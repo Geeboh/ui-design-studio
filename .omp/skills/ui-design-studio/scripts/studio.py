@@ -27,7 +27,7 @@ import uuid
 import zipfile
 import xml.etree.ElementTree as ET
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 SLUG = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 SEMVER = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\Z")
 SHA = re.compile(r"[0-9a-f]{64}\Z")

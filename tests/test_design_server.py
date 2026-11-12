@@ -43,14 +43,14 @@ class DesignServerTests(unittest.TestCase):
         self.servers.append(server)
         return server
 
-    def request(self, server, path="/api/snapshot", method="GET", body=None, headers=None, authenticated=True, local=False):
+    def request(self, server, path="/api/snapshot", method="GET", body=None, headers=None, authenticated=True, local=False, connect_host="127.0.0.1"):
         headers = dict(headers or {})
         if authenticated:
             headers.setdefault("Authorization", "Bearer " + (server.shutdown_token if local else server.token))
         if isinstance(body, dict):
             body = json.dumps(body)
             headers.setdefault("Content-Type", "application/json")
-        connection = http.client.HTTPConnection("127.0.0.1", server.local.server_port if local else server.http.server_port, timeout=3)
+        connection = http.client.HTTPConnection(connect_host, server.local.server_port if local else server.http.server_port, timeout=3)
         try:
             connection.request(method, path if path.startswith("/") else "/" + path, body, headers)
             response = connection.getresponse()
@@ -61,6 +61,26 @@ class DesignServerTests(unittest.TestCase):
             return response.status, response_headers, content
         finally:
             connection.close()
+
+    def local_lan_address(self):
+        try:
+            import psutil
+        except ImportError:
+            try:
+                inventory = backend.socket.getaddrinfo(backend.socket.gethostname(), 0, backend.socket.AF_INET, backend.socket.SOCK_STREAM)
+            except OSError as exc:
+                self.skipTest("No discoverable local IPv4 LAN interface: " + str(exc))
+            addresses = {backend.ipaddress.IPv4Address(item[4][0]) for item in inventory}
+        else:
+            stats = psutil.net_if_stats()
+            addresses = {backend.ipaddress.IPv4Address(item.address)
+                         for name, entries in psutil.net_if_addrs().items() if name in stats and stats[name].isup
+                         for item in entries if item.family == backend.socket.AF_INET}
+        usable = sorted((value for value in addresses if not (value.is_loopback or value.is_unspecified
+                        or value.is_multicast or value.is_link_local)), key=int)
+        if not usable:
+            self.skipTest("No discoverable local IPv4 LAN interface")
+        return str(usable[0])
 
     def plan(self, request_id="plan-choice", files=None, choices=None):
         (self.root / "plan.html").write_text("<h1>Synthetic concept board</h1>", encoding="utf-8")
@@ -105,11 +125,230 @@ class DesignServerTests(unittest.TestCase):
         self.assertFalse(any(gate["status"] == "passed" for gate in content["gates"]))
         self.assertEqual(headers["Cache-Control"], "no-store")
 
+    def test_lan_keyword_preserves_positional_constructor_and_coherent_metadata(self):
+        server = backend.DesignServer(studio, self.root, "0.0.0.0", 0, None, 60, self.repo,
+                                      lan_addresses=("192.0.2.25", "192.0.2.10", "192.0.2.25")).start()
+        self.servers.append(server)
+        local_url = f"http://127.0.0.1:{server.http.server_port}/#token={server.token}"
+        lan_urls = [f"http://{value}:{server.http.server_port}/#token={server.token}" for value in ("192.0.2.25", "192.0.2.10")]
+        self.assertEqual(server.local_url, local_url)
+        self.assertEqual(server.lan_urls, lan_urls)
+        self.assertEqual(server.url, lan_urls[0])
+        self.assertEqual(server.base_url, lan_urls[0].split("#")[0])
+        locator = studio.read_json(self.root / ".design-server.json")
+        cached = studio.read_json(self.root / ".design-status.json")
+        snapshot = self.request(server)[2]
+        status = backend.command(studio, argparse.Namespace(command="status", run=str(self.root), watch=False, interval=1))
+        expected = {"url": lan_urls[0], "localUrl": local_url, "lanUrls": lan_urls, "startedAt": locator["startedAt"]}
+        for observed in (cached["server"], snapshot["server"], status["server"]):
+            self.assertEqual(observed, expected)
+        self.assertEqual({key: locator[key] for key in expected}, expected)
+        returned = server.lan_urls
+        returned.clear()
+        self.assertEqual(server.lan_urls, lan_urls)
+
+    def test_loopback_binding_does_not_advertise_unreachable_lan_aliases(self):
+        server = self.start(lan_addresses=("192.0.2.25",))
+        self.assertEqual(server.local_url, server.url)
+        self.assertEqual(server.lan_urls, [])
+        self.assertEqual(self.request(server, headers={"Host": f"192.0.2.25:{server.http.server_port}"})[0], 403)
+        server.set_lan_addresses(("192.0.2.26",))
+        self.assertEqual(self.request(server)[2]["server"]["lanUrls"], [])
+
+    def test_lan_aliases_require_safe_canonical_ipv4_addresses(self):
+        for addresses in ("192.0.2.25", (None,), ("invalid",), ("127.0.0.1",), ("0.0.0.0",),
+                          ("224.0.0.1",), ("169.254.1.2",), ("::1",), ("192.000.2.25",)):
+            with self.subTest(addresses=addresses):
+                with self.assertRaisesRegex(studio.StudioError, "LAN addresses"):
+                    backend.DesignServer(studio, self.root, lan_addresses=addresses)
+        self.assertFalse((self.root / ".design-server.json").exists())
+        server = self.start(host="0.0.0.0", lan_addresses=("192.0.2.25",))
+        before = studio.read_json(self.root / ".design-server.json")
+        with self.assertRaisesRegex(studio.StudioError, "LAN addresses"):
+            server.set_lan_addresses(("192.0.2.26", "https://attacker.invalid"))
+        self.assertEqual(studio.read_json(self.root / ".design-server.json"), before)
+        self.assertEqual(server.lan_urls, before["lanUrls"])
+
+    def test_public_and_control_identity_use_dashboard_token_without_shutdown_disclosure(self):
+        server = self.start()
+        expected = {"instanceId": server.instance_id, "run": str(self.root.resolve())}
+        locator = studio.read_json(self.root / ".design-server.json")
+        self.assertEqual(locator["probeUrl"], f"http://127.0.0.1:{server.local.server_port}/api/identity")
+        self.assertEqual(urlsplit(locator["probeUrl"]).fragment, "")
+        if os.name != "nt":
+            self.assertEqual((self.root / ".design-server.json").stat().st_mode & 0o777, 0o600)
+        for local in (False, True):
+            with self.subTest(control=local):
+                self.assertEqual(self.request(server, "/api/identity", authenticated=False, local=local)[0], 401)
+                self.assertEqual(self.request(server, "/api/identity", headers={"Authorization": "Bearer wrong"}, local=local)[0], 401)
+                self.assertEqual(self.request(server, "/api/identity", headers={"Authorization": "Bearer " + server.shutdown_token}, local=local)[0], 401)
+                code, headers, content = self.request(server, "/api/identity", headers={"Authorization": "Bearer " + server.token}, local=local)
+                self.assertEqual(code, 200)
+                self.assertEqual(content, expected)
+                self.assertEqual(headers["Cache-Control"], "no-store")
+                self.assertNotIn(server.shutdown_token, json.dumps(content))
+        self.assertNotIn(server.shutdown_token, json.dumps(self.request(server)[2]))
+        for path in ("/", "/api/snapshot", "/dashboard.js", "/preview/anything"):
+            self.assertEqual(self.request(server, path, local=True)[0], 404)
+
+    def test_unadvertised_hosts_and_duplicate_host_headers_are_rejected(self):
+        request = self.plan()
+        server = self.start()
+        for host in ("", "attacker.invalid", f"0.0.0.0:{server.http.server_port}",
+                     f"127.0.0.1:{server.local.server_port}", f"127.0.0.1:{server.http.server_port}@attacker.invalid"):
+            with self.subTest(host=host):
+                for path in ("/", "/api/identity", "/api/snapshot", "/preview/anything"):
+                    self.assertEqual(self.request(server, path, headers={"Host": host})[0], 403)
+                self.assertEqual(self.request(server, "/api/approval", "POST", self.payload(request), {"Host": host})[0], 403)
+        for values in ((), (f"127.0.0.1:{server.http.server_port}", "attacker.invalid")):
+            connection = http.client.HTTPConnection("127.0.0.1", server.http.server_port, timeout=3)
+            try:
+                connection.putrequest("GET", "/api/identity", skip_host=True)
+                for value in values:
+                    connection.putheader("Host", value)
+                connection.putheader("Authorization", "Bearer " + server.token)
+                connection.endheaders()
+                response = connection.getresponse()
+                self.assertEqual(response.status, 403)
+                response.read()
+            finally:
+                connection.close()
+        self.assertEqual(studio.read_json(self.root / "decisions.json")["decisions"], [])
+
+    def test_lan_removal_replaces_urls_hosts_and_approval_origins_together(self):
+        request = self.plan()
+        server = self.start(host="0.0.0.0", lan_addresses=("192.0.2.25", "192.0.2.26"))
+        previous = studio.read_json(self.root / ".design-server.json")
+        old_origin = f"http://192.0.2.25:{server.http.server_port}"
+        new_origin = f"http://192.0.2.26:{server.http.server_port}"
+        server.set_lan_addresses(("192.0.2.26",))
+        locator = studio.read_json(self.root / ".design-server.json")
+        snapshot = self.request(server)[2]
+        self.assertEqual(server.url, new_origin + "/#token=" + server.token)
+        self.assertEqual(server.lan_urls, [server.url])
+        for key in ("url", "localUrl", "lanUrls"):
+            self.assertEqual(locator[key], snapshot["server"][key])
+            self.assertEqual(locator[key], studio.read_json(self.root / ".design-status.json")["server"][key])
+        self.assertEqual(locator["localShutdown"], previous["localShutdown"])
+        self.assertEqual(locator["probeUrl"], previous["probeUrl"])
+        self.assertEqual(self.request(server, "/api/identity", headers={"Host": urlsplit(previous["lanUrls"][0]).netloc})[0], 403)
+        self.assertEqual(self.request(server, "/api/approval", "POST", self.payload(request), {"Origin": old_origin})[0], 403)
+        self.assertEqual(self.request(server, "/api/approval", "POST", self.payload(request),
+                                      {"Origin": new_origin, "Host": urlsplit(server.url).netloc})[0], 200)
+        server.set_lan_addresses(())
+        self.assertEqual(server.url, server.local_url)
+        self.assertEqual(server.lan_urls, [])
+        self.assertEqual(self.request(server, headers={"Host": urlsplit(locator["lanUrls"][0]).netloc})[0], 403)
+        second = self.plan("loopback-after-removal")
+        self.assertEqual(self.request(server, "/api/approval", "POST", self.payload(second), {"Origin": new_origin})[0], 403)
+        local = urlsplit(server.local_url)
+        self.assertEqual(self.request(server, "/api/approval", "POST", self.payload(second),
+                                      {"Origin": f"{local.scheme}://{local.netloc}"})[0], 200)
+        server.close()
+        server.set_lan_addresses(("192.0.2.27",))
+        self.assertFalse((self.root / ".design-server.json").exists())
+        self.assertFalse((self.root / ".design-status.json").exists())
+
+    def test_alias_update_blocks_readers_until_locator_and_snapshot_are_published(self):
+        server = self.start(host="0.0.0.0", lan_addresses=("192.0.2.25",))
+        entered, released, reading, completed = (threading.Event() for unused in range(4))
+        self.addCleanup(released.set)
+        write = backend.private_json
+        failures, observed = [], []
+        def delayed_write(engine, path, value):
+            if path.name == ".design-server.json":
+                entered.set()
+                if not released.wait(5):
+                    raise RuntimeError("Synthetic alias publication barrier was not released")
+            write(engine, path, value)
+        def update():
+            try:
+                server.set_lan_addresses(("192.0.2.26",))
+            except BaseException as exc:
+                failures.append(exc)
+        def read():
+            reading.set()
+            try:
+                observed.append(self.request(server))
+            except BaseException as exc:
+                failures.append(exc)
+            finally:
+                completed.set()
+        with mock.patch.object(backend, "private_json", side_effect=delayed_write):
+            writer = threading.Thread(target=update)
+            writer.start()
+            self.assertTrue(entered.wait(3))
+            reader = threading.Thread(target=read)
+            reader.start()
+            self.assertTrue(reading.wait(3))
+            self.assertFalse(completed.wait(0.1))
+            released.set()
+            writer.join(timeout=5)
+            reader.join(timeout=5)
+        self.assertFalse(writer.is_alive())
+        self.assertFalse(reader.is_alive())
+        self.assertEqual(failures, [])
+        self.assertEqual(observed[0][0], 200)
+        locator = studio.read_json(self.root / ".design-server.json")
+        for key in ("url", "localUrl", "lanUrls"):
+            self.assertEqual(observed[0][2]["server"][key], locator[key])
+
+    def test_specific_lan_binding_never_claims_a_loopback_public_listener(self):
+        address = self.local_lan_address()
+        server = self.start(host=address, lan_addresses=(address, "192.0.2.25"))
+        self.assertIsNone(server.local_url)
+        self.assertEqual(server.lan_urls, [server.url])
+        self.assertEqual(urlsplit(server.url).hostname, address)
+        self.assertEqual(self.request(server, "/api/identity", connect_host=address)[2],
+                         {"instanceId": server.instance_id, "run": str(self.root)})
+        self.assertIsNone(studio.read_json(self.root / ".design-server.json")["localUrl"])
+
     def test_public_urls_keep_the_actual_port_and_reject_terminal_controls(self):
         self.assertEqual(backend.public_base("0.0.0.0", 43210, "http://192.0.2.25:0"), "http://192.0.2.25:43210/")
         self.assertEqual(backend.public_base("::", 43210, None), "http://[::1]:43210/")
         with self.assertRaisesRegex(ValueError, "terminal controls"):
             backend.public_base("127.0.0.1", 43210, "http://example.invalid/\x1b[2J")
+
+    def test_default_proxy_ports_match_normalized_hosts_and_origins(self):
+        for case, (scheme, default_port, explicit) in enumerate((("http", 80, True), ("https", 443, True), ("https", 443, False))):
+            suffix = ":" + str(default_port) if explicit else ""
+            advertised = f"{scheme}://studio.example.invalid{suffix}/design/view/"
+            server = self.start(public_url=advertised)
+            self.assertEqual(server.base_url, advertised)
+            for index, (host, origin) in enumerate((
+                    ("studio.example.invalid", f"{scheme}://studio.example.invalid"),
+                    (f"STUDIO.EXAMPLE.INVALID:{default_port}", f"{scheme}://studio.example.invalid"),
+                    ("studio.example.invalid", f"{scheme}://STUDIO.EXAMPLE.INVALID:{default_port}"),
+                    (f"studio.example.invalid:{default_port}", f"{scheme}://studio.example.invalid:{default_port}"))):
+                with self.subTest(scheme=scheme, explicit=explicit, host=host, origin=origin):
+                    request = self.plan(f"default-port-{case}-{index}")
+                    identity = self.request(server, "/design/view/api/identity", headers={"Host": host})
+                    self.assertEqual(identity[0], 200)
+                    self.assertEqual(identity[2], {"instanceId": server.instance_id, "run": str(self.root)})
+                    snapshot = self.request(server)[2]
+                    art = next(item for item in snapshot["artworks"] if item["path"] == "plan.html")
+                    code, headers, content = self.request(server, "/design/view/" + art["url"],
+                                                          headers={"Host": host}, authenticated=False)
+                    self.assertEqual(code, 200)
+                    self.assertIn(advertised + "preview/", headers["Content-Security-Policy"])
+                    self.assertIn(b"Synthetic concept board", content)
+                    self.assertEqual(self.request(server, "/design/view/api/approval", "POST", self.payload(request),
+                                                  {"Host": host, "Origin": origin})[0], 200)
+            self.assertEqual(self.request(server, "/api/identity",
+                                          headers={"Host": f"studio.example.invalid:{default_port + 1}"})[0], 403)
+            self.assertEqual(self.request(server, "/api/identity",
+                                          headers={"Host": "studio.example.invalid:invalid"})[0], 403)
+            for forbidden in (f"{scheme}://studio.example.invalid:{default_port + 1}",
+                              f"{scheme}://studio.example.invalid:{default_port}/",
+                              f"{scheme}://studio.example.invalid:{default_port}?",
+                              f"{scheme}://studio.example.invalid:{default_port}#",
+                              f"{scheme}://user@studio.example.invalid:{default_port}"):
+                self.assertEqual(self.request(server, "/api/approval", "POST", self.payload(request),
+                                              {"Host": "studio.example.invalid", "Origin": forbidden})[0], 403)
+            server.close()
+        self.assertEqual(backend.http_origin("http://[::1]:80"), "http://[::1]")
+        self.assertEqual(backend.http_origin("https://[::1]:443"), "https://[::1]")
+        self.assertEqual(backend.http_origin("https://[::1]:444"), "https://[::1]:444")
 
     def test_tokens_in_queries_and_unknown_files_are_not_data_routes(self):
         server = self.start()
@@ -362,6 +601,78 @@ class DesignServerTests(unittest.TestCase):
         self.assertNotIn("attacker.invalid", css.decode())
         self.assertEqual(self.request(server, art["url"].replace(server.preview_capability, "wrong-capability"), authenticated=False)[0], 404)
 
+    def test_proxy_and_alias_previews_keep_the_validated_origin_and_base_path(self):
+        directory = self.root / "mockups"
+        for child in ("styles", "fonts", "images"):
+            (directory / child).mkdir(parents=True, exist_ok=True)
+        (directory / "scene.html").write_text('<link rel="stylesheet" href="styles/scene.css"><img src="images/pixel.png">', encoding="utf-8")
+        (directory / "styles/scene.css").write_text('@import "palette.css";@font-face{font-family:fixture;src:url(../fonts/fixture.woff2)}body{background:url(../images/pixel.png)}', encoding="utf-8")
+        (directory / "styles/palette.css").write_text("body{color:#123456}", encoding="utf-8")
+        (directory / "fonts/fixture.woff2").write_bytes(b"synthetic retained font")
+        (directory / "images/pixel.png").write_bytes(PNG)
+        server = self.start(host="0.0.0.0", public_url="https://studio.example.invalid/design/view/",
+                            lan_addresses=("192.0.2.25",))
+        self.assertEqual(server.base_url, "https://studio.example.invalid/design/view/")
+        art = next(item for item in self.request(server)[2]["artworks"] if item["path"] == "mockups/scene.html")
+        for index, url in enumerate((server.url, server.local_url, *server.lan_urls)):
+            parsed = urlsplit(url)
+            origin = f"{parsed.scheme}://{parsed.netloc}"
+            headers = {"Host": parsed.netloc}
+            prefix = parsed.path + f"preview/{server.preview_capability}/{art['version']}/"
+            with self.subTest(origin=origin):
+                identity = self.request(server, parsed.path + "api/identity", headers=headers)
+                self.assertEqual(identity[0], 200)
+                self.assertEqual(identity[2], {"instanceId": server.instance_id, "run": str(self.root)})
+                code, response_headers, html = self.request(server, parsed.path + art["url"], headers=headers, authenticated=False)
+                self.assertEqual(code, 200)
+                policy = response_headers["Content-Security-Policy"]
+                for directive in ("style-src 'unsafe-inline' ", "img-src ", "font-src "):
+                    self.assertIn(directive + origin + prefix, policy)
+                self.assertIn((prefix + "mockups/styles/scene.css").encode(), html)
+                self.assertIn((prefix + "mockups/images/pixel.png").encode(), html)
+                code, unused, css = self.request(server, prefix + "mockups/styles/scene.css", headers=headers, authenticated=False)
+                self.assertEqual(code, 200)
+                self.assertIn((prefix + "mockups/fonts/fixture.woff2").encode(), css)
+                self.assertIn((prefix + "mockups/styles/palette.css").encode(), css)
+                self.assertEqual(self.request(server, prefix + "mockups/images/pixel.png", headers=headers, authenticated=False)[2], PNG)
+                self.assertEqual(self.request(server, prefix + "mockups/fonts/fixture.woff2", headers=headers, authenticated=False)[2], b"synthetic retained font")
+                request = self.plan("alias-choice-" + str(index), ["mockups/scene.html"])
+                self.assertEqual(self.request(server, parsed.path + "api/approval", "POST", self.payload(request),
+                                              {**headers, "Origin": origin})[0], 200)
+        stripped = self.request(server, art["url"], headers={"Host": "studio.example.invalid"}, authenticated=False)
+        self.assertEqual(stripped[0], 200)
+        self.assertIn("https://studio.example.invalid/design/view/preview/", stripped[1]["Content-Security-Policy"])
+        for candidate in ("https://unlisted.example.invalid", "http://studio.example.invalid", "https://studio.example.invalid/design/view/"):
+            request = self.plan("forbidden-proxy-origin", ["mockups/scene.html"])
+            self.assertEqual(self.request(server, "/api/approval", "POST", self.payload(request), {"Origin": candidate})[0], 403)
+
+    def test_real_lan_alias_serves_nested_preview_and_accepts_digest_bound_approval(self):
+        address = self.local_lan_address()
+        directory = self.root / "concept"
+        directory.mkdir()
+        (directory / "pixel.png").write_bytes(PNG)
+        (directory / "board.css").write_text("body{background:url(pixel.png)}", encoding="utf-8")
+        (directory / "board.html").write_text('<link rel="stylesheet" href="board.css"><img src="pixel.png">', encoding="utf-8")
+        server = self.start(host="0.0.0.0", lan_addresses=(address,))
+        for index, host in enumerate(("127.0.0.1", address)):
+            with self.subTest(interface=host):
+                snapshot = self.request(server, connect_host=host)[2]
+                art = next(item for item in snapshot["artworks"] if item["path"] == "concept/board.html")
+                code, headers, html = self.request(server, art["url"], authenticated=False, connect_host=host)
+                self.assertEqual(code, 200)
+                self.assertIn(b"concept/board.css", html)
+                source = f"http://{host}:{server.http.server_port}/preview/"
+                self.assertIn(source, headers["Content-Security-Policy"])
+                prefix = art["url"].rsplit("/", 1)[0] + "/"
+                self.assertEqual(self.request(server, prefix + "board.css", authenticated=False, connect_host=host)[0], 200)
+                self.assertEqual(self.request(server, prefix + "pixel.png", authenticated=False, connect_host=host)[2], PNG)
+                request = self.plan("real-interface-" + str(index), ["concept/board.html"])
+                self.assertEqual(self.request(server, "/api/approval", "POST", self.payload(request),
+                                              {"Origin": f"http://{host}:{server.http.server_port}"}, connect_host=host)[0], 200)
+                decision = studio.read_json(self.root / "decisions.json")["decisions"][-1]
+                self.assertEqual(decision["actor"], "user")
+                self.assertEqual(decision["inputsDigest"], studio.file_digest(self.root, decision["inputs"]))
+
     def test_inline_svg_cannot_restore_navigation_through_animation(self):
         html = '<svg xmlns="http://www.w3.org/2000/svg"><a href="https://attacker.invalid/"><text>Fixture</text><set attributeName="href" to="/"/><animate attributeName="href" values="/;https://attacker.invalid/"/><animateMotion path="M0 0L1 1"/><animateTransform attributeName="transform" type="rotate" to="360"/></a></svg>'
         (self.root / "animated.html").write_text(html, encoding="utf-8")
@@ -530,6 +841,43 @@ class DesignServerTests(unittest.TestCase):
         self.assertEqual(self.request(server, "/api/shutdown", "POST", body, {"Origin": "null"}, local=True)[0], 403)
         self.assertFalse(server.stop.is_set())
 
+    def test_status_watch_tracks_alias_replacement_without_old_lan_links(self):
+        server = self.start(host="0.0.0.0", lan_addresses=("192.0.2.25",))
+        previous = server.url
+        outputs = []
+        stream = io.StringIO()
+        def refresh(unused):
+            outputs.append(stream.getvalue())
+            stream.seek(0)
+            stream.truncate(0)
+            if len(outputs) == 1:
+                server.set_lan_addresses(("192.0.2.26",))
+            else:
+                raise KeyboardInterrupt
+        args = argparse.Namespace(command="status", run=str(self.root), watch=True, interval=0.1)
+        with contextlib.redirect_stdout(stream), mock.patch.object(backend.time, "sleep", side_effect=refresh):
+            result = backend.command(studio, args)
+        self.assertTrue(result["watchStopped"])
+        self.assertEqual(len(outputs), 2)
+        self.assertIn(previous, outputs[0])
+        self.assertNotIn(previous, outputs[1])
+        self.assertIn(server.url, outputs[1])
+
+    def test_public_aliases_cannot_reach_shutdown_and_control_rejects_public_hosts(self):
+        server = self.start(host="0.0.0.0", lan_addresses=("192.0.2.25",))
+        body = {"instanceId": server.instance_id}
+        for url in (server.local_url, *server.lan_urls):
+            host = urlsplit(url).netloc
+            with self.subTest(host=host):
+                self.assertEqual(self.request(server, "/api/shutdown", "POST", body,
+                                              {"Host": host, "Authorization": "Bearer " + server.shutdown_token})[0], 404)
+                self.assertEqual(self.request(server, "/api/shutdown", "POST", body, {"Host": host}, local=True)[0], 403)
+                self.assertEqual(self.request(server, "/api/identity", headers={"Host": host}, local=True)[0], 403)
+        self.assertEqual(self.request(server, "/api/approval", "POST", {}, local=True)[0], 404)
+        self.assertFalse(server.stop.is_set())
+        self.assertEqual(backend.cleanup(studio, self.root)["status"], "PASS")
+        self.assertTrue(server.closed.wait(3))
+
     def test_watch_neutralizes_terminal_controls_without_mutating_records(self):
         malicious = "Review\x1b[2J the fixture\nwith \x9b31mcontrols\r"
         backend.publish_progress(studio, self.root, malicious)
@@ -607,9 +955,37 @@ class DesignServerTests(unittest.TestCase):
 
     def test_second_server_cannot_steal_run_lock_or_remove_owner_locator(self):
         server = self.start()
+        contender = backend.DesignServer(studio, self.root)
+        self.assertFalse(contender.lock_contended)
         with self.assertRaisesRegex(studio.StudioError, "locked"):
-            backend.DesignServer(studio, self.root).start()
+            contender.start()
+        self.assertTrue(contender.lock_contended)
+        self.assertIsNone(contender.run_lock)
+        self.assertTrue(contender.closed.is_set())
         self.assertEqual(studio.read_json(self.root / ".design-server.json")["instanceId"], server.instance_id)
+        self.assertEqual(self.request(server)[0], 200)
+
+    def test_bind_and_lock_permission_failures_are_not_reported_as_contention(self):
+        with backend.socket.socket() as occupied:
+            occupied.bind(("127.0.0.1", 0))
+            occupied.listen(1)
+            failed = backend.DesignServer(studio, self.root, port=occupied.getsockname()[1])
+            with self.assertRaises(OSError):
+                failed.start()
+        self.assertFalse(failed.lock_contended)
+        self.assertTrue(failed.closed.is_set())
+        self.assertIsNone(failed.run_lock)
+        self.assertFalse((self.root / ".design-server.json").exists())
+        if failed.temporary:
+            self.assertFalse(failed.temporary.exists())
+        denied = backend.DesignServer(studio, self.root)
+        with mock.patch.object(backend.FileLock, "__enter__", side_effect=studio.StudioError("Cannot lock design records")):
+            with self.assertRaisesRegex(studio.StudioError, "Cannot lock design records"):
+                denied.start()
+        self.assertFalse(denied.lock_contended)
+        self.assertTrue(denied.closed.is_set())
+        self.assertIsNone(denied.run_lock)
+        server = self.start()
         self.assertEqual(self.request(server)[0], 200)
 
     def test_cleanup_all_only_uses_configured_run_locations(self):
@@ -759,6 +1135,111 @@ class DesignServerTests(unittest.TestCase):
         self.assertIn("Registry registration succeeded", result["message"])
         self.assertEqual(exit_code, 2)
         self.assertEqual(studio.registry_read(self.repo / "themes")["themes"][0]["id"], "fixture")
+
+    def test_failed_alias_publication_rolls_back_and_can_retry_the_same_addresses(self):
+        for filename in (".design-server.json", ".design-status.json"):
+            with self.subTest(failed_record=filename):
+                server = self.start(host="0.0.0.0", lan_addresses=("192.0.2.25",))
+                before = studio.read_json(self.root / ".design-server.json")
+                write = backend.private_json
+                failed = False
+
+                def fail_once(engine, path, value):
+                    nonlocal failed
+                    if path.name == filename and not failed:
+                        failed = True
+                        raise OSError("Synthetic alias publication failure")
+                    return write(engine, path, value)
+
+                with mock.patch.object(backend, "private_json", side_effect=fail_once):
+                    with self.assertRaisesRegex(OSError, "Synthetic alias publication failure"):
+                        server.set_lan_addresses(("192.0.2.26",))
+                locator = studio.read_json(self.root / ".design-server.json")
+                status = studio.read_json(self.root / ".design-status.json")
+                for key in ("url", "localUrl", "lanUrls"):
+                    self.assertEqual(locator[key], before[key])
+                    self.assertEqual(status["server"][key], before[key])
+                self.assertEqual(self.request(server, headers={"Host": urlsplit(before["url"]).netloc})[0], 200)
+                replacement_host = f"192.0.2.26:{server.http.server_port}"
+                self.assertEqual(self.request(server, headers={"Host": replacement_host})[0], 403)
+                server.set_lan_addresses(("192.0.2.26",))
+                self.assertEqual(self.request(server, headers={"Host": replacement_host})[0], 200)
+                self.assertEqual(studio.read_json(self.root / ".design-server.json")["url"], server.url)
+                server.close()
+
+    def test_encoded_proxy_prefix_routes_identity_approval_and_retained_dependencies(self):
+        (self.root / "scene.css").write_text("body{color:#123456}", encoding="utf-8")
+        (self.root / "scene.html").write_text('<link rel="stylesheet" href="scene.css"><h1>Encoded prefix fixture</h1>', encoding="utf-8")
+        server = self.start(public_url="https://studio.example.invalid:443/design%20review/")
+        headers = {"Host": "studio.example.invalid"}
+        code, unused, identity = self.request(server, "/design%20review/api/identity", headers=headers)
+        self.assertEqual(code, 200)
+        self.assertEqual(identity["run"], str(self.root))
+        artwork = next(item for item in server.state.snapshot()["artworks"] if item["path"] == "scene.html")
+        prefix = f"/design%20review/preview/{server.preview_capability}/{artwork['version']}/"
+        code, response_headers, content = self.request(server, prefix + "scene.html", headers=headers, authenticated=False)
+        self.assertEqual(code, 200)
+        self.assertIn((prefix + "scene.css").encode(), content)
+        self.assertIn("/design%20review/preview/", response_headers["Content-Security-Policy"])
+        self.assertEqual(self.request(server, prefix + "scene.css", headers=headers, authenticated=False)[0], 200)
+        request = self.plan("encoded-prefix-choice", ["scene.html"])
+        code, unused, unused_body = self.request(server, "/design%20review/api/approval", "POST", self.payload(request),
+                                               {**headers, "Origin": "https://studio.example.invalid"})
+        self.assertEqual(code, 200)
+        self.assertEqual(studio.read_json(self.root / "decisions.json")["decisions"][-1]["outcome"], "approved")
+
+    def test_close_cancels_an_unfinished_header_without_retaining_the_run_lock(self):
+        server = self.start()
+        entered = threading.Event()
+        setup = backend.Handler.setup
+
+        def observe_setup(handler):
+            setup(handler)
+            entered.set()
+
+        with mock.patch.object(backend.Handler, "setup", observe_setup):
+            client = backend.socket.create_connection(("127.0.0.1", server.http.server_port), timeout=2)
+            self.addCleanup(client.close)
+            client.sendall(b"GET /api/identity HTTP/1.1\r\nX-Slow: unfinished")
+            self.assertTrue(entered.wait(2))
+            closer = threading.Thread(target=server.close, daemon=True)
+            closer.start()
+            self.assertTrue(server.closed.wait(3))
+            closer.join(3)
+        replacement = self.start()
+        self.assertEqual(self.request(replacement)[0], 200)
+
+    def test_close_drains_a_fully_admitted_approval_before_cleanup(self):
+        request = self.plan()
+        server = self.start()
+        admitted, release = threading.Event(), threading.Event()
+        self.addCleanup(release.set)
+        approve = backend.approve
+        results = []
+
+        def hold_approval(*args):
+            admitted.set()
+            if not release.wait(5):
+                raise RuntimeError("Synthetic approval barrier was not released")
+            return approve(*args)
+
+        with mock.patch.object(backend, "approve", side_effect=hold_approval):
+            writer = threading.Thread(target=lambda: results.append(self.request(server, "/api/approval", "POST", self.payload(request))), daemon=True)
+            writer.start()
+            self.assertTrue(admitted.wait(2))
+            closer = threading.Thread(target=server.close, daemon=True)
+            closer.start()
+            try:
+                self.assertFalse(server.closed.wait(0.05))
+            finally:
+                release.set()
+            writer.join(3)
+            closer.join(3)
+        self.assertTrue(server.closed.is_set())
+        self.assertEqual(results[0][0], 200)
+        decision = studio.read_json(self.root / "decisions.json")["decisions"][-1]
+        self.assertEqual(decision["outcome"], "approved")
+        self.assertEqual(decision["inputsDigest"], request["inputsDigest"])
 
 
 if __name__ == "__main__":

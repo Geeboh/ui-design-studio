@@ -18,8 +18,8 @@ import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-TREES = (".omp/agents", ".omp/commands", ".omp/extensions", ".omp/skills", "docs", "prompts", "scripts", "tests", "tools", "examples")
-TOP = ("README.md", "LICENSE.txt", "install.sh", "release.json")
+TREES = (".omp/agents", ".omp/commands", ".omp/extensions", ".omp/skills", "docs", "prompts", "scripts", "tests", "tools", "examples", "src")
+TOP = ("README.md", "LICENSE.txt", "install.sh", "release.json", "pyproject.toml", "hatch_build.py")
 SKIP = {"__pycache__", ".git", ".DS_Store", "node_modules"}
 EXECUTABLE = {"install.sh", "tools/ui-design"}
 
@@ -119,7 +119,7 @@ def build(output: Path, check: bool = False) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=ROOT / "dist/UI-Design-Studio-OMP-v1.2.0.zip")
+    parser.add_argument("--output", type=Path, default=ROOT / "dist/UI-Design-Studio-OMP-v1.3.0.zip")
     parser.add_argument("--check", action="store_true", help="Check source hashes without building")
     args = parser.parse_args()
     if sys.prefix == sys.base_prefix:

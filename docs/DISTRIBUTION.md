@@ -1,10 +1,10 @@
 # Distribution and release maintenance
 
-UI Design Studio 1.2.0 is a complete project-local OMP skills distribution. It may be copied, modified and redistributed under the included MIT license. Keep the copyright and license with copies. Imported reference images and assets used in future design runs retain their own licenses; this package's license does not change them.
+UI Design Studio 1.3.0 is a complete project-local OMP skills distribution with an optional standalone local MCP adapter. It may be copied, modified and redistributed under the included MIT license. Keep the copyright and license with copies. Imported reference images and assets used in future design runs retain their own licenses; this package's license does not change them.
 
 ## What recipients receive
 
-The ZIP contains one top-level `ui-design-studio-v1.2.0/` directory. Start at `README.md`; follow `docs/INSTALLATION.md` and `docs/RUN-TYPES.md`. `release.json` identifies the version, default policies and compatibility scope. `docs/VALIDATION.md` states what was actually checked.
+The ZIP contains one top-level `ui-design-studio-v1.3.0/` directory. Start at `README.md`; follow `docs/INSTALLATION.md` and `docs/RUN-TYPES.md`. `release.json` identifies the version, default policies and compatibility scope. `docs/VALIDATION.md` states what was actually checked.
 
 Included: nine skills, seven native OMP specialist definitions, two convenience commands, a native status extension, the Design Server and dashboard, focused reference documents, installation/update/restore utilities, project/run/model-routing helpers, theme schema/compiler/validator, an original CSS/SVG specimen, copy-and-paste run prompts, regression tests and a reproducible release builder.
 
@@ -31,19 +31,22 @@ bash -n install.sh tools/ui-design
 .venv-release/bin/python scripts/package_release.py --check
 ```
 
-The only use of system Python is creating the virtual environment. The package helpers and release builder use the standard library; no Python package downloads are required. OMP/provider execution and the target application's actual build/browser/native checks remain separate from these package tests.
+The only use of system Python is creating the virtual environment. The OMP helpers and release builder use the standard library. Adapter tests require the dependencies declared in `pyproject.toml`; install the package before running `test_mcp*.py`. OMP/provider execution and the target application's actual build/browser/native checks remain separate from these package tests.
 
 ## Build a distribution
 
 After reviewing and testing the complete source tree:
 
 ```bash
-.venv-release/bin/python scripts/package_release.py --output dist/UI-Design-Studio-OMP-v1.2.0.zip
+.venv-release/bin/python scripts/package_release.py --output dist/UI-Design-Studio-OMP-v1.3.0.zip
 ```
 
 The builder regenerates `MANIFEST.sha256`, writes the ZIP and a SHA-256 sidecar, reopens the ZIP, checks every entry against its source bytes and checks CRCs. Entries have deterministic ordering, release-date timestamps and portable file modes. `install.sh` and the project wrapper retain executable permissions.
 
 Only the declared source directories and root release files are packaged. Virtual environments, bytecode caches, Git metadata, installation backups and generated project runs are excluded. Review the source tree for private material before distribution; an allowlist is not a general secret scanner. Do not distribute a used project directory as if it were the clean package.
+
+The source ZIP also includes `src`, `pyproject.toml`, the build hook, and the [MCP adapter guide](MCP.md). Build the standalone wheel with `python -m build --wheel`. Hatchling maps the same authored `.omp/skills` and `.omp/agents` files into `ui_design_studio/payload`; no second source copy is maintained. Wheel builds reject symlinks and exclude bytecode, caches, private runtime records, and credentials. The wheel carries no OMP installation step or client configuration mutation.
+
 
 For another release, update the release version/date, code version constants, release notes and user-facing commands consistently; run the meaningful checks again and rebuild. Theme versions are independent of the designer package version. Fieldstone's theme version remains 1.0.0 for its unchanged runtime styling; the distribution's surrounding guidance has been updated.
 

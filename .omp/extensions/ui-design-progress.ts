@@ -14,6 +14,8 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
+import { request as httpRequest } from "node:http";
+import { isIP } from "node:net";
 
 const WIDGET = "ui-design-progress";
 const TASK_EVENT = "pi-tasks:state";
@@ -39,7 +41,7 @@ type HostContext = {
 };
 type HostAPI = {
 	on(event: string, handler: (event: unknown, context: unknown) => void): void;
-	registerCommand(name: string, command: { description: string; handler(args: string, context: unknown): void }): void;
+	registerCommand(name: string, command: { description: string; handler(args: string, context: unknown): void | Promise<void> }): void;
 	events: { on(name: string, handler: (event: unknown) => void): () => void };
 	sendMessage(message: { customType: string; content: string; display: true }, options: { triggerTurn: false }): void;
 };
@@ -66,12 +68,26 @@ type Snapshot = {
 	statistics: { artworks: number; evidence: number; passedEvidence: number; elapsedSeconds: number };
 };
 type Run = { root: string; id: string };
+type Connection = {
+	instanceId: string;
+	repo: string;
+	observedAt: string;
+	localUrl: string;
+	lanUrls: string[];
+	qrUrl: string;
+	text: string;
+	selectedRun: { run: string; instanceId: string } | null;
+};
+type ConnectionSelection = { kind: "none" } | { kind: "selected"; connection: Connection }
+	| { kind: "ambiguous"; ids: string[] } | { kind: "unavailable"; id: string };
 type Session = {
 	context: HostContext;
 	id: string;
 	project: string;
 	runs: string | undefined;
 	run: (Run & { source: "auto" | "explicit" }) | undefined;
+	dashboardId: string | undefined;
+	dashboardGeneration: number;
 	tasks: PiTasks | undefined;
 	exported: PiTasks | undefined;
 	lastLines: string;
@@ -374,6 +390,129 @@ function shellQuote(path: string): string {
 	return `'${path.replaceAll("'", "'\\''")}'`;
 }
 
+function connectionUrl(value: unknown, loopback: boolean): string {
+	const raw = serverUrl(value);
+	const url = new URL(raw);
+	const octets = url.hostname.split(".").map(Number);
+	if (url.protocol !== "http:" || isIP(url.hostname) !== 4 || Number(url.port || 80) < 1 || url.pathname !== "/"
+		|| url.search || !/^#token=[A-Za-z0-9_-]{16,256}$/u.test(url.hash)
+		|| (loopback ? url.hostname !== "127.0.0.1"
+			: octets[0] === 0 || octets[0] === 127 || (octets[0] ?? 0) >= 224
+				|| (octets[0] === 169 && octets[1] === 254))) {
+		throw new Error("Invalid dashboard connection URL.");
+	}
+	return raw;
+}
+
+function connectionRecord(value: unknown, project: string, id: string): Connection {
+	const fields = objectFields(value);
+	if (!fields || fields.schemaVersion !== "1.0" || fields.state !== "live" || fields.run !== null
+		|| fields.instanceId !== id || !/^[0-9a-f]{48}$/u.test(id) || fields.repo !== plainDirectory(project)
+		|| typeof fields.observedAt !== "string" || typeof fields.startedAt !== "string" || !Number.isFinite(Date.parse(fields.startedAt))
+		|| !Array.isArray(fields.lanUrls) || fields.lanUrls.length > 256) throw new Error("Invalid dashboard connection record.");
+	const observed = Date.parse(fields.observedAt);
+	if (!Number.isFinite(observed) || Date.now() - observed > 15_000 || observed - Date.now() > 5_000) {
+		throw new Error("Dashboard connection record has expired.");
+	}
+	const localUrl = connectionUrl(fields.localUrl, true);
+	const local = new URL(localUrl);
+	const lanUrls = fields.lanUrls.map(value => {
+		const raw = connectionUrl(value, false);
+		const url = new URL(raw);
+		if (url.port !== local.port || url.hash !== local.hash) throw new Error("Dashboard aliases do not match.");
+		return raw;
+	});
+	const qrUrl = lanUrls[0] ?? localUrl;
+	if (fields.qrUrl !== qrUrl || typeof fields.text !== "string" || fields.text.length > 65_536) {
+		throw new Error("Invalid dashboard command text.");
+	}
+	const heading = `[ok] Dashboard live → ${localUrl}\n${lanUrls.length ? lanUrls.map(url => `[lan] ${url}`).join("\n") : "[lan] unavailable"}\n\n`;
+	if (!fields.text.startsWith(heading) || !/^[ \n\u2580-\u259f]+$/u.test(fields.text.slice(heading.length))
+		|| !/[\u2580-\u259f]/u.test(fields.text.slice(heading.length))) {
+		throw new Error("Invalid dashboard QR output.");
+	}
+	let selectedRun: Connection["selectedRun"] = null;
+	if (fields.selectedRun !== null) {
+		const selected = objectFields(fields.selectedRun);
+		if (!selected || typeof selected.instanceId !== "string" || !/^[0-9a-f]{48}$/u.test(selected.instanceId)) {
+			throw new Error("Invalid selected dashboard run.");
+		}
+		selectedRun = { run: portablePath(selected.run), instanceId: selected.instanceId };
+	}
+	return { instanceId: id, repo: project, observedAt: fields.observedAt, localUrl, lanUrls, qrUrl, text: fields.text, selectedRun };
+}
+
+function connections(session: Session): ConnectionSelection {
+	const directory = join(session.project, ".ui-design-studio", "runtime", "mcp");
+	let entries;
+	try {
+		plainDirectory(directory);
+		entries = readdirSync(directory, { withFileTypes: true });
+	} catch (error) {
+		if (!isMissing(error)) throw error;
+		return session.dashboardId ? { kind: "unavailable", id: session.dashboardId } : { kind: "none" };
+	}
+	const candidates: Connection[] = [];
+	const expired: string[] = [];
+	for (const entry of entries) {
+		if (!entry.isFile() || entry.isSymbolicLink() || !/^[0-9a-f]{48}\.json$/u.test(entry.name)) continue;
+		try {
+			candidates.push(connectionRecord(readJson(join(directory, entry.name), 128 * 1024), session.project, entry.name.slice(0, -5)));
+		} catch (error) {
+			if (error instanceof Error && error.message === "Dashboard connection record has expired.") expired.push(entry.name.slice(0, -5));
+			continue;
+		}
+	}
+	if (session.dashboardId) {
+		const connection = candidates.find(value => value.instanceId === session.dashboardId);
+		return connection ? { kind: "selected", connection } : { kind: "unavailable", id: session.dashboardId };
+	}
+	if (candidates.length > 1) return { kind: "ambiguous", ids: candidates.map(value => value.instanceId).sort() };
+	const connection = candidates[0];
+	return connection ? { kind: "selected", connection } : expired[0] ? { kind: "unavailable", id: expired[0] } : { kind: "none" };
+}
+
+function connectionLines(connection: Connection): string[] {
+	return [
+		`UI Design Studio | Connection ${connection.instanceId}`,
+		connection.localUrl,
+		connection.lanUrls[0] ?? "LAN unavailable",
+		`ui-design dashboard-info --repo ${shellQuote(connection.repo)} --session ${connection.instanceId}`,
+	];
+}
+
+function probeConnection(connection: Connection): Promise<void> {
+	const { promise, resolve, reject } = Promise.withResolvers<void>();
+	const endpoint = new URL(connection.localUrl);
+	const token = endpoint.hash.slice("#token=".length);
+	endpoint.hash = "";
+	endpoint.pathname = "/api/identity";
+	const request = httpRequest(endpoint, { method: "GET", agent: false, headers: { Authorization: `Bearer ${token}` } }, response => {
+		const chunks: Buffer[] = [];
+		let length = 0;
+		response.on("data", (chunk: Buffer) => {
+			length += chunk.length;
+			if (length > 64 * 1024) request.destroy(new Error("Dashboard identity exceeds the safe size."));
+			else chunks.push(chunk);
+		});
+		response.on("error", reject);
+		response.on("end", () => {
+			clearTimeout(timer);
+			try {
+				const identity = objectFields(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+				if (response.statusCode !== 200 || identity?.instanceId !== connection.instanceId || identity.repo !== connection.repo) {
+					throw new Error("Dashboard identity does not match the selected connection.");
+				}
+				resolve();
+			} catch (error) { reject(error); }
+		});
+	});
+	const timer = setTimeout(() => request.destroy(new Error("Dashboard identity probe timed out.")), 2_000);
+	request.on("error", error => { clearTimeout(timer); reject(error); });
+	request.end();
+	return promise;
+}
+
 export default function designProgress(value: unknown): void {
 	if (!isHost(value)) throw new Error("UI Design Studio requires the documented OMP extension API.");
 	const pi = value;
@@ -397,8 +536,8 @@ export default function designProgress(value: unknown): void {
 		if (session.context.hasUI && session.context.mode === "tui") {
 			if (encoded !== session.lastLines) session.context.ui.setWidget(WIDGET, lines, { placement: "belowEditor" });
 		} else if (Date.now() - session.lastReport >= REPORT_MS || !session.lastReport) {
-			const run = session.run ? relative(session.project, session.run.root).split(sep).join("/") : "RUN";
-			const report = `${lines.join("\n")}\nPersistent footer unavailable. Run tools/ui-design status ${shellQuote(run)} --watch for periodic progress.`;
+			const run = session.run ? relative(session.project, session.run.root).split(sep).join("/") : undefined;
+			const report = `${lines.join("\n")}\nPersistent footer unavailable.${run ? ` Run tools/ui-design status ${shellQuote(run)} --watch for periodic progress.` : ""}`;
 			if (session.context.hasUI) session.context.ui.notify(report, "info");
 			else pi.sendMessage({ customType: "ui-design-studio:progress", content: report, display: true }, { triggerTurn: false });
 			session.lastReport = Date.now();
@@ -415,6 +554,7 @@ export default function designProgress(value: unknown): void {
 			return;
 		}
 		let url: string | undefined;
+		let pinned: string[] = [];
 		try {
 			const runs = configuredRuns(session.project);
 			if (session.runs !== undefined && session.runs !== runs) {
@@ -423,6 +563,42 @@ export default function designProgress(value: unknown): void {
 				session.exported = undefined;
 			}
 			session.runs = runs;
+			let selection = connections(session);
+			if (selection.kind === "unavailable" && !session.dashboardId && session.run?.source !== "explicit" && discover(runs).length) {
+				selection = { kind: "none" };
+				session.run = undefined;
+			}
+			const connection = selection.kind === "selected" ? selection.connection : undefined;
+			if (connection) pinned = connectionLines(connection);
+			if (session.run?.source !== "explicit" && selection.kind !== "none") {
+				session.run = undefined;
+				session.exported = undefined;
+				if (selection.kind === "ambiguous") {
+					display(session, ["UI Design Studio | Multiple dashboard connections.", ...selection.ids,
+						"Select /ui-design-dashboard SESSION_ID."]);
+					return;
+				}
+				if (selection.kind === "unavailable") {
+					display(session, [`UI Design Studio | Connection ${selection.id} unavailable.`]);
+					return;
+				}
+				const selected = connection?.selectedRun;
+				if (!selected) {
+					display(session, [...pinned, "Waiting for a design run. Start or resume from your coding client."]);
+					return;
+				}
+				const root = join(session.project, selected.run);
+				const child = relative(runs, root);
+				if (!child || child === ".." || child.startsWith(`..${sep}`) || isAbsolute(child)) {
+					throw new Error("Selected connection run is outside paths.runs.");
+				}
+				const locator = readLocator(root);
+				if (!locator || locator.instanceId !== selected.instanceId) {
+					display(session, [...pinned, "Selected run stopped. Resume explicitly from your coding client."]);
+					return;
+				}
+				session.run = { ...readRun(root), source: "auto" };
+			}
 			if (!session.run) {
 				const candidates = discover(runs);
 				if (candidates.length !== 1) {
@@ -438,19 +614,20 @@ export default function designProgress(value: unknown): void {
 			const locator = readLocator(run.root);
 			if (!locator) {
 				if (run.source === "explicit") {
-					display(session, ["UI Design Studio | Design server stopped. Start tools/ui-design design-serve RUN."]);
+					display(session, [...pinned, "UI Design Studio | Design server stopped. Start tools/ui-design design-serve RUN."]);
 				} else {
 					session.run = undefined;
 					session.tasks = undefined;
 					session.exported = undefined;
-					hide(session);
+					if (pinned.length) display(session, [...pinned, "Selected run stopped. Resume explicitly from your coding client."]);
+					else hide(session);
 				}
 				return;
 			}
 			url = locator.url;
 			const raw = readJson(join(run.root, ".design-status.json"));
 			if (raw === undefined) {
-				display(session, ["UI Design Studio | Waiting for the design server status snapshot.", url]);
+				display(session, [...pinned, "UI Design Studio | Waiting for the design server status snapshot.", url]);
 				return;
 			}
 			const status = snapshot(raw);
@@ -458,16 +635,18 @@ export default function designProgress(value: unknown): void {
 			if (locator.instanceId !== status.instanceId || url !== status.url) {
 				throw new Error("Design status belongs to a different server.");
 			}
-			const lines = linesFor(status);
+			const progress = linesFor(status);
+			const lines = pinned.length ? [...pinned, progress[0] ?? "", progress.slice(1, 3).join(" | "),
+				progress.slice(3, 5).join(" | "), progress.slice(5, -1).join(" | "), status.url] : progress;
 			try { exportTasks(session, run); }
 			catch (error) { lines.splice(lines.length - 1, 0, `Pi Tasks export unavailable. ${text(error instanceof Error ? error.message : String(error))}`); }
 			display(session, lines);
 		} catch (error) {
-			if (!session.run) {
+			if (!session.run && !pinned.length) {
 				hide(session);
 				return;
 			}
-			const lines = [`UI Design Studio | Progress unavailable. ${text(error instanceof Error ? error.message : String(error))}`];
+			const lines = [...pinned, `UI Design Studio | Progress unavailable. ${text(error instanceof Error ? error.message : String(error))}`];
 			if (url) lines.push(url);
 			display(session, lines);
 		}
@@ -485,8 +664,8 @@ export default function designProgress(value: unknown): void {
 		}
 		const tasks = lifecycle.kind === "waiting" ? lifecycle.tasks : undefined;
 		if (lifecycle.kind === "active") clear(lifecycle.session);
-		const session: Session = { context, id, project, runs: undefined, run: undefined, tasks, exported: undefined,
-			lastLines: "", lastReport: 0, stopTimer: () => {} };
+		const session: Session = { context, id, project, runs: undefined, run: undefined, dashboardId: undefined, dashboardGeneration: 0,
+			tasks, exported: undefined, lastLines: "", lastReport: 0, stopTimer: () => {} };
 		lifecycle = { kind: "active", session };
 		if (context.setInterval && context.clearTimer) {
 			const timer = context.setInterval(refresh, POLL_MS);
@@ -553,6 +732,37 @@ export default function designProgress(value: unknown): void {
 				refresh();
 			} catch (error) {
 				session.context.ui.notify(text(error instanceof Error ? error.message : String(error)), "warning");
+			}
+		},
+	});
+	pi.registerCommand("ui-design-dashboard", {
+		description: "Select an MCP dashboard connection and print its verified URLs and terminal QR.",
+		async handler(args, context) {
+			start(context);
+			if (lifecycle.kind !== "active") return;
+			const generation = ++lifecycle.session.dashboardGeneration;
+			const session = lifecycle.session;
+			try {
+				const argument = args.trim();
+				if (argument && !/^[0-9a-f]{48}$/u.test(argument)) throw new Error("Use /ui-design-dashboard SESSION_ID.");
+				if (argument) session.dashboardId = argument;
+				const selection = connections(session);
+				refresh();
+				if (selection.kind === "ambiguous") throw new Error(`Multiple dashboard connections. Select /ui-design-dashboard SESSION_ID. ${selection.ids.join(" ")}`);
+				if (selection.kind !== "selected") throw new Error("Dashboard is not running.");
+				const connection = selection.connection;
+				const selectedId = session.dashboardId;
+				await probeConnection(connection);
+				if (lifecycle.kind !== "active" || lifecycle.session !== session || session.context.sessionManager.getSessionId() !== session.id
+					|| resolve(session.context.cwd) !== session.project || session.dashboardId !== selectedId || session.dashboardGeneration !== generation) return;
+				const current = connections(session);
+				if (current.kind !== "selected" || current.connection.instanceId !== connection.instanceId
+					|| current.connection.localUrl !== connection.localUrl || current.connection.text !== connection.text) return;
+				pi.sendMessage({ customType: "ui-design-studio:dashboard", content: connection.text, display: true }, { triggerTurn: false });
+			} catch (error) {
+				if (lifecycle.kind === "active" && lifecycle.session === session && session.context.sessionManager.getSessionId() === session.id) {
+					session.context.ui.notify(text(error instanceof Error ? error.message : String(error)), "warning");
+				}
 			}
 		},
 	});

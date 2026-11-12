@@ -1,5 +1,44 @@
 # Release validation
 
+## Version 1.3.0 portable MCP adapter checks
+
+Checked on Linux with Python 3.12.3, Node 24.22.2, OMP 18.19.0, and headless Chromium. The adapter uses the pinned official MCP Python SDK 1.30.0. These checks use isolated temporary projects and ephemeral listeners.
+
+| Check | Observed result | Scope |
+| --- | --- | --- |
+| MCP protocol | 14 tests passed | Real SDK stdio initialization, typed tools, resources, prompts, guide access, pending create/resume, path boundaries, two-client reuse, EOF and Linux SIGTERM |
+| Connection dashboard | 38 tests passed | Authenticated empty state, private discovery, address inventories, ownership races, bounded probes, partial-refresh recovery, slow-header teardown, CLI errors, and independently decoded Unicode QR output |
+| Wheel packaging | 3 tests passed | Bundled engine/assets/guides outside checkout, create/resume and CLI smoke, no private state, and rejected payload/readme/license symlinks |
+| Run server | 69 tests passed | Existing evidence and approval gates, actual loopback/LAN listeners, nested preview resources, default ports, encoded proxy prefixes, alias rollback, and owned cleanup |
+| Existing Studio engine | 52 tests passed | Theme, dossier, evidence, registration, and OMP-only model-routing compatibility |
+| OMP installation | 19 tests passed | Existing installer/update/restore contracts and the exact private MCP ignore subtree |
+| OMP progress extension | 33 tests passed | Waiting connections, explicit selection, run-director precedence, verified async command output, expiry, session switching, and unchanged Pi Tasks widget content |
+| Clean installed wheel | Actual second-environment smoke passed | Installed console entry points, real stdio, guides/assets, pending create/resume, authenticated listing, dashboard-info, and EOF cleanup outside checkout without project-local `.omp` files |
+| Browser | Actual waiting and run pages exercised | Loopback and real LAN alias, keyboard focus and reload, credential replacement recovery, copy, 320px reflow, retained CSS/image preview, digest-bound guided approval, stopped-run display, and explicit browser resume |
+| Native OMP | Actual PTY output observed | Installed extension pinned the connection ID and complete loopback/LAN URLs before a run existed; `/ui-design-dashboard` printed verified labels and QR blocks |
+
+The emitted terminal QR was reconstructed and independently decoded with verification-only `zxing-cpp`. No URL was sent to an external QR service. The browser approval remained a synthetic user decision; the complete run stayed pending because its other evidence gates were unmet.
+
+The [release screenshots](RELEASE-v1.3.0.md#screenshots) retain actual Chromium captures from synthetic runs. Connection capabilities, private project paths, and connection identity are visibly redacted. The tests reproduce the automated checks without private development captures.
+
+Independent source reviews identified publication rollback, default-port normalization, encoded proxy paths, pending-read shutdown, partial multi-run refresh, cumulative probe delays, metadata symlinks, unsupported Windows signal registration, and keyboard-token handling. Targeted regressions or actual browser checks verified the corrections. Alternate-family review was unavailable because per-call model overrides were disabled; no permissions were changed.
+
+Native Windows/macOS, a second physical device, and other native MCP clients were not exercised. A simulated no-Unix-signal stdio/EOF branch is not native Windows verification. No public-internet or remote HTTP MCP support is claimed. Trusted-LAN HTTP exposes bearer credentials and content to network observers. Pi Tasks task creation failed in this development session's semantic assessor; a fallback progress widget tracked the work without changing Pi Tasks integration or claiming passing task evidence.
+
+### Reproduce adapter checks
+
+```bash
+python3 -m venv .venv-mcp-test
+.venv-mcp-test/bin/python -m pip install . build zxing-cpp pillow
+.venv-mcp-test/bin/python -m unittest discover -s tests -p 'test_mcp*.py' -v
+.venv-mcp-test/bin/python -m unittest discover -s tests -p 'test_design_server.py' -v
+.venv-mcp-test/bin/python -m unittest discover -s tests -p 'test_studio.py' -v
+.venv-mcp-test/bin/python -m unittest discover -s tests -p 'test_install.py' -v
+.venv-mcp-test/bin/python -m unittest discover -s tests -p 'test_progress_extension.py' -v
+node --test tests/test_progress_extension.mjs
+.venv-mcp-test/bin/python -m build --wheel
+```
+
 ## Version 1.2.0 progress feature checks
 
 The progress feature was checked on Linux with Python 3.12.3, Node 24.22.2, OMP 18.19.0 and a local Chromium browser.
@@ -101,4 +140,4 @@ bash -n install.sh tools/ui-design
 .venv-test/bin/python scripts/package_release.py --check
 ```
 
-These package tests use Python's standard library and require no Python dependency downloads. Use the project's own build, browser/native, accessibility and performance checks for its actual interface. See [Distribution](DISTRIBUTION.md) for release reproduction and [Installation](INSTALLATION.md) for installation/upgrade troubleshooting.
+The original OMP-only helpers and their tests use Python's standard library. Adapter tests require the dependencies in `pyproject.toml` and the verification-only packages shown above. Use the project's own build, browser/native, accessibility and performance checks for its actual interface. See [Distribution](DISTRIBUTION.md) for release reproduction and [Installation](INSTALLATION.md) for installation/upgrade troubleshooting.

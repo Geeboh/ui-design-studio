@@ -1,5 +1,16 @@
 # Release notes
 
+## 1.3.0 · 12 November 2026
+
+### Portable local MCP adapter
+
+- Added the installable `ui-design-studio-mcp` 1.3.0 Python package with local stdio tools, workflow prompts, and allowlisted guide resources.
+- Added a per-connection authenticated waiting dashboard, identity-verified run reuse, and ownership-aware cleanup without creating a run during connection.
+- Added validated loopback and LAN aliases, private connection discovery, and `ui-design dashboard-info` with locally generated terminal QR output.
+- Extended the existing OMP progress widget with waiting-session details and `/ui-design-dashboard` while retaining explicit run-director ownership.
+- Kept the OMP installer standard-library-only and separate from MCP configuration and package installation.
+- Added [screenshots and runnable examples](RELEASE-v1.3.0.md) for connection setup, verified addresses, and retained artwork previews.
+
 ## 1.2.0 · 12 November 2026
 
 ### Live development progress and Design Server

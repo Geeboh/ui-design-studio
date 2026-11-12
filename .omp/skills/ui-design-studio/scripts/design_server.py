@@ -18,6 +18,8 @@ Explicit artwork publication retains bytes before acknowledging an ID/version.
 Manifests retain capture time; a separate index orders current publications,
 including content reverts. Cleanup keeps inert OS-lock coordination files.
 Status command success means the records were read, not that gates passed.
+Public aliases use one address generation for request validation and metadata.
+LAN updates replace advertised URLs, permitted Hosts and permitted Origins.
 """
 from __future__ import annotations
 
@@ -42,6 +44,7 @@ import socket
 import tempfile
 import threading
 import time
+from typing import NamedTuple
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 import xml.etree.ElementTree as ET
 
@@ -783,15 +786,35 @@ def task_records(record):
     return result
 
 
+class ServerAddresses(NamedTuple):
+    """Keep metadata and request validation on one immutable address generation."""
+
+    url: str
+    local_url: str | None
+    lan_urls: tuple[str, ...]
+    bases: tuple[str, ...] = ()
+    origins: frozenset[str] = frozenset()
+
+
 class DesignState:
-    def __init__(self, studio, root, url="", preview_capability="", repo=None):
+    def __init__(self, studio, root, url="", preview_capability="", repo=None, *, addresses=None):
         self.studio, self.root = studio, checked_root(studio, root)
-        self.url, self.preview_capability = url, preview_capability
+        self.addresses = addresses if addresses is not None else ServerAddresses(url, None, ())
+        self.preview_capability = preview_capability
         self.started_at = timestamp()
         self.library = ArtworkLibrary(studio, self.root, repo)
         self.lock = threading.RLock()
         self.history = []
         self.last_revision = None
+
+    @property
+    def url(self):
+        return self.addresses.url
+
+    def server_details(self):
+        addresses = self.addresses
+        return {"url": addresses.url, "localUrl": addresses.local_url, "lanUrls": list(addresses.lan_urls),
+                "startedAt": self.started_at}
 
     def snapshot(self):
         with self.lock, records_lock(self.studio, self.root):
@@ -806,7 +829,7 @@ class DesignState:
                     self.last_revision = revision
                 return {"schemaVersion": "1.0", "revision": revision, "observedAt": observed,
                         "run": {"id": self.root.name, "themeId": "", "mode": "", "phase": "", "status": "unverified"},
-                        "server": {"url": self.url, "startedAt": self.started_at},
+                        "server": self.server_details(),
                         "gates": [{"id": stage, "label": stage.title(), "status": "failed", "detail": message}
                                   for stage in ("assessment", "plan", "design", "produce", "finalize")],
                         "coverage": {"required": 0, "mockups": 0, "verified": 0, "inventoryComplete": False},
@@ -952,7 +975,7 @@ class DesignState:
         except (ValueError, TypeError):
             pass
         snap = {"schemaVersion": "1.0", "run": {key: run.get(key, "") for key in ("id", "themeId", "mode", "phase", "status")},
-                "server": {"url": self.url, "startedAt": self.started_at}, "gates": gates, "coverage": counts,
+                "server": self.server_details(), "gates": gates, "coverage": counts,
                 "nextAction": next_action, "blockers": blockers, "warnings": warnings, "workers": workers, "tasks": tasks,
                 "statistics": {"artworks": len(published_art), "workers": len(workers), "tasks": len(tasks), "evidence": len(evidence), "passedEvidence": len(fresh), "elapsedSeconds": elapsed},
                 "artworks": published_art, "approvals": approvals,
@@ -1027,9 +1050,72 @@ def public_base(host, port, supplied):
     return f"http://{hostname}:{port}/"
 
 
+def http_origin(value, *, allow_path=False):
+    if not isinstance(value, str) or re.search(r"[\x00-\x20\x7f-\x9f\\?#]", value):
+        raise ValueError("Invalid HTTP origin")
+    parsed = urlsplit(value)
+    if (parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username is not None
+            or parsed.password is not None or (parsed.path and not allow_path) or parsed.netloc.endswith(":")):
+        raise ValueError("Invalid HTTP origin")
+    port = parsed.port
+    if port == 0:
+        raise ValueError("Invalid HTTP origin")
+    hostname = "[" + parsed.hostname + "]" if ":" in parsed.hostname else parsed.hostname
+    if port is not None and port != {"http": 80, "https": 443}[parsed.scheme]:
+        hostname += ":" + str(port)
+    return f"{parsed.scheme}://{hostname}"
+
+
+def validated_lan_addresses(studio, addresses):
+    need(studio, isinstance(addresses, (tuple, list)), "LAN addresses must be IPv4 addresses")
+    result = []
+    for value in addresses:
+        try:
+            address = ipaddress.IPv4Address(value) if isinstance(value, str) else None
+        except ipaddress.AddressValueError:
+            address = None
+        need(studio, address is not None and str(address) == value
+             and not (address.is_loopback or address.is_unspecified or address.is_multicast or address.is_link_local),
+             "LAN addresses must be non-loopback, non-link-local unicast IPv4 addresses")
+        if value not in result:
+            result.append(value)
+    return tuple(result)
+
+
 class DesignHTTPServer(ThreadingHTTPServer):
     daemon_threads = False
     allow_reuse_address = True
+
+    def __init__(self, *args, **kwargs):
+        self.connections = set()
+        self.connections_lock = threading.Lock()
+        super().__init__(*args, **kwargs)
+
+    def process_request(self, request, client_address):
+        with self.connections_lock:
+            self.connections.add(request)
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            with self.connections_lock:
+                self.connections.discard(request)
+            raise
+
+    def shutdown_request(self, request):
+        try:
+            super().shutdown_request(request)
+        finally:
+            with self.connections_lock:
+                self.connections.discard(request)
+
+    def cancel_pending_reads(self):
+        with self.connections_lock:
+            connections = tuple(self.connections)
+        for connection in connections:
+            try:
+                connection.shutdown(socket.SHUT_RD)
+            except OSError:
+                pass
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1067,6 +1153,28 @@ class Handler(BaseHTTPRequestHandler):
         supplied = self.headers.get("Authorization", "")
         return secrets.compare_digest(supplied, "Bearer " + token)
 
+    def request_host_allowed(self):
+        values = self.headers.get_all("Host", [])
+        if len(values) != 1 or re.search(r"[\x00-\x20\x7f-\x9f]", values[0]):
+            return False
+        host = values[0]
+        if self.server.shutdown_only:
+            self.request_base = f"http://127.0.0.1:{self.owner.local.server_port}/"
+            return host.lower() == urlsplit(self.request_base).netloc
+        with self.owner.state.lock:
+            self.addresses = self.owner.state.addresses
+        try:
+            candidates = [base for base in self.addresses.bases
+                          if http_origin(base, allow_path=True) == http_origin(f"{urlsplit(base).scheme}://{host}")]
+        except ValueError:
+            return False
+        if not candidates:
+            return False
+        path = unquote(urlsplit(self.path).path)
+        matching = [base for base in candidates if path.startswith(unquote(urlsplit(base).path))]
+        self.request_base = max(matching, key=lambda base: len(unquote(urlsplit(base).path))) if matching else candidates[0]
+        return True
+
     def mutation_origin_allowed(self):
         origin = self.headers.get("Origin")
         fetch_site = self.headers.get("Sec-Fetch-Site")
@@ -1074,15 +1182,19 @@ class Handler(BaseHTTPRequestHandler):
             return False
         if origin is None:
             return True
-        parsed = urlsplit(self.owner.base_url)
-        return origin == f"{parsed.scheme}://{parsed.netloc}"
+        if len(self.headers.get_all("Origin", [])) != 1:
+            return False
+        try:
+            return http_origin(origin) in self.addresses.origins
+        except ValueError:
+            return False
 
     def request_path(self):
         parsed = urlsplit(self.path)
         if parsed.query or parsed.fragment or parsed.scheme or parsed.netloc:
             raise ValueError("Queries and absolute request targets are not accepted")
         value = unquote(parsed.path)
-        prefix = urlsplit(self.owner.base_url).path.rstrip("/")
+        prefix = unquote(urlsplit(self.request_base).path).rstrip("/")
         if prefix and value.startswith(prefix + "/"):
             value = value[len(prefix):]
         if "\\" in value or any(piece in (".", "..") for piece in value.split("/")) or any(ord(c) < 32 for c in value):
@@ -1091,11 +1203,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         owner = self.owner
-        if self.server.shutdown_only:
-            self.respond(404, {"error": "Not found"})
-            return
         try:
+            if not self.request_host_allowed():
+                self.respond(403, {"error": "Unadvertised request Host"})
+                return
             path = self.request_path()
+            if path == "/api/identity":
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                self.respond(200, {"instanceId": owner.instance_id, "run": str(owner.root)})
+                return
+            if self.server.shutdown_only:
+                self.respond(404, {"error": "Not found"})
+                return
             if path == "/api/snapshot":
                 if not self.authorized(owner.token):
                     self.respond(401, {"error": "Bearer authentication required"})
@@ -1126,7 +1247,7 @@ class Handler(BaseHTTPRequestHandler):
         version, relative = parts[3], parts[4]
         record, content = owner.state.library.file(version, relative)
         directory = owner.state.library.directory / version / "files"
-        prefix = urlsplit(owner.base_url).path + f"preview/{owner.preview_capability}/{version}/"
+        prefix = urlsplit(self.request_base).path + f"preview/{owner.preview_capability}/{version}/"
         suffix = Path(relative).suffix.lower()
         if suffix in (".html", ".htm"):
             parser = SafeHTML(owner.studio, directory, relative, record["files"], prefix)
@@ -1138,7 +1259,7 @@ class Handler(BaseHTTPRequestHandler):
         elif suffix == ".svg":
             content = safe_svg(owner.studio, directory, relative, content, record["files"], prefix)
         content_type = mimetypes.guess_type(relative)[0] or "application/octet-stream"
-        parsed = urlsplit(owner.base_url)
+        parsed = urlsplit(self.request_base)
         source = f"{parsed.scheme}://{parsed.netloc}{prefix}"
         csp = f"sandbox; default-src 'none'; script-src 'none'; style-src 'unsafe-inline' {source}; img-src {source} data:; font-src {source} data:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
         self.respond(200, content, content_type, csp, {"Access-Control-Allow-Origin": "*", "Cross-Origin-Resource-Policy": "cross-origin"})
@@ -1146,6 +1267,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         owner = self.owner
         try:
+            if not self.request_host_allowed():
+                self.respond(403, {"error": "Unadvertised request Host"})
+                return
             path = self.request_path()
             shutdown = self.server.shutdown_only
             if (shutdown and path != "/api/shutdown") or (not shutdown and path != "/api/approval"):
@@ -1183,11 +1307,13 @@ class Handler(BaseHTTPRequestHandler):
 
 
 class DesignServer:
-    def __init__(self, studio, root, host="127.0.0.1", port=0, public_url=None, interval=1.0, repo=None):
+    def __init__(self, studio, root, host="127.0.0.1", port=0, public_url=None, interval=1.0, repo=None, *, lan_addresses=()):
         self.studio, self.root = studio, checked_root(studio, root)
         need(studio, isinstance(port, int) and 0 <= port <= 65535 and interval > 0, "Port/refresh interval is invalid")
         self.host, self.port, self.public_url, self.interval = host, port, public_url, interval
         self.repo = repo
+        self._lan_addresses = validated_lan_addresses(studio, lan_addresses)
+        self.lock_contended = False
         self.token, self.preview_capability, self.shutdown_token = (secrets.token_urlsafe(32) for unused in range(3))
         self.instance_id = secrets.token_hex(24)
         self.stop = threading.Event()
@@ -1195,7 +1321,75 @@ class DesignServer:
         self.close_lock = threading.RLock()
         self.http = self.local = self.run_lock = self.temporary = self.state = None
         self.threads = []
-        self.base_url = ""
+
+    @property
+    def addresses(self):
+        if self.state is None:
+            return None
+        with self.state.lock:
+            return self.state.addresses
+
+    @property
+    def base_url(self):
+        addresses = self.addresses
+        return addresses.bases[0] if addresses else ""
+
+    @property
+    def url(self):
+        addresses = self.addresses
+        return addresses.url if addresses else ""
+
+    @property
+    def local_url(self):
+        addresses = self.addresses
+        return addresses.local_url if addresses else None
+
+    @property
+    def lan_urls(self):
+        addresses = self.addresses
+        return list(addresses.lan_urls) if addresses else []
+
+    def address_snapshot(self, addresses):
+        bound = ipaddress.ip_address(self.http.server_address[0])
+        port = self.http.server_port
+        local_base = None
+        if bound.is_loopback or bound.is_unspecified:
+            local_host = ("127.0.0.1" if bound.version == 4 else "::1") if bound.is_unspecified else str(bound)
+            local_base = public_base(local_host, port, None)
+        supported = addresses if str(bound) == "0.0.0.0" else tuple(value for value in addresses if value == str(bound))
+        lan_bases = tuple(public_base(value, port, None) for value in supported)
+        base = public_base(self.host, port, self.public_url)
+        if not self.public_url and lan_bases:
+            base = lan_bases[0]
+        bases = tuple(dict.fromkeys(value for value in (base, local_base, *lan_bases) if value))
+        origins = frozenset(http_origin(base, allow_path=True) for base in bases)
+        fragment = "#token=" + self.token
+        return ServerAddresses(base + fragment, local_base + fragment if local_base else None,
+                               tuple(value + fragment for value in lan_bases), bases, origins)
+
+    def set_lan_addresses(self, addresses: tuple[str, ...]):
+        addresses = validated_lan_addresses(self.studio, addresses)
+        need(self.studio, self.state is not None, "A design server must start before updating LAN addresses")
+        with self.state.lock:
+            if self.stop.is_set() or self.closed.is_set():
+                return
+            updated = self.address_snapshot(addresses)
+            if updated == self.state.addresses:
+                return
+            locator = read_record(self.studio, self.root, ".design-server.json")
+            need(self.studio, isinstance(locator, dict) and locator.get("instanceId") == self.instance_id
+                 and locator.get("run") == str(self.root), "Server owner changed before updating LAN addresses")
+            previous = self.state.addresses
+            self.state.addresses = updated
+            try:
+                private_json(self.studio, self.studio.safe_path(self.root, ".design-server.json"),
+                             {**locator, "url": updated.url, "localUrl": updated.local_url, "lanUrls": list(updated.lan_urls)})
+                self.publish_status()
+            except BaseException:
+                self.state.addresses = previous
+                private_json(self.studio, self.studio.safe_path(self.root, ".design-server.json"), locator)
+                self.publish_status()
+                raise
 
     def start(self):
         need(self.studio, self.run_lock is None and not self.closed.is_set(), "A design server instance can only start once")
@@ -1216,11 +1410,13 @@ class DesignServer:
                 server_type = IPv6Server
             self.http = server_type((self.host, self.port), Handler)
             self.local = DesignHTTPServer(("127.0.0.1", 0), Handler)
-            self.base_url = public_base(self.host, self.http.server_port, self.public_url)
-            self.url = self.base_url + "#token=" + self.token
-            self.state = DesignState(self.studio, self.root, self.url, self.preview_capability, self.repo)
-            locator = {"schemaVersion": "1.0", "instanceId": self.instance_id, "url": self.url, "startedAt": self.state.started_at,
+            self.state = DesignState(self.studio, self.root, preview_capability=self.preview_capability, repo=self.repo,
+                                     addresses=self.address_snapshot(self._lan_addresses))
+            addresses = self.state.addresses
+            locator = {"schemaVersion": "1.0", "instanceId": self.instance_id, "url": addresses.url,
+                       "localUrl": addresses.local_url, "lanUrls": list(addresses.lan_urls), "startedAt": self.state.started_at,
                        "pid": os.getpid(), "run": str(self.root), "tempDirectory": str(self.temporary), "previewCapability": self.preview_capability,
+                       "probeUrl": f"http://127.0.0.1:{self.local.server_port}/api/identity",
                        "localShutdown": {"url": f"http://127.0.0.1:{self.local.server_port}/api/shutdown", "token": self.shutdown_token}}
             private_json(self.studio, self.studio.safe_path(self.root, ".design-server.json", must_exist=False), locator)
             self.publish_status()
@@ -1234,6 +1430,7 @@ class DesignServer:
             self.threads.append(watcher)
             return self
         except BaseException:
+            self.lock_contended = bool(self.run_lock and self.run_lock.contended)
             self.close()
             raise
 
@@ -1292,6 +1489,7 @@ class DesignServer:
                     if server:
                         if len(self.threads) > index:
                             server.shutdown()
+                        server.cancel_pending_reads()
                         server.server_close()
                 for thread in self.threads[:2]:
                     if thread is not threading.current_thread():
@@ -1505,14 +1703,17 @@ def command(studio, args):
     need(studio, args.interval > 0, "Status interval must be positive")
     root = checked_root(studio, args.run)
     locator = read_record(studio, root, ".design-server.json", {})
-    state = DesignState(studio, root, locator.get("url", ""), locator.get("previewCapability", ""))
+    state = DesignState(studio, root, preview_capability=locator.get("previewCapability", ""),
+                        addresses=ServerAddresses(locator.get("url", ""), locator.get("localUrl"), tuple(locator.get("lanUrls", ()))))
+    state.started_at = locator.get("startedAt", state.started_at)
     if not args.watch:
         snap = state.snapshot()
         return {"status": "PASS", **snap, "lines": status_lines(snap)}
     try:
         while True:
             locator = read_record(studio, root, ".design-server.json", {})
-            state.url = locator.get("url", "")
+            state.addresses = ServerAddresses(locator.get("url", ""), locator.get("localUrl"), tuple(locator.get("lanUrls", ())))
+            state.started_at = locator.get("startedAt", state.started_at)
             state.preview_capability = locator.get("previewCapability", "")
             snap = state.snapshot()
             print("\n".join(status_lines(snap)), flush=True)
