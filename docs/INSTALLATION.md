@@ -1,6 +1,6 @@
 # Installation, configuration and maintenance
 
-**UI Design Studio 1.1.0**
+**UI Design Studio 1.2.0**
 
 ## Contents
 
@@ -32,7 +32,7 @@ The designer inspects available OMP capabilities at runtime. A particular Figma 
 
 ## 2. Select the project and install
 
-Extract the release. Open a shell in its `ui-design-studio-v1.1.0` directory. Point `--project` at the existing repository containing the application you want to redesign:
+Extract the release. Open a shell in its `ui-design-studio-v1.2.0` directory. Point `--project` at the existing repository containing the application you want to redesign:
 
 ```bash
 bash ./install.sh --project /absolute/path/to/project --dry-run
@@ -100,7 +100,8 @@ All paths below are relative to the selected project root.
 | `.omp/agents/ui-*.md` | Seven specialist role definitions |
 | `.omp/commands/ui-design.md` | Guided/director convenience command |
 | `.omp/commands/ui-yolo.md` | Autonomous design convenience command |
-| `tools/ui-design` | Venv-backed theme and run helper |
+| `.omp/extensions/ui-design-progress.ts` | Pinned below-editor development status and actual Pi Tasks observation bridge |
+| `tools/ui-design` | Venv-backed theme, run, Design Server and cleanup helper |
 | `ui-design-studio.json` | Project design policy; created once and preserved on update |
 | `docs/ui-design-studio/` | User documentation and ready-to-use prompts |
 | `.venv-ui-design/` | Local Python virtual environment |

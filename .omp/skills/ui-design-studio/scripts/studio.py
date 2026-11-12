@@ -27,7 +27,7 @@ import uuid
 import zipfile
 import xml.etree.ElementTree as ET
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 SLUG = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 SEMVER = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\Z")
 SHA = re.compile(r"[0-9a-f]{64}\Z")
@@ -1003,6 +1003,36 @@ def theme_new(repo, theme_id, name):
             "message": "Scaffolded only; app integration and approval are still pending. No default was changed."}
 
 
+def _design_backend():
+    """Load the sibling only on use, including importlib-based Python callers."""
+    import importlib.util
+    import types
+    if not hasattr(_design_backend, "module"):
+        path = Path(__file__).with_name("design_server.py")
+        spec = importlib.util.spec_from_file_location("ui_design_studio_design_server", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module.studio = types.SimpleNamespace(**globals())
+        _design_backend.module = module
+    return _design_backend.module
+
+
+def _registered_result(result, run_path):
+    try:
+        run = read_json(Path(run_path) / "run.json")
+        if run.get("mode") == "yolo":
+            backend = _design_backend()
+            cleanup = backend.cleanup_registered_yolo(backend.studio, run_path)
+            if cleanup is not None:
+                result["cleanup"] = cleanup
+    except (StudioError, OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
+        result["cleanup"] = {"status": "FAIL", "error": str(exc)}
+    if result.get("cleanup", {}).get("status") == "FAIL":
+        result["status"] = "BLOCKED"
+        result["message"] = "Registry registration succeeded; automatic design server cleanup remains pending. Retry design-cleanup for this run."
+    return result
+
+
 def register_theme(repo, theme_id, run_path, make_default=False):
     validate_slug(theme_id)
     repo = Path(repo).resolve()
@@ -1032,9 +1062,9 @@ def register_theme(repo, theme_id, run_path, make_default=False):
         existing = next((item for item in registry["themes"] if item["id"] == theme_id), None)
         if existing and all(existing.get(key) == value for key, value in (
                 ("version", verification["version"]), ("themeDigest", verification["themeDigest"]), ("runId", run_result["runId"]))):
-            return {"status": "PASS", "registry": str(themes / "registry.json"), "defaultTheme": registry["defaultTheme"],
+            return _registered_result({"status": "PASS", "registry": str(themes / "registry.json"), "defaultTheme": registry["defaultTheme"],
                     "alreadyRegistered": True, "backup": None,
-                    "message": "Identical run/version/digest is already registered; no registry or default change was made."}
+                    "message": "Identical run/version/digest is already registered; no registry or default change was made."}, run_path)
         if run_document["themeAction"] == "new":
             require(existing is None, "New theme ID is already registered; choose a new ID or explicitly start a modify-default run")
         if run_document["themeAction"] == "modify-default":
@@ -1060,9 +1090,9 @@ def register_theme(repo, theme_id, run_path, make_default=False):
     finally:
         os.close(fd)
         lock.unlink(missing_ok=True)
-    return {"status": "PASS", "registry": str(path), "defaultTheme": registry["defaultTheme"],
+    return _registered_result({"status": "PASS", "registry": str(path), "defaultTheme": registry["defaultTheme"],
             "backup": str(backup) if backup else None,
-            "message": "Registry updated atomically. The app's reviewed adapter must consume this registry; this command does not deploy or activate a running application."}
+            "message": "Registry updated atomically. The app's reviewed adapter must consume this registry; this command does not deploy or activate a running application."}, run_path)
 
 
 def semver_newer(candidate, previous):
@@ -1178,6 +1208,7 @@ def parser():
         sub = subs.add_parser(command, help=description)
         sub.add_argument("--repo", required=True)
         sub.add_argument("--run", required=True)
+    _design_backend().add_parsers(subs)
     return main
 
 
@@ -1212,6 +1243,9 @@ def main(argv=None):
             result = models_apply(args.repo, args.run)
         elif args.command == "models-restore":
             result = models_restore(args.repo, args.run)
+        elif args.command in _design_backend().COMMANDS:
+            backend = _design_backend()
+            result = backend.command(backend.studio, args)
         else:
             result = register_theme(args.repo, args.theme, args.run, args.make_default)
         print(json.dumps(result, indent=2, ensure_ascii=False))

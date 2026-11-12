@@ -1,6 +1,6 @@
 # UI Design Studio
 
-**Version 1.1.0 · A portable UI design workflow for Oh My Pi**
+**Version 1.2.0 · A portable UI design workflow for Oh My Pi**
 
 Assess an interface, develop coherent visual directions, design its complete pages and dialogs, implement the selected system, and deliver a documented theme. UI Design Studio combines a design director, nine reusable skills, seven specialist agent roles, run records, and installation/theme utilities.
 
@@ -14,7 +14,7 @@ The designer learns the project from its own instructions, requirements, source 
 | --- | --- |
 | [Installation and maintenance](docs/INSTALLATION.md) | Requirements, installation, live-session discovery, configuration, upgrades, restore and troubleshooting |
 | [Run types and copy/paste recipes](docs/RUN-TYPES.md) | Guided, YOLO, `/goal` with YOLO, assessment, mockups, references, themes, scoped work, resume and model choices |
-| [Release notes](docs/CHANGELOG.md) | Changes in 1.1.0 and compatibility with existing installations |
+| [Release notes](docs/CHANGELOG.md) | Changes in 1.2.0 and compatibility with existing installations |
 | [Validation record](docs/VALIDATION.md) | Checks actually performed on this release and their limits |
 | [Distribution and release maintenance](docs/DISTRIBUTION.md) | License, package contents, checksum verification and reproducible ZIP builds |
 | [Primary sources](docs/SOURCES.md) | Upstream OMP behaviour, accessibility, tokens and performance references |
@@ -23,7 +23,7 @@ The installer places this documentation in `docs/ui-design-studio/` inside the t
 
 ## Quick start
 
-From the extracted `ui-design-studio-v1.1.0` directory, install into the **actual project root**:
+From the extracted `ui-design-studio-v1.2.0` directory, install into the **actual project root**:
 
 ```bash
 bash ./install.sh --project /absolute/path/to/project --dry-run
@@ -163,15 +163,21 @@ For web work, target WCAG 2.2 AA and test keyboard/focus behaviour, labels, cont
 
 Default run location: `docs/design/runs/<run-id>/`. Default themes location: `themes/<theme-id>/`. The project configuration can change these paths.
 
-A run records project context, model policy/actual routing, brief, findings, coverage, decisions, evidence and blockers. Coverage links required pages/dialogs/states/viewports to their mockups, implementation and QA evidence. Status uses real counts, for example:
+A run records project context, model policy, actual routing, findings, coverage, decisions, evidence and blockers. The Design Server displays live progress, workers, tasks, coverage bars and gate statistics. Its Working feed shows generated artwork and mockups as clickable thumbnails. The accumulating Library retains browsable versions, and guided Approvals records submitted artistic choices against the reviewed bytes.
 
-```text
-UI Design: Meadow | Produce | yolo | active
-Coverage: 18/24 cases | Gates: 4/6
-Next: Verify narrow dialogs | Blocked: none
+Start it in a retained foreground service after creating or resuming a run:
+
+```bash
+tools/ui-design design-serve docs/design/runs/RUN_ID --host 0.0.0.0 --port 0 --public-url http://YOUR_LAN_IP
 ```
 
-This is a reporting convention, not an installed OMP footer extension. Counts describe the actual run; they are not invented completion percentages.
+Use the actual run directory and reachable LAN address. Readiness prints the complete URL with its actual port and access fragment. The installed OMP extension pins status and that address below the editor, separately from Pi Tasks. On hosts without that UI, `tools/ui-design status docs/design/runs/RUN_ID --watch` emits status regularly.
+
+The URL authorizes its holder to inspect artwork and submit guided approvals. Keep it private. Plain HTTP is for trusted LAN use; use SSH forwarding or an existing HTTPS reverse proxy on untrusted networks. Starting the server does not create a public tunnel.
+
+Use `tools/ui-design design-cleanup docs/design/runs/RUN_ID` to stop and completely remove owned server runtime resources. `design-cleanup --all --repo .` cleans all run servers in the configured run directory. Design evidence and the artwork library remain intact. Completed yolo runs automatically request cleanup and verify it at handover.
+
+See `.omp/skills/ui-design-studio/references/run-records.md`, section "Live progress and Design Server", for publication, approvals and cleanup commands. Counts describe the actual declared scope; incomplete inventories do not become invented completion percentages.
 
 A completed handover identifies the theme/version, package and preview, changed behaviour, default status, measured verification, known limitations, customization steps and rollback. A draft package or successful helper command is not, by itself, a completed redesign.
 

@@ -18,5 +18,6 @@ Run in normal OMP mode or within `/goal` when its objective explicitly loads thi
 7. Choose a suitable theme name and collision-free stable ID. First successful finalization makes it the default. On later runs without an explicit action, create a new theme and preserve the existing default.
 8. Record design choices with actor `agent-yolo`, rationale and artifact identities. Do not impersonate human approval, fabricate evidence or relax quality gates.
 9. Finalize, package, document and hand over the result. Preserve rollback and existing deployment authorization. Ask only for a genuine unresolved blocker, after completing independent work.
+10. Run `tools/ui-design design-cleanup <run-directory>` before completed handover and verify shutdown. Successful final acceptance and yolo registration also request automatic cleanup. Keep original design evidence and the accumulated artwork library. A blocked run remains incomplete; do not label cancellation or cleanup as successful finalization.
 
 Yolo delegates design judgment for the current run. It does not disable runtime permissions, authorize unrelated changes or turn failed checks into passing results.

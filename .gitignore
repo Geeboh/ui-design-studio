@@ -11,6 +11,8 @@ htmlcov/
 
 # Local installation state and backups
 /.ui-design-studio/
+**/.design-server.json
+**/.design-status.json
 
 # Local environment configuration
 .env

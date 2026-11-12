@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; frame-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Design workspace</title>
+  <link rel="stylesheet" href="dashboard.css">
+  <script src="dashboard.js" defer></script>
+</head>
+<body data-dashboard>
+  <a class="skip-link" href="#workspace-main">Skip to workspace</a>
+  <header class="workspace-header">
+    <div class="header-main">
+      <div class="workspace-identity">
+        <span class="workspace-mark" aria-hidden="true">DS</span>
+        <div>
+          <h1>Design workspace</h1>
+          <p id="run-summary" class="muted">Waiting for the run snapshot.</p>
+        </div>
+      </div>
+      <div class="connection-controls">
+        <span id="connection-status" class="status-badge" data-state="loading" role="status">Connecting</span>
+        <button id="refresh-snapshot" type="button" class="button button-quiet">Refresh</button>
+      </div>
+    </div>
+    <div class="server-address">
+      <span class="field-label">Private server address</span>
+      <code id="server-url" tabindex="0" aria-label="Full private server address"></code>
+      <button id="copy-address" type="button" class="button button-quiet">Copy address</button>
+      <span id="address-feedback" class="muted" role="status">Keep this capability address private.</span>
+    </div>
+    <nav class="workspace-nav" aria-label="Workspace sections">
+      <button id="nav-progress" type="button" data-view="progress" aria-controls="progress-panel" aria-current="page">Progress</button>
+      <button id="nav-feed" type="button" data-view="feed" aria-controls="feed-panel">Working feed</button>
+      <button id="nav-library" type="button" data-view="library" aria-controls="library-panel">Library</button>
+      <button id="nav-approvals" type="button" data-view="approvals" aria-controls="approvals-panel">Approvals <span id="approval-count" class="nav-count" hidden></span></button>
+    </nav>
+  </header>
+
+  <main id="workspace-main" class="workspace-main" tabindex="-1">
+    <noscript><p class="notice" data-state="failed">JavaScript is required to fetch live run records. No progress or approval has been loaded.</p></noscript>
+    <div id="connection-notice" class="notice" data-state="loading" role="status">Connecting to the design server. No run records have been loaded.</div>
+    <p id="snapshot-age" class="snapshot-age muted">No snapshot received.</p>
+
+    <section id="progress-panel" data-view-panel="progress" aria-labelledby="progress-heading" aria-busy="true">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Run records</p>
+          <h2 id="progress-heading" tabindex="-1">Progress</h2>
+          <p id="run-detail" class="muted">Gates and coverage come from the current run records.</p>
+        </div>
+        <span id="run-status" class="status-badge" data-state="pending">Not loaded</span>
+      </div>
+
+      <div class="progress-layout">
+        <section class="panel" aria-labelledby="coverage-heading">
+          <div class="panel-heading"><h3 id="coverage-heading">Coverage</h3><span id="inventory-status" class="muted">Inventory not loaded</span></div>
+          <div class="coverage-row">
+            <div class="metric-heading"><label for="mockup-progress">Mockups</label><span id="mockup-count">Not loaded</span></div>
+            <progress id="mockup-progress" max="1" value="0" hidden></progress>
+          </div>
+          <div class="coverage-row">
+            <div class="metric-heading"><label for="verified-progress">Verified implementation</label><span id="verified-count">Not loaded</span></div>
+            <progress id="verified-progress" max="1" value="0" hidden></progress>
+          </div>
+          <p id="coverage-note" class="muted">Verification requires a mockup, implementation, and fresh passed QA evidence for each required case.</p>
+        </section>
+        <section class="panel" aria-labelledby="gates-heading">
+          <div class="panel-heading"><h3 id="gates-heading">Acceptance gates</h3><span id="gate-count" class="muted">Not loaded</span></div>
+          <ol id="gate-list" class="gate-list"><li class="empty-state">Waiting for gate records.</li></ol>
+        </section>
+      </div>
+
+      <section class="panel next-panel" aria-labelledby="next-heading">
+        <h3 id="next-heading">Next action</h3>
+        <p id="next-action">Waiting for the director's progress record.</p>
+        <div class="notice-columns">
+          <div><h4>Blockers</h4><ul id="blocker-list" class="message-list"><li class="muted">Not loaded.</li></ul></div>
+          <div id="warnings-section" hidden><h4>Warnings</h4><ul id="warning-list" class="message-list"></ul></div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="statistics-heading">
+        <div class="panel-heading"><h3 id="statistics-heading">Recorded statistics</h3><span class="muted">Actual counts only</span></div>
+        <dl id="statistics" class="statistics-grid">
+          <div><dt>Artwork versions</dt><dd data-stat="artworks">Not loaded</dd></div>
+          <div><dt>Workers</dt><dd data-stat="workers">Not loaded</dd></div>
+          <div><dt>Tasks</dt><dd data-stat="tasks">Not loaded</dd></div>
+          <div><dt>Evidence records</dt><dd data-stat="evidence">Not loaded</dd></div>
+          <div><dt>Passed evidence</dt><dd data-stat="passedEvidence">Not loaded</dd></div>
+          <div><dt>Elapsed time</dt><dd data-stat="elapsedSeconds">Not loaded</dd></div>
+        </dl>
+      </section>
+
+      <div class="work-layout">
+        <section class="panel" aria-labelledby="workers-heading">
+          <div class="panel-heading"><h3 id="workers-heading">Workers</h3><span id="worker-count" class="muted">Not loaded</span></div>
+          <p class="muted">Reported worker status is not proof of process liveness.</p>
+          <ul id="worker-list" class="work-list"><li class="empty-state">Waiting for worker records.</li></ul>
+        </section>
+        <section class="panel" aria-labelledby="tasks-heading">
+          <div class="panel-heading"><h3 id="tasks-heading">Tasks</h3><span id="task-count" class="muted">Not loaded</span></div>
+          <p class="muted">Director records and available Pi Tasks state. No task status is inferred.</p>
+          <ul id="task-list" class="work-list"><li class="empty-state">Waiting for task records.</li></ul>
+        </section>
+      </div>
+
+      <section class="panel" aria-labelledby="history-heading">
+        <div class="panel-heading"><h3 id="history-heading">Progress history</h3><span class="muted">Recorded changes, not a forecast</span></div>
+        <figure class="history-figure">
+          <div id="history-chart"><p class="empty-state">Waiting for progress history.</p></div>
+          <figcaption id="history-summary" class="muted">No history loaded.</figcaption>
+        </figure>
+        <details id="history-details" hidden>
+          <summary>Read recorded history values</summary>
+          <div class="table-scroll"><table><thead><tr><th scope="col">Recorded at</th><th scope="col">Verified cases</th><th scope="col">Required cases</th><th scope="col">Passed gates</th></tr></thead><tbody id="history-rows"></tbody></table></div>
+        </details>
+      </section>
+    </section>
+
+    <section id="feed-panel" data-view-panel="feed" aria-labelledby="feed-heading" hidden aria-busy="true">
+      <div class="section-heading">
+        <div><p class="eyebrow">Latest retained versions</p><h2 id="feed-heading" tabindex="-1">Working feed</h2><p id="feed-summary" class="muted">Waiting for discovered visual artifacts.</p></div>
+        <button type="button" class="button button-quiet" data-open-library>Browse all versions</button>
+      </div>
+      <p class="preview-policy muted">HTML and PDF previews are sandboxed. Scripts are disabled. Publish a screenshot for script-rendered artwork.</p>
+      <div id="feed-grid" class="artwork-grid"><p class="empty-state">No artwork records loaded.</p></div>
+      <nav class="pagination" aria-label="Working feed pages"><button id="feed-previous" type="button" class="button button-quiet" disabled>Newer</button><span id="feed-page" aria-live="polite">No pages loaded</span><button id="feed-next" type="button" class="button button-quiet" disabled>Older</button></nav>
+    </section>
+
+    <section id="library-panel" data-view-panel="library" aria-labelledby="library-heading" hidden aria-busy="true">
+      <div class="section-heading"><div><p class="eyebrow">Accumulated artifacts</p><h2 id="library-heading" tabindex="-1">Library</h2><p class="muted">All retained artwork versions remain available here.</p></div></div>
+      <form id="library-filters" class="library-filters" role="search" aria-label="Filter artwork library">
+        <label class="search-field" for="library-search">Search artwork<input id="library-search" type="search" placeholder="Title, context, path, or version" autocomplete="off"></label>
+        <label for="library-kind">Type<select id="library-kind"><option value="all">All types</option><option value="image">Images</option><option value="html">HTML mockups</option><option value="pdf">PDF documents</option></select></label>
+        <label for="library-versions">Versions<select id="library-versions"><option value="all">All versions</option><option value="latest">Latest per path</option></select></label>
+        <label for="library-sort">Sort<select id="library-sort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="title">Title</option></select></label>
+      </form>
+      <div class="library-summary"><p id="library-summary" class="muted" role="status">No artwork records loaded.</p><button id="library-clear" type="button" class="button button-quiet">Clear filters</button></div>
+      <p class="preview-policy muted">HTML and PDF previews are sandboxed. Scripts are disabled. Select an artifact to inspect its retained version.</p>
+      <div id="library-grid" class="artwork-grid"><p class="empty-state">Waiting for the artwork library.</p></div>
+      <nav class="pagination" aria-label="Library pages"><button id="library-previous" type="button" class="button button-quiet" disabled>Previous</button><span id="library-page" aria-live="polite">No pages loaded</span><button id="library-next" type="button" class="button button-quiet" disabled>Next</button></nav>
+    </section>
+
+    <section id="approvals-panel" data-view-panel="approvals" aria-labelledby="approvals-heading" hidden aria-busy="true">
+      <div class="section-heading"><div><p class="eyebrow">Digest-bound decisions</p><h2 id="approvals-heading" tabindex="-1">Approvals</h2><p id="approval-mode" class="muted">Run mode not loaded. No approval can be submitted.</p></div></div>
+      <div id="approval-list"><p class="empty-state">Waiting for approval requests.</p></div>
+      <section class="panel decision-history" aria-labelledby="decisions-heading">
+        <div class="panel-heading"><h3 id="decisions-heading" tabindex="-1">Recorded decisions</h3><span id="decision-count" class="muted">Not loaded</span></div>
+        <p class="muted">Actual decision records, newest first. These records do not replace acceptance gates.</p>
+        <ol id="decision-list" class="decision-list"><li class="empty-state">Waiting for recorded decisions.</li></ol>
+        <nav class="pagination" aria-label="Decision history pages"><button id="decision-previous" type="button" class="button button-quiet" disabled>Newer</button><span id="decision-page" aria-live="polite">No pages loaded</span><button id="decision-next" type="button" class="button button-quiet" disabled>Older</button></nav>
+      </section>
+    </section>
+  </main>
+
+  <dialog id="artwork-dialog" class="artwork-dialog" aria-labelledby="viewer-title" aria-describedby="viewer-context viewer-policy">
+    <div class="viewer-header"><div><h2 id="viewer-title"></h2><p id="viewer-context" class="muted"></p></div><button id="viewer-close" type="button" class="button button-quiet" autofocus>Close <span aria-hidden="true">Esc</span></button></div>
+    <div class="viewer-toolbar" role="group" aria-label="Artwork display controls"><button id="viewer-fit" type="button" class="button button-quiet" aria-pressed="true">Fit</button><button id="viewer-natural" type="button" class="button button-quiet" aria-pressed="false">Natural size</button><button id="viewer-zoom-out" type="button" class="button button-quiet" aria-label="Zoom out">−</button><output id="viewer-scale" aria-live="polite">Not loaded</output><button id="viewer-zoom-in" type="button" class="button button-quiet" aria-label="Zoom in">+</button><button id="viewer-expand" type="button" class="button button-quiet" aria-pressed="false">Full viewport</button><a id="viewer-download" class="button button-quiet" download>Save artifact</a></div>
+    <div id="viewer-stage" class="viewer-stage" tabindex="0" aria-label="Artwork preview. Scroll to inspect artwork larger than the viewport."><div id="viewer-content" class="viewer-content"></div></div>
+    <div class="viewer-footer"><p id="viewer-metadata" class="monospace"></p><p id="viewer-dimensions" class="muted"></p><p id="viewer-policy" class="muted"></p><p id="viewer-load-status" class="muted" role="status"></p></div>
+  </dialog>
+
+  <template id="artwork-card-template">
+    <article class="artwork-card">
+      <button type="button" class="artwork-open">
+        <span class="artifact-preview"><span class="preview-loading">Loading preview</span></span>
+        <span class="artwork-card-heading"><span class="artwork-title"></span><span class="kind-label"></span></span>
+      </button>
+      <p class="artwork-context"></p>
+      <p class="artwork-path monospace"></p>
+      <div class="artwork-version muted"><code class="version-label"></code><time></time></div>
+      <p class="artifact-preview-note muted"></p>
+    </article>
+  </template>
+</body>
+</html>
