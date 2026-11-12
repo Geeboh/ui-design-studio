@@ -1,6 +1,6 @@
 # UI Design Studio
 
-**Version 1.2.0 · A portable UI design workflow for Oh My Pi**
+**Version 1.3.0 · A portable UI design workflow for Oh My Pi and local MCP clients**
 
 Assess an interface, develop coherent visual directions, design its complete pages and dialogs, implement the selected system, and deliver a documented theme. UI Design Studio combines a design director, nine reusable skills, seven specialist agent roles, run records, and installation/theme utilities.
 
@@ -13,8 +13,9 @@ The designer learns the project from its own instructions, requirements, source 
 | Read | What it covers |
 | --- | --- |
 | [Installation and maintenance](docs/INSTALLATION.md) | Requirements, installation, live-session discovery, configuration, upgrades, restore and troubleshooting |
+| [Local MCP adapter](docs/MCP.md) | Python package, explicit project connection, automatic landing dashboard, verified URLs and terminal QR |
 | [Run types and copy/paste recipes](docs/RUN-TYPES.md) | Guided, YOLO, `/goal` with YOLO, assessment, mockups, references, themes, scoped work, resume and model choices |
-| [Release notes](docs/CHANGELOG.md) | Changes in 1.2.0 and compatibility with existing installations |
+| [Release notes](docs/CHANGELOG.md) | Changes in 1.3.0 and compatibility with existing installations |
 | [Validation record](docs/VALIDATION.md) | Checks actually performed on this release and their limits |
 | [Distribution and release maintenance](docs/DISTRIBUTION.md) | License, package contents, checksum verification and reproducible ZIP builds |
 | [Primary sources](docs/SOURCES.md) | Upstream OMP behaviour, accessibility, tokens and performance references |
@@ -23,7 +24,9 @@ The installer places this documentation in `docs/ui-design-studio/` inside the t
 
 ## Quick start
 
-From the extracted `ui-design-studio-v1.2.0` directory, install into the **actual project root**:
+For a local MCP coding client, follow [Connect UI Design Studio through local MCP](docs/MCP.md). The installable `ui-design-studio-mcp` package bundles the engine and guides without installing `.omp` files into your project. The OMP path below remains unchanged.
+
+From the extracted `ui-design-studio-v1.3.0` directory, install into the **actual project root**:
 
 ```bash
 bash ./install.sh --project /absolute/path/to/project --dry-run
@@ -32,7 +35,7 @@ cd /absolute/path/to/project
 ./tools/ui-design doctor --repo .
 ```
 
-Replace `/absolute/path/to/project` with the repository you intend to redesign. The dry run is a preview of changes; the second command installs them. Package Python runs in a virtual environment and requires no third-party Python dependencies.
+Replace `/absolute/path/to/project` with the repository you intend to redesign. The dry run is a preview of changes; the second command installs them. The OMP installer and project wrapper use a virtual environment and require no third-party Python dependencies. The separate MCP adapter has its own runtime dependencies.
 
 In OMP, already working in that project, submit these as separate commands:
 

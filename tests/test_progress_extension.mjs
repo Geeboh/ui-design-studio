@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { createServer } from "node:http";
 import test from "node:test";
 import designProgress from "../.omp/extensions/ui-design-progress.ts";
 
@@ -116,7 +117,8 @@ function host(t, project, options = {}) {
 		emit,
 		state(event) { for (const handler of bus.get(TASK_EVENT) ?? []) handler(event); },
 		tick() { for (const callback of [...timers.values()]) callback(); },
-		command(args) { commands.get(WIDGET).handler(args, context); },
+		command(args) { return commands.get(WIDGET).handler(args, context); },
+		dashboard(args = "") { return commands.get("ui-design-dashboard").handler(args, context); },
 		setSession(id) { sessionId = id; },
 	};
 }
@@ -523,4 +525,265 @@ test("automatic observers cannot replace a director and explicit handoff keeps b
 	first.state(taskEvent("Late old director event"));
 	assert.equal(exported(run).sessionId, "session-B");
 	assert.equal(readFileSync(exportPath(run), "utf8"), retained);
+});
+
+function addConnection(f, overrides = {}) {
+	const instanceId = overrides.instanceId ?? "a".repeat(48);
+	const localUrl = overrides.localUrl ?? `http://127.0.0.1:54322/#token=${"fixture-token-".repeat(4)}`;
+	const lanUrls = overrides.lanUrls ?? [localUrl.replace("127.0.0.1", "192.0.2.46")];
+	const record = {
+		schemaVersion: "1.0", instanceId, repo: f.project, run: null, state: "live",
+		observedAt: new Date().toISOString(), startedAt: new Date().toISOString(), localUrl, lanUrls,
+		qrUrl: lanUrls[0] ?? localUrl, selectedRun: null,
+		text: `[ok] Dashboard live → ${localUrl}\n${lanUrls.length ? lanUrls.map(url => `[lan] ${url}`).join("\n") : "[lan] unavailable"}\n\n ▄█▀ \n`,
+		...overrides,
+	};
+	const directory = join(f.project, ".ui-design-studio", "runtime", "mcp");
+	mkdirSync(directory, { recursive: true, mode: 0o700 });
+	const path = join(directory, `${instanceId}.json`);
+	writeJson(path, record);
+	return { record, path, write() { writeJson(path, record); } };
+}
+
+async function liveConnection(t, f, onRequest) {
+	const requests = [];
+	let connection;
+	const server = createServer((request, response) => {
+		requests.push({ url: request.url, authorization: request.headers.authorization });
+		if (onRequest) onRequest(request, response, connection.record);
+		else {
+			response.setHeader("Content-Type", "application/json");
+			response.end(JSON.stringify({ instanceId: connection.record.instanceId, repo: f.project }));
+		}
+	});
+	const listening = Promise.withResolvers();
+	server.once("error", listening.reject);
+	server.listen(0, "127.0.0.1", listening.resolve);
+	await listening.promise;
+	t.after(() => {
+		server.closeAllConnections();
+		const closed = Promise.withResolvers();
+		server.close(closed.resolve);
+		return closed.promise;
+	});
+	connection = addConnection(f, {
+		localUrl: `http://127.0.0.1:${server.address().port}/#token=${"fixture-token-".repeat(4)}`,
+		lanUrls: [],
+	});
+	return { ...connection, server, requests };
+}
+
+test("pins a waiting connection without progress or Pi Tasks exports", t => {
+	const f = fixture(t);
+	const connection = addConnection(f);
+	const runtime = host(t, f.project);
+	runtime.state(taskEvent());
+	runtime.emit("session_start");
+	const lines = runtime.widgets.get(WIDGET);
+	assert.ok(lines.includes(connection.record.localUrl));
+	assert.ok(lines.includes(connection.record.lanUrls[0]));
+	assert.match(lines.join("\n"), /Waiting for a design run/);
+	assert.match(lines[3], /ui-design dashboard-info --repo '.*project with spaces' --session a{48}/);
+	assert.doesNotMatch(lines.join("\n"), /%|Gates|Coverage/);
+	assert.deepEqual(readdirSync(f.runs), []);
+	assert.deepEqual(runtime.widgets.get("pi-tasks"), ["Existing Pi Tasks widget"]);
+});
+
+test("requires connection selection without silently choosing newest", async t => {
+	const f = fixture(t);
+	const first = addConnection(f, { instanceId: "b".repeat(48) });
+	const second = await liveConnection(t, f);
+	const runtime = host(t, f.project);
+	runtime.emit("session_start");
+	assert.match(runtime.widgets.get(WIDGET).join("\n"), /Multiple dashboard connections/);
+	assert.match(runtime.widgets.get(WIDGET).join("\n"), /b{48}/);
+	assert.ok(!runtime.widgets.get(WIDGET).includes(first.record.localUrl));
+	await runtime.dashboard(second.record.instanceId);
+	assert.equal(runtime.reports.at(-1).message.content, second.record.text);
+	assert.ok(runtime.widgets.get(WIDGET).includes(second.record.localUrl));
+	assert.deepEqual(runtime.reports.at(-1).options, { triggerTurn: false });
+});
+
+test("prints cached QR only after an authenticated matching identity response", async t => {
+	const f = fixture(t);
+	const connection = await liveConnection(t, f);
+	const runtime = host(t, f.project);
+	runtime.emit("session_start");
+	await runtime.dashboard();
+	assert.equal(runtime.reports.length, 1);
+	assert.equal(runtime.reports[0].message.content, connection.record.text);
+	assert.deepEqual(connection.requests, [{
+		url: "/api/identity", authorization: `Bearer ${connection.record.localUrl.split("#token=")[1]}`,
+	}]);
+	assert.equal(runtime.reports[0].message.customType, "ui-design-studio:dashboard");
+});
+
+test("keeps explicit run and director precedence over a selected connection run", t => {
+	const f = fixture(t);
+	const explicit = addRun(f, "alpha");
+	const automatic = addRun(f, "beta");
+	automatic.snapshot.instanceId = "c".repeat(48);
+	writeJson(join(automatic.root, ".design-server.json"), {
+		schemaVersion: "1.0", instanceId: automatic.snapshot.instanceId, run: automatic.root, url: automatic.url,
+	});
+	writeJson(join(automatic.root, ".design-status.json"), automatic.snapshot);
+	const connection = addConnection(f, { selectedRun: { run: relative(f.project, automatic.root), instanceId: automatic.snapshot.instanceId } });
+	const runtime = host(t, f.project);
+	runtime.state(taskEvent("Actual director work"));
+	runtime.emit("session_start");
+	assert.equal(runtime.widgets.get(WIDGET).at(-1), automatic.url);
+	assert.equal(existsSync(exportPath(automatic)), false);
+	runtime.command(relative(f.project, explicit.root));
+	assert.equal(runtime.widgets.get(WIDGET).at(-1), explicit.url);
+	assert.equal(exported(explicit).state.tasks.T1.title, "Actual director work");
+	assert.equal(existsSync(exportPath(automatic)), false);
+	unlinkSync(join(explicit.root, ".design-server.json"));
+	runtime.tick();
+	assert.ok(runtime.widgets.get(WIDGET).includes(connection.record.localUrl));
+	assert.match(runtime.widgets.get(WIDGET).join("\n"), /Design server stopped/);
+});
+
+test("retains landing details after its automatically selected run stops", t => {
+	const f = fixture(t);
+	const run = addRun(f);
+	const instanceId = "d".repeat(48);
+	writeJson(join(run.root, ".design-server.json"), { schemaVersion: "1.0", instanceId, run: run.root, url: run.url });
+	run.snapshot.instanceId = instanceId;
+	writeJson(join(run.root, ".design-status.json"), run.snapshot);
+	const connection = addConnection(f, { selectedRun: { run: relative(f.project, run.root), instanceId } });
+	const runtime = host(t, f.project);
+	runtime.emit("session_start");
+	assert.equal(runtime.widgets.get(WIDGET).at(-1), run.url);
+	unlinkSync(join(run.root, ".design-server.json"));
+	runtime.tick();
+	assert.ok(runtime.widgets.get(WIDGET).includes(connection.record.localUrl));
+	assert.match(runtime.widgets.get(WIDGET).join("\n"), /Selected run stopped/);
+	assert.equal(existsSync(exportPath(run)), false);
+});
+
+test("expires waiting records and removes all access links", t => {
+	const f = fixture(t);
+	const connection = addConnection(f);
+	const runtime = host(t, f.project);
+	runtime.emit("session_start");
+	connection.record.observedAt = new Date(Date.now() - 16_000).toISOString();
+	connection.write();
+	runtime.tick();
+	const output = runtime.widgets.get(WIDGET).join("\n");
+	assert.match(output, /unavailable/);
+	assert.doesNotMatch(output, /http|token|dashboard-info/);
+});
+
+test("rejects forged URLs, text, repositories and symlinked connection records", async t => {
+	for (const mutation of [
+		record => { record.repo += "/elsewhere"; },
+		record => { record.localUrl = record.localUrl.replace("127.0.0.1", "attacker.invalid"); },
+		record => { record.text += "\u001b[31m"; },
+		record => { record.text = record.text.replace("[ok]", "[ok] forged"); },
+		record => { record.qrUrl = "http://attacker.invalid/"; },
+		record => { record.lanUrls = [record.localUrl]; },
+	]) {
+		const f = fixture(t);
+		const connection = addConnection(f);
+		mutation(connection.record);
+		connection.write();
+		const runtime = host(t, f.project);
+		runtime.emit("session_start");
+		await runtime.dashboard(connection.record.instanceId);
+		assert.equal(runtime.reports.length, 0);
+		assert.ok(!runtime.widgets.get(WIDGET)?.includes(connection.record.localUrl));
+	}
+	const f = fixture(t);
+	const connection = addConnection(f);
+	const outside = join(f.base, "foreign.json");
+	writeJson(outside, connection.record);
+	unlinkSync(connection.path);
+	symlinkSync(outside, connection.path);
+	const runtime = host(t, f.project);
+	runtime.emit("session_start");
+	await runtime.dashboard(connection.record.instanceId);
+	assert.equal(runtime.reports.length, 0);
+});
+
+test("rejects wrong identities and redirects without following them", async t => {
+	for (const redirect of [false, true]) {
+		const f = fixture(t);
+		let calls = 0;
+		await liveConnection(t, f, (_request, response) => {
+			calls++;
+			if (redirect) {
+				response.statusCode = 302;
+				response.setHeader("Location", "http://127.0.0.1:1/api/identity");
+				response.end("{}");
+			} else response.end(JSON.stringify({ instanceId: "b".repeat(48), repo: f.project }));
+		});
+		const runtime = host(t, f.project);
+		runtime.emit("session_start");
+		await runtime.dashboard();
+		assert.equal(calls, 1);
+		assert.equal(runtime.reports.length, 0);
+		assert.match(runtime.notifications.at(-1).message, /identity does not match/);
+	}
+});
+
+test("does not print old credentials after a session switch during the probe", async t => {
+	const f = fixture(t);
+	const arrived = Promise.withResolvers();
+	const connection = await liveConnection(t, f, (_request, response) => arrived.resolve(response));
+	const runtime = host(t, f.project);
+	runtime.emit("session_start");
+	const pending = runtime.dashboard();
+	const response = await arrived.promise;
+	runtime.emit("session_before_switch");
+	runtime.setSession("session-B");
+	runtime.emit("session_switch");
+	response.end(JSON.stringify({ instanceId: connection.record.instanceId, repo: f.project }));
+	await pending;
+	assert.equal(runtime.reports.length, 0);
+	assert.deepEqual(runtime.widgets.get("pi-tasks"), ["Existing Pi Tasks widget"]);
+});
+
+test("bounds stalled identity probes and escapes command errors", async t => {
+	const f = fixture(t);
+	await liveConnection(t, f, () => {});
+	const runtime = host(t, f.project);
+	runtime.emit("session_start");
+	await runtime.dashboard();
+	assert.equal(runtime.reports.length, 0);
+	assert.match(runtime.notifications.at(-1).message, /timed out/);
+	await runtime.dashboard("bad\u001b[31m");
+	assert.doesNotMatch(runtime.notifications.at(-1).message, /\u001b/u);
+});
+
+test("accepts the effective HTTP default port in waiting connection aliases", t => {
+	const f = fixture(t);
+	const connection = addConnection(f, { localUrl: `http://127.0.0.1:80/#token=${"fixture-token-".repeat(4)}` });
+	const runtime = host(t, f.project);
+	runtime.emit("session_start");
+	assert.ok(runtime.widgets.get(WIDGET).includes(connection.record.localUrl));
+	assert.ok(runtime.widgets.get(WIDGET).includes(connection.record.lanUrls[0]));
+	assert.match(runtime.widgets.get(WIDGET).join("\n"), /Waiting for a design run/);
+});
+
+test("an unselected expired crash record cannot hide a standalone run", t => {
+	const f = fixture(t);
+	addConnection(f, { observedAt: new Date(Date.now() - 16_000).toISOString() });
+	const run = addRun(f);
+	const runtime = host(t, f.project);
+	runtime.emit("session_start");
+	assert.equal(runtime.widgets.get(WIDGET).at(-1), run.url);
+	assert.match(runtime.widgets.get(WIDGET).join("\n"), /Gates/);
+	assert.equal(existsSync(exportPath(run)), false);
+});
+
+test("keeps connection and warned run details within the host row contract", t => {
+	const f = fixture(t);
+	const run = addRun(f, "alpha", { instanceId: "e".repeat(48), warnings: ["Inspect stale review evidence"] });
+	addConnection(f, { selectedRun: { run: relative(f.project, run.root), instanceId: run.snapshot.instanceId } });
+	const runtime = host(t, f.project);
+	runtime.emit("session_start");
+	const lines = runtime.widgets.get(WIDGET);
+	assert.ok(lines.length <= 10);
+	assert.match(lines.join("\n"), /Inspect stale review evidence/);
+	assert.equal(lines.at(-1), run.url);
 });

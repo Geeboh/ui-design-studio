@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Design workspace connections</title>
+  <link rel="stylesheet" href="dashboard.css">
+  <script src="landing.js" defer></script>
+</head>
+<body data-dashboard>
+  <a class="skip-link" href="#workspace-main">Skip to design runs</a>
+  <header class="workspace-header">
+    <div class="header-main">
+      <div class="workspace-identity">
+        <span class="workspace-mark" aria-hidden="true">DS</span>
+        <div>
+          <h1>Design workspace</h1>
+          <p class="muted">Connection dashboard</p>
+        </div>
+      </div>
+      <div class="connection-controls">
+        <span id="connection-status" class="status-badge" data-state="loading" role="status">Connecting</span>
+        <button id="refresh-session" type="button" class="button button-quiet">Refresh</button>
+      </div>
+    </div>
+    <div class="server-address">
+      <span class="field-label">Private connection address</span>
+      <code id="server-url" tabindex="0" aria-label="Full private connection address"></code>
+      <button id="copy-address" type="button" class="button button-quiet" disabled>Copy address</button>
+      <span id="address-feedback" class="muted" role="status">Keep capability addresses private. LAN HTTP is for trusted networks only.</span>
+    </div>
+  </header>
+  <main id="workspace-main" class="workspace-main" tabindex="-1">
+    <noscript><p class="notice" data-state="failed">JavaScript is required to load design runs. No records have been loaded.</p></noscript>
+    <div id="connection-notice" class="notice" data-state="loading" role="status">Connecting. No design runs have been loaded.</div>
+    <section id="session-panel" class="panel" aria-labelledby="session-heading" hidden>
+      <div class="panel-heading"><h2 id="session-heading">This connection</h2></div>
+      <p id="repository" class="muted"></p>
+      <p id="session-identity" class="monospace"></p>
+      <ul id="connection-addresses" class="message-list" aria-label="Copyable connection addresses"></ul>
+    </section>
+    <section id="runs-panel" class="panel" aria-labelledby="runs-heading" aria-busy="true" hidden>
+      <div class="panel-heading"><h2 id="runs-heading">Design runs</h2><span id="run-count" class="muted"></span></div>
+      <p id="empty-runs" class="empty-state">No design runs yet.<br>Start or resume a run from your coding client.</p>
+      <ul id="run-list" class="work-list" aria-label="Design runs"></ul>
+    </section>
+  </main>
+</body>
+</html>

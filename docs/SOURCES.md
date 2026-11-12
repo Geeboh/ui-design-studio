@@ -1,6 +1,6 @@
 # Primary sources and compatibility notes
 
-**UI Design Studio 1.2.0 · Reviewed 12 November 2026**
+**UI Design Studio 1.3.0 · Reviewed 12 November 2026**
 
 OMP sources refer to upstream `main`. Runtime capabilities and command syntax may differ in an installed release, so the director inspects the live version/tool surface before using optional features. The external sources below explain their respective standards or tools. Studio's workflow, decision weights, worker limit, theme-module packaging and default byte budgets are package design choices.
 

@@ -1,6 +1,8 @@
 # Installation, configuration and maintenance
 
-**UI Design Studio 1.2.0**
+**UI Design Studio 1.3.0**
+
+This guide covers the project-local OMP installation. For the standalone Python package and a local MCP stdio client, use [Connect UI Design Studio through local MCP](MCP.md). MCP installation does not copy OMP instructions or modify client configuration.
 
 ## Contents
 
@@ -32,7 +34,7 @@ The designer inspects available OMP capabilities at runtime. A particular Figma 
 
 ## 2. Select the project and install
 
-Extract the release. Open a shell in its `ui-design-studio-v1.2.0` directory. Point `--project` at the existing repository containing the application you want to redesign:
+Extract the release. Open a shell in its `ui-design-studio-v1.3.0` directory. Point `--project` at the existing repository containing the application you want to redesign:
 
 ```bash
 bash ./install.sh --project /absolute/path/to/project --dry-run

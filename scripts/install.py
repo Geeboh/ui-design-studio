@@ -19,7 +19,7 @@ import tempfile
 from datetime import datetime, timezone
 from dataclasses import dataclass
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 PACKAGE = Path(__file__).resolve().parents[1]
 STATE = ".ui-design-studio/install-state.json"
 BACKUPS = ".ui-design-studio/backups"
@@ -49,6 +49,7 @@ IGNORE_BLOCK = b"""# ui-design-studio:start
 /.venv-ui-design/
 /.ui-design-studio/backups/
 /.ui-design-studio/model-routing/
+/.ui-design-studio/runtime/mcp/
 **/.design-server.json
 **/.design-status.json
 # ui-design-studio:end"""

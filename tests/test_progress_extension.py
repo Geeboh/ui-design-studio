@@ -81,6 +81,7 @@ class ProgressInstallerTests(unittest.TestCase):
         self.assertTrue(after.startswith(before))
         self.assertIn(b"**/.design-server.json\n", after)
         self.assertIn(b"**/.design-status.json\n", after)
+        self.assertIn(b"/.ui-design-studio/runtime/mcp/\n", after)
         self.assertNotIn(b"artwork-library", after)
         self.assertNotIn(b"progress-pi-tasks", after)
         self.assertEqual(INSTALL.marked_block(after, INSTALL.IGNORE_START, INSTALL.IGNORE_END, INSTALL.IGNORE_BLOCK), after)
