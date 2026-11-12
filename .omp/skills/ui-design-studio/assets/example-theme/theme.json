@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "1.0",
+  "id": "fieldstone",
+  "name": "Fieldstone",
+  "version": "1.0.0",
+  "description": "A warm, restrained CSS and SVG specimen for practical offline interfaces.",
+  "author": "UI Design Studio contributors",
+  "license": "MIT",
+  "tokens": "tokens.json",
+  "styles": [
+    "tokens.css",
+    "theme.css"
+  ],
+  "icons": "icons.svg",
+  "preview": "preview.html",
+  "compatibility": {
+    "themeApi": "1",
+    "framework": "any"
+  },
+  "budgets": {
+    "maxRawBytes": 131072,
+    "maxGzipBytes": 40960
+  },
+  "contrastPairs": [
+    {
+      "foreground": "color.text",
+      "background": "color.background",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.text",
+      "background": "color.surface",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.muted",
+      "background": "color.background",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.on-primary",
+      "background": "color.primary",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.on-danger",
+      "background": "color.danger",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.on-success",
+      "background": "color.success",
+      "minimum": 4.5
+    },
+    {
+      "foreground": "color.focus",
+      "background": "color.background",
+      "minimum": 3
+    },
+    {
+      "foreground": "color.border",
+      "background": "color.surface",
+      "minimum": 3
+    }
+  ]
+}

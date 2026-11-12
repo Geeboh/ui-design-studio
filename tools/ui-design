@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+PYTHON_BIN="$PROJECT_ROOT/.venv-ui-design/bin/python"
+STUDIO_SCRIPT="$PROJECT_ROOT/.omp/skills/ui-design-studio/scripts/studio.py"
+if [[ ! -x "$PYTHON_BIN" || ! -f "$STUDIO_SCRIPT" ]]; then
+  printf '%s\n' 'UI Design Studio is incomplete. Run the package installer again for this project.' >&2
+  exit 2
+fi
+cd -- "$PROJECT_ROOT"
+exec "$PYTHON_BIN" "$STUDIO_SCRIPT" "$@"

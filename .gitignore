@@ -1,0 +1,22 @@
+# Python environments and generated files
+.venv*/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Locally built release artifacts
+/dist/
+
+# Local installation state and backups
+/.ui-design-studio/
+
+# Local environment configuration
+.env
+.env.*
+!.env.example
+
+# Operating-system files
+.DS_Store
+Thumbs.db

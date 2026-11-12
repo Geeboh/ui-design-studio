@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fieldstone — UI Design Studio specimen</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="theme.css">
+<style>body{margin:0}</style></head><body data-ui-theme="fieldstone">
+<a class="ui-skip ui-button" href="#main">Skip to content</a>
+<div class="ui-shell"><aside class="ui-sidebar">
+<div class="ui-brand"><span class="ui-brand-mark"><svg class="ui-icon" aria-hidden="true"><use href="icons.svg#grid"></use></svg></span>Fieldstone</div>
+<p class="ui-caption" style="margin-top:12px">UI DESIGN STUDIO / 01</p>
+<nav class="ui-nav" aria-label="Specimen sections">
+<a href="#main" aria-current="page"><svg class="ui-icon" aria-hidden="true"><use href="icons.svg#grid"></use></svg>Module library</a>
+<a href="#palette"><svg class="ui-icon" aria-hidden="true"><use href="icons.svg#settings"></use></svg>Visual language</a>
+<a href="#components"><svg class="ui-icon" aria-hidden="true"><use href="icons.svg#package"></use></svg>Components</a>
+<a href="#storyboard"><svg class="ui-icon" aria-hidden="true"><use href="icons.svg#map"></use></svg>Storyboard</a>
+</nav><p class="ui-caption" style="margin-top:32px">Local CSS + SVG<br>System fonts · No runtime dependencies</p>
+</aside><main id="main" class="ui-main">
+<div class="ui-between"><span class="ui-eyebrow">Reusable theme specimen</span><span class="ui-badge">Illustrative content</span></div>
+<h1>Useful, at a glance.</h1>
+<p class="ui-muted" style="max-width:650px">A quiet interface for important work. Clear structure, deliberate spacing and meaningful status keep attention on the task.</p>
+<div class="ui-row" style="margin:24px 0 32px"><a class="ui-button" href="#components">Explore the system <svg class="ui-icon" aria-hidden="true"><use href="icons.svg#arrow"></use></svg></a><a class="ui-button secondary" href="#storyboard">View task storyboard</a></div>
+<section aria-label="Example overview" class="ui-grid">
+<article class="ui-card"><span class="ui-eyebrow">Modules in this example</span><div class="ui-kpi">03</div><span class="ui-muted">One clear place to manage them</span></article>
+<article class="ui-card"><span class="ui-eyebrow">State language</span><div class="ui-kpi">Explicit</div><span class="ui-muted">Available is different from Active</span></article>
+<article class="ui-card"><span class="ui-eyebrow">Design approach</span><div class="ui-kpi">Local</div><span class="ui-muted">No remote fonts or imagery</span></article>
+</section>
+<section class="ui-section"><div class="ui-card"><div class="ui-between"><h2>Module library</h2><span class="ui-caption">Sample states, not live data</span></div>
+<div class="ui-module"><span class="ui-icon-tile"><svg class="ui-icon" aria-hidden="true"><use href="icons.svg#map"></use></svg></span><div class="ui-module-copy"><strong>Regional maps</strong><p>Validated local resources, selected for this build.</p></div><span class="ui-badge good"><svg class="ui-icon" aria-hidden="true"><use href="icons.svg#check"></use></svg>Active</span></div>
+<div class="ui-module"><span class="ui-icon-tile"><svg class="ui-icon" aria-hidden="true"><use href="icons.svg#package"></use></svg></span><div class="ui-module-copy"><strong>Reference collection</strong><p>Downloaded and available for selection.</p></div><span class="ui-badge">Available</span></div>
+<div class="ui-module"><span class="ui-icon-tile"><svg class="ui-icon" aria-hidden="true"><use href="icons.svg#alert"></use></svg></span><div class="ui-module-copy"><strong>Imagery update</strong><p>Validation failed. The current build is unchanged.</p></div><span class="ui-badge bad">Needs attention</span></div>
+</div></section>
+<section id="palette" class="ui-section ui-stack"><div><span class="ui-eyebrow">01 / Visual language</span><h2 style="margin-top:8px">Warm surfaces. Clear intent.</h2></div><div class="ui-palette"><div><div class="ui-swatch" style="background:#f6f5ef"></div><div class="ui-caption">background<br>#F6F5EF</div></div><div><div class="ui-swatch" style="background:#ffffff"></div><div class="ui-caption">surface<br>#FFFFFF</div></div><div><div class="ui-swatch" style="background:#172b2a"></div><div class="ui-caption">text<br>#172B2A</div></div><div><div class="ui-swatch" style="background:#176b58"></div><div class="ui-caption">primary<br>#176B58</div></div><div><div class="ui-swatch" style="background:#73847c"></div><div class="ui-caption">border<br>#73847C</div></div><div><div class="ui-swatch" style="background:#a22c35"></div><div class="ui-caption">danger<br>#A22C35</div></div></div><p class="ui-caption">One coherent light palette. Token checks cover declared pairs; real application states still require inspection.</p></section>
+<section id="components" class="ui-section ui-stack"><div><span class="ui-eyebrow">02 / Component samples</span><h2 style="margin-top:8px">Predictable building blocks.</h2></div>
+<div class="ui-card ui-stack"><div class="ui-row"><button class="ui-button" type="button" disabled>Sample primary action</button><button class="ui-button secondary" type="button" disabled>Sample secondary</button><button class="ui-button danger" type="button" disabled>Sample destructive</button></div><p class="ui-caption">Buttons are intentionally disabled in this static specimen. Production controls need real actions, states and keyboard tests.</p>
+<label class="ui-field" for="sample-name">Theme name<input class="ui-input" id="sample-name" value="Fieldstone" autocomplete="off"></label>
+<label class="ui-field" for="sample-error">Example invalid name<input class="ui-input" id="sample-error" value="" aria-invalid="true" aria-describedby="error-description" placeholder="Enter a descriptive name"><span id="error-description" class="ui-error">Error example: enter a name before saving.</span></label>
+<div class="ui-alert"><svg class="ui-icon" aria-hidden="true"><use href="icons.svg#check"></use></svg><div><strong>Recovery stays visible.</strong><p class="ui-muted" style="margin:4px 0 0">If a candidate update fails validation, retain the previous build and show the next useful action.</p></div></div>
+<details><summary>Interaction specification example</summary><p class="ui-muted">Production dialogs receive an accessible title, predictable initial focus, contained keyboard navigation, Escape behaviour and focus restoration. Critical state changes have a readable status and recovery path.</p></details>
+</div></section>
+<section id="storyboard" class="ui-section ui-stack"><div><span class="ui-eyebrow">03 / Task storyboard</span><h2 style="margin-top:8px">From choice to confidence.</h2></div><div class="ui-story">
+<article><h3>Choose a candidate</h3><p>The user sees which resource is available, its source and its expected effect.</p></article>
+<article><h3>Review and validate</h3><p>The interface explains progress. A failed check preserves the current state and offers recovery.</p></article>
+<article><h3>Confirm the outcome</h3><p>After successful publication, status becomes Active. The prior version remains available for rollback.</p></article>
+</div></section>
+<footer class="ui-section"><p class="ui-caption">Fieldstone is an original demonstration supplied with UI Design Studio. It is not a completed project redesign or evidence of a live system audit.</p></footer>
+</main></div></body></html>
