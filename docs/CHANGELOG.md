@@ -9,6 +9,7 @@
 - Added validated loopback and LAN aliases, private connection discovery, and `ui-design dashboard-info` with locally generated terminal QR output.
 - Extended the existing OMP progress widget with waiting-session details and `/ui-design-dashboard` while retaining explicit run-director ownership.
 - Kept the OMP installer standard-library-only and separate from MCP configuration and package installation.
+- Set the MCP initialization identity to the package version instead of the SDK's default version.
 - Added [screenshots and runnable examples](RELEASE-v1.3.0.md) for connection setup, verified addresses, and retained artwork previews.
 
 ## 1.2.0 · 12 November 2026

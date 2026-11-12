@@ -92,7 +92,9 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
         async with stdio_client(parameters, errlog=self.errors) as (read, write):
             process = self.processes[asyncio.current_task()]
             async with ClientSession(read, write, read_timeout_seconds=timedelta(seconds=30)) as client:
-                await client.initialize()
+                initialized = await client.initialize()
+                self.assertEqual(initialized.serverInfo.name, "UI Design Studio")
+                self.assertEqual(initialized.serverInfo.version, "1.3.0")
                 yield client, process
 
     async def call(self, client, tool_name, **arguments):

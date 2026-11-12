@@ -17,6 +17,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field
 
+from . import __version__
 from .dashboard import DashboardSession, DashboardUnavailable
 from .runtime import PACKAGE, PAYLOAD, backend, studio
 
@@ -120,6 +121,8 @@ def create_server(repo: Path | str, dashboard_host: str = "0.0.0.0", dashboard_p
                       "Guided human approval occurs only in the authenticated browser dashboard."),
         lifespan=lifespan,
     )
+    # FastMCP 1.30 has no version argument and otherwise advertises the SDK version.
+    mcp._mcp_server.version = __version__
 
     def tool(*, read_only: bool = False, destructive: bool = False, idempotent: bool = False):
         def register(function: Callable):

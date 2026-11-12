@@ -10,6 +10,7 @@ Local MCP clients can now use UI Design Studio without installing OMP files into
 - Run-server reuse checks instance identity. Disconnect closes owned listeners without deleting dossiers or stopping another connection's borrowed server.
 - OMP gains `/ui-design-dashboard [SESSION_ID]` and waiting-connection details in its existing progress widget. Explicit run ownership and Pi Tasks boundaries remain intact.
 - The OMP installer remains standard-library-only. MCP dependencies and client configuration stay separate.
+- MCP initialization advertises the Studio package version instead of the SDK's default version.
 
 ## Examples
 

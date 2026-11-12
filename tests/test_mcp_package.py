@@ -63,7 +63,9 @@ async def main():
     params = StdioServerParameters(command=sys.executable, args=['-I', '-c', command, '--repo', repo, '--dashboard-host', '127.0.0.1'])
     async with stdio_client(params) as streams:
         async with ClientSession(*streams) as client:
-            await client.initialize()
+            initialized = await client.initialize()
+            assert initialized.serverInfo.name == 'UI Design Studio'
+            assert initialized.serverInfo.version == '1.3.0'
             guide = await client.call_tool('ui_design_read_guide', {'name':'skills/ui-design-studio/SKILL.md'})
             assert not guide.isError, guide
             assert 'UI Design Studio' in str(guide)
