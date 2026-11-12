@@ -1,5 +1,23 @@
 # Release validation
 
+## Version 1.2.0 progress feature checks
+
+The progress feature was checked on Linux with Python 3.12.3, Node 24.22.2, OMP 18.19.0 and a local Chromium browser.
+
+| Check | Observed result | Scope |
+| --- | --- | --- |
+| Python and native-adapter regressions | 142 tests passed | 51 server, 52 existing Studio, 15 installer, 4 native-payload and 20 native-adapter cases |
+| Native console | Pinned widget observed in actual OMP | Separate below-editor rows, real counts and percentages, blockers and complete URL |
+| Console fallback | Periodic non-TTY output observed | Real counts, bar, percentages, full address and no ANSI injection |
+| Browser progress and artwork | Actual authenticated LAN page exercised | Workers, task, gate/history data, image and sandboxed HTML thumbnails, full-size images and local dependencies |
+| Library and narrow layouts | Actual pagination and 320px reflow exercised | Retained versions, search, two thumbnail pages and four dashboard sections without page-level horizontal overflow |
+| Guided decisions and recovery | Real browser submission persisted in a synthetic run | Named option and digest, retained drafts, offline recovery, changed-dependency rejection and reviewer clock differences |
+| Independent source review | Findings corrected with targeted regressions | Upstream approval invalidation, session ownership, inert SVG, watcher shutdown, stale-owner recovery, URL selection and keyboard focus |
+
+These checks use isolated, explicitly labelled integration fixtures. They do not approve a production theme, prove public-internet deployment, certify WCAG conformance or establish Windows/macOS compatibility. HTML previews intentionally disable scripts. PDF preview support depends on the browser. The live server is for a small private design team; untrusted networks require an existing protected transport.
+
+## Version 1.1.0 baseline
+
 **UI Design Studio 1.1.0 · Checked 12 November 2026**
 
 This record covers the distributed designer package, its installation/routing utilities and its supplied web-theme specimen. It does not claim that any recipient's application has been redesigned, tested or deployed.

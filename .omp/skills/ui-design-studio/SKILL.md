@@ -18,6 +18,7 @@ The design workflow is independent of project and UI stack. The supplied theme c
 5. Inspect Git status. Reuse a suitable design branch or create `design/<scope>` under existing project policy. Preserve uncommitted work; isolate overlapping work. Do not stash, discard, reset, rewrite history or change authorization settings to make progress.
 6. Establish the theme action before changing application styles. On first completed Studio cycle, the resulting module becomes the default. Inventory existing styles as the fallback first. On later guided cycles ask whether to modify the default or create a new theme unless already specified. Yolo chooses under [decisions.md](references/decisions.md).
 7. Initialize a run with `tools/ui-design init-run --repo . --mode guided --theme-action auto --theme-id working-title` (adapt explicit options; add `--models current-model` when requested). Use the returned run directory. Write its source-labelled `project-context.md`, resolve the recorded context and model assignments, and verify them before delegating. A run record is a checkpoint, not proof of completion.
+8. Start or reuse the run's Design Server using [run-records.md](references/run-records.md#7-live-progress-and-design-server). Keep its named foreground service alive throughout work and guided approval pauses. Present its complete reachable URL, never `0.0.0.0`. The installed OMP extension pins status below the editor without replacing Pi Tasks; where unavailable, emit `status` after each worker result and phase change, at least once per working minute, and provide `status --watch` for regular terminal output.
 
 ## Choose the run type
 
@@ -78,6 +79,10 @@ Use `scripts/studio.py --help` through the project venv if the `tools/ui-design`
 ## Report progress and completion
 
 When temporary model assignments were applied, finish or park dependent workers and use the documented `models-restore` procedure before handing over, pausing for the user or updating the package. Record restoration and refresh the routing hash before final acceptance. Never overwrite later agent-file edits to force restoration.
+
+Keep the Design Server current throughout the run. Publish the director's next action and blockers, actual task and worker states, and every generated artwork or mockup with a one-sentence purpose. Publish each version before overwriting it. Automatic discovery supplements publication; it cannot recover overwritten bytes it never observed. Present guided artistic requests in the server and record only submitted user choices. Yolo records autonomous choices without waiting for a user form.
+
+Run `design-cleanup` at completed yolo handover and verify the listener stopped. The server also cleans itself after current final acceptance, and successful yolo registration requests cleanup. Preserve original artifacts, the accumulated artwork library, decisions and evidence. Guided pauses retain the server; cancellation uses the same explicit cleanup command without claiming completion.
 
 Persist decisions and evidence after each phase. Mirror a compact status into the existing project tracker without overwriting unrelated tasks:
 

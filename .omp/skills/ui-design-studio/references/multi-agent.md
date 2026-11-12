@@ -30,6 +30,8 @@ OMP workers do not inherit the director's complete context or `AGENTS.md` automa
 - Required artifacts, acceptance checks, evidence format and completion condition.
 - Applicable project restrictions, offline/performance budgets and known uncertainties.
 - Dependencies, integration owner and what to report if blocked.
+- Exact run directory and artwork publication commands from [run-records.md](run-records.md#7-live-progress-and-design-server). Require a one-sentence purpose for every generated art or mockup and publication before overwriting each version.
+- Worker activity ID, actual task identity and next action. Publish start, blocked and terminal states without treating a heartbeat as proof of process liveness.
 
 Have the worker report changed paths, design decisions, checks actually run, evidence, unresolved issues and integration needs. Workers may propose shared-contract changes; only the designated owner applies them.
 

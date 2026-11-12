@@ -1,5 +1,16 @@
 # Release notes
 
+## 1.2.0 · 12 November 2026
+
+### Live development progress and Design Server
+
+- Added a native below-editor OMP status widget with actual progress bars, gate and coverage counts, next action, blockers and the complete server address. Pi Tasks keeps its own widget.
+- Added a regular console status fallback and a standard-library Design Server with live workers, tasks, progress graphs and statistics.
+- Added automatic artwork discovery, explicit contextual publication, immutable version browsing, clickable thumbnails and sandboxed full-size mockup previews.
+- Added guided artistic requests and digest-bound user decisions without human approval waits in yolo mode.
+- Added authenticated owned-server cleanup, all-run cleanup and automatic cleanup after successful yolo acceptance. Original design evidence and the artwork library remain intact.
+- Documented private access URLs, trusted-LAN limits, worker publication and the cleanup lifecycle.
+
 ## 1.1.0 — 12 November 2026
 
 ### Project context replaces profile selection

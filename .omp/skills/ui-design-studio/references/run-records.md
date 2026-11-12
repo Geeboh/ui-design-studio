@@ -170,3 +170,77 @@ Avoid a circular gate: implement and verify the adapter/default logic in the dev
 `0` means the invoked operation passed; `1` means failed/invalid; `2` means blocked/incomplete. State the scope of a pass. `doctor PASS` is successful discovery, `check-theme PASS` is module-format validation, and `check-run PASS` is a complete/fresh recorded dossier. None is a substitute for executing and examining the real application checks.
 
 Do not edit checks merely to obtain green status. A deliberate contract change requires a documented need, updated schema/docs and meaningful regression checks. The helper's tests use synthetic fixtures; never copy those fixtures as if they were real project evidence.
+
+## 7. Live progress and Design Server
+
+After `init-run`, start the server in a retained named foreground service. Keep that service alive during design work and guided review pauses:
+
+```bash
+tools/ui-design design-serve docs/design/runs/RUN_ID --host 0.0.0.0 --port 0 --public-url http://YOUR_LAN_IP
+```
+
+Replace `RUN_ID` and `YOUR_LAN_IP` with the actual run directory and reachable host address. Port zero chooses a free port. Readiness prints the complete address with the actual port and a secret fragment. Pin that exact address in progress reports. The address grants its holder access to the run and guided approvals. Do not put it in committed evidence or public logs. The default listener is loopback when `--host` is omitted.
+
+An explicit LAN listener does not create a public tunnel, configure a firewall or prove reachability from another computer. Use SSH forwarding or an existing HTTPS reverse proxy on untrusted networks. Plain HTTP does not encrypt artwork or approvals. Do not expose this session server directly to the public internet.
+
+The installed `.omp/extensions/ui-design-progress.ts` reads the server's status and pins a separate widget below OMP's editor. It preserves the existing Pi Tasks widget and built-in footer. Reload extensions after installation.
+
+Automatic footer discovery is read-only. Select the intended project-relative run with `/ui-design-progress docs/design/runs/RUN_ID` to pin it and designate this OMP session as the run's Pi Tasks director. Selecting the run from another session explicitly hands off that role. Each session retains its own observation file; unrelated sessions cannot replace the director's tasks. `/ui-design-progress auto` restores read-only discovery. With no active server, the extension stays silent.
+
+Without a compatible host UI, use a separate terminal:
+
+```bash
+tools/ui-design status docs/design/runs/RUN_ID --watch
+```
+
+The fallback emits regular status blocks without injecting terminal control sequences into another application's console. The director also emits status after worker results, phase changes and at least once per working minute. Both displays use observed gate and coverage counts, not guessed percentages. An incomplete inventory is not overall completion.
+
+### Publish current activity and artwork
+
+The director owns next actions, blockers and task reconciliation. Each worker owns its activity record:
+
+```bash
+tools/ui-design progress docs/design/runs/RUN_ID --next "Review the narrow mockups" --blocker "none"
+tools/ui-design worker docs/design/runs/RUN_ID --id page-library --task "Library mockups" --status active --message "Rendering empty states"
+tools/ui-design artwork docs/design/runs/RUN_ID --file design/library-empty.html --title "Library empty state" --context "This mockup defines the first-run library experience."
+tools/ui-design worker docs/design/runs/RUN_ID --id page-library --task "Library mockups" --status done --message "Mockups published for review"
+```
+
+Publish every generated version before replacing its source file. Automatic discovery scans browser artwork and mockups inside the run, including HTML, SVG, raster images and PDF. It cannot recover versions overwritten between scans. Keep generated art and local dependencies inside the run. Publication adds the precise one-sentence purpose; automatically discovered files receive a path-based description rather than invented intent.
+
+The server also imports visual files and local dependencies from the active theme when it can verify the project and configured run directory. Use `design-serve RUN --repo /absolute/project` when project selection is ambiguous. Explicit theme publication is confined to that run's active theme:
+
+```bash
+tools/ui-design artwork docs/design/runs/RUN_ID --repo . --file themes/THEME_ID/preview.html --title "Theme preview" --context "This preview shows the active theme's shared components."
+```
+
+Imported copies appear under `theme-artwork/THEME_ID/` in the run. Use those run-relative paths for approval inputs. Original theme files remain untouched.
+
+The Working feed updates as art appears. The Library retains earlier versions and supports browsing and search. Image thumbnails use the actual image. HTML mockups use a scaled sandboxed preview; selecting a thumbnail opens the full-size viewer. Previews disable scripts and external requests. A script-driven mockup needs a rendered static screenshot for visual review; use the real application separately for interaction QA.
+
+The dashboard shows reported workers and real task observations, not inferred process liveness. The explicitly selected OMP director mirrors available `pi-tasks:state` events without changing task state. Automatic observers remain read-only. Missing model-cost or token data stays absent. Gate acceptance and evidence freshness remain governed by the existing checks.
+
+### Present guided artistic choices
+
+Publish a request against the actual artifacts:
+
+```bash
+tools/ui-design approval-request docs/design/runs/RUN_ID --id plan-choice --stage plan --title "Select the visual direction" --context "Review the concept boards before choosing a direction." --files plan/concept-a.html plan/concept-b.html
+```
+
+Pass `--choices plan/choices.json` to supply named concepts or palettes. The run-relative file contains an array of `{ "id": "concept-a", "label": "Concept A", "artworkIds": ["ID_RETURNED_BY_ARTWORK_PUBLICATION"] }` records. Use actual current artwork IDs, not that placeholder. Each option references only this request's reviewed artifacts. Request IDs are immutable; publish a new ID when the offer changes.
+
+The dashboard presents the artifacts and rationale field. Only a submitted guided choice appends an `actor: "user"` decision. Approving a listed existing concept records that selection. To request a combination that has not been rendered, submit Request changes with the desired elements in the rationale, then review a new request for the reconciled artifacts. Approval binds current input bytes and local dependencies; changed inputs require a new review. Design requests include all approved Plan inputs, the shared contract and the complete mockup set. Yolo displays actual autonomous decisions and never waits for a human artistic form.
+
+### Clean up owned server resources
+
+```bash
+tools/ui-design design-cleanup docs/design/runs/RUN_ID
+tools/ui-design design-cleanup --all --repo .
+```
+
+Cleanup asks the authenticated owner to stop. It never kills a process solely from a stored PID. It removes the listener, owned runtime locator, status cache and temporary server files. It preserves the original run, decisions, evidence, generated art and accumulated artwork library. Repeating cleanup is safe.
+
+Inert `.design-server.lock` and `.design-records.lock` coordination files remain so concurrent operations keep a stable lock identity. Their OS locks are released; no listener or active server resource remains. Do not delete a live lock to force a second owner.
+
+A yolo server watches for current final acceptance and cleans itself up on success. Successful yolo registration also requests cleanup. At completed yolo handover, run `design-cleanup` and verify shutdown even if the automatic path already ran. Blocked work is not completion. Guided review pauses retain their server; explicitly clean up when cancelling or finishing.

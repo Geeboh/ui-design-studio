@@ -19,7 +19,7 @@ import tempfile
 from datetime import datetime, timezone
 from dataclasses import dataclass
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 PACKAGE = Path(__file__).resolve().parents[1]
 STATE = ".ui-design-studio/install-state.json"
 BACKUPS = ".ui-design-studio/backups"
@@ -49,6 +49,8 @@ IGNORE_BLOCK = b"""# ui-design-studio:start
 /.venv-ui-design/
 /.ui-design-studio/backups/
 /.ui-design-studio/model-routing/
+**/.design-server.json
+**/.design-status.json
 # ui-design-studio:end"""
 
 
@@ -198,6 +200,9 @@ def source_files() -> dict[str, tuple[bytes, int]]:
         if not source.exists():
             raise InstallError(f"Incomplete package: missing command {name}")
         include(source, source.relative_to(PACKAGE).as_posix())
+    extension = PACKAGE / ".omp" / "extensions" / "ui-design-progress.ts"
+    if extension.exists() or extension.is_symlink():
+        include(extension, extension.relative_to(PACKAGE).as_posix())
     for tree, destination in (("docs", "docs/ui-design-studio"), ("prompts", "docs/ui-design-studio/prompts")):
         source_root = PACKAGE / tree
         if source_root.exists():
