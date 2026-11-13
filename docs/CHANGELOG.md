@@ -1,5 +1,15 @@
 # Release notes
 
+## 1.4.0 · 13 November 2026
+
+- Added optional `install.sh --mcp-global` installation into one isolated user environment shared by all projects.
+- Added `ui-design dashboard-serve` with verified local/LAN addresses, a locally generated QR, and foreground or parent-stdio cleanup.
+- Made the OMP extension start and supervise a dashboard automatically, recover unexpected child exits, and expose explicit start/stop commands.
+- Preserved authentication fragments, private discovery, explicit run-director ownership, and read-only `dashboard-info`.
+- Isolated global pip installation from inherited destination configuration and preserved unrelated user executables during upgrades.
+- Required authenticated identity verification before discovery output and preserved selected runs across recovery and cancelled session switches.
+- Added [setup, recovery, and release limits](RELEASE-v1.4.0.md), backed by 91 Python tests, 49 Node tests, and actual Linux global-runtime and OMP lifecycle checks.
+
 ## 1.3.0 · 12 November 2026
 
 ### Portable local MCP adapter

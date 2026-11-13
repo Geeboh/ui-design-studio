@@ -1,5 +1,49 @@
 # Release validation
 
+## Version 1.4.0 global installation and automatic OMP dashboard · 13 November 2026
+
+Checked on Linux with Python 3.12.3, Node 24.22.2, and actual OMP 18.20.0. These checks used temporary HOME directories and synthetic projects, not a production application's design evidence.
+
+| Check | Observed result | Scope |
+| --- | --- | --- |
+| MCP, dashboard, and installed package | 61 Python tests passed | Existing protocol/authorization/ownership contracts, foreground readiness, human QR output, parent EOF, signals, occupied ports, and installed console operation |
+| Global installer | 11 Python tests passed | Owned upgrades, unrelated executables, symlinks, failure cleanup, flag routing, and actual pip parsing with hostile external target configuration |
+| Existing project installer and installed extension | 19 Python tests passed | 15 installation/update/restore cases and four extension payload installation cases |
+| OMP extension | 49 Node tests passed | Awaited startup, single-flight child ownership, bounded recovery, explicit stop, selected-run recovery, cancelled switches, authenticated discovery, and preserved Pi Tasks ownership |
+| User-global installation | Real installation and repeated upgrade passed | The same installed executables served two projects with spaces in their paths, without project-local `.omp` installation |
+| Installed CLI and SDK | Actual consumers passed in both projects | Authenticated landing, guide access, pending create/resume, CLI discovery, independent QR decoding, EOF cleanup, and dossier preservation |
+| Native OMP | Actual PTY lifecycle passed | Automatic dashboard before any run, local/LAN URL display, unexpected child recovery, explicit stop inhibition, explicit restart, and owned shutdown |
+| Rendered terminal QR | Two complete actual OMP cards decoded independently | The decoded value exactly matched each displayed LAN capability URL. A historical card cropped by scrolling was not a complete QR |
+| Source identity | Installed bytes matched current source | Tested global CLI/backend files and the installed OMP extension |
+
+Independent review found an inherited pip-configuration destination hazard, an unverified discovery-display path, lost run selection during recovery, and premature teardown on a cancelled session switch. The fixes have focused behavioral regressions. A real reinstall with hostile external pip configuration preserved an unrelated user executable.
+
+OMP's child remains available during work and approval pauses. Recovery stops after three rapid failures and reports an actionable restart command. This is not an OS daemon or a promise to survive machine shutdown. Explicit stop and completed-run cleanup remain effective. Foreground output names Ctrl-C; OMP output names its own stop command.
+
+No native Windows/macOS, second physical LAN device, or other native MCP-client verification was performed for this change. Existing trusted-LAN HTTP and private-capability limits still apply.
+
+After the 1.4.0 version update, the final built wheel passed four package tests outside the checkout. The protocol suite passed 14 tests, the project installer passed 15 tests, and the global installer passed 11 tests. These 44 rerun cases overlap the 140 completed-feature cases above; they are not 44 additional unique cases.
+
+The final version-sensitive checks used the built release wheel:
+
+```bash
+export UI_DESIGN_TEST_WHEEL="$PWD/dist/ui_design_studio_mcp-1.4.0-py3-none-any.whl"
+python -m unittest discover -s tests -p 'test_mcp_package.py' -v
+python -m unittest discover -s tests -p 'test_mcp.py' -v
+python -m unittest discover -s tests -p 'test_install.py' -v
+python -m unittest discover -s tests -p 'test_global_mcp_install.py' -v
+```
+
+Reproduce the focused automated checks in a dependency-equipped virtual environment.
+
+```bash
+python -m unittest discover -s tests -p 'test_mcp*.py' -v
+python -m unittest discover -s tests -p 'test_global_mcp_install.py' -v
+python -m unittest discover -s tests -p 'test_install.py' -v
+python -m unittest discover -s tests -p 'test_progress_extension.py' -v
+node --experimental-strip-types --test tests/test_progress_extension.mjs
+```
+
 ## Version 1.3.0 portable MCP adapter checks
 
 Checked on Linux with Python 3.12.3, Node 24.22.2, OMP 18.19.0, and headless Chromium. The adapter uses the pinned official MCP Python SDK 1.30.0. These checks use isolated temporary projects and ephemeral listeners.

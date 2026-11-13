@@ -1,6 +1,6 @@
 # Installation, configuration and maintenance
 
-**UI Design Studio 1.3.0**
+**UI Design Studio 1.4.0**
 
 This guide covers the project-local OMP installation. For the standalone Python package and a local MCP stdio client, use [Connect UI Design Studio through local MCP](MCP.md). MCP installation does not copy OMP instructions or modify client configuration.
 
@@ -30,11 +30,19 @@ Use the project's supported environment. On Windows, a compatible Linux/WSL envi
 
 All package Python work runs in a virtual environment. The installer bootstraps one temporarily, then creates the project's `.venv-ui-design`. The helper uses the standard library; installation does not require pip packages, network downloads or `sudo`. On Ubuntu, missing Python/venv support is normally supplied by the OS packages `python3` and `python3-venv` using your established administration process.
 
+For automatic dashboard startup, clean URL output, and terminal QR codes, also install the optional global runtime from the distribution directory:
+
+```bash
+bash ./install.sh --mcp-global
+```
+
+This separate option installs Python dependencies into `~/.local/share/ui-design-studio/mcp` and exposes executables in `~/.local/bin`. It requires package downloads but no `sudo`. One installation serves every project; each project still needs its OMP extension installed below. See [MCP setup](MCP.md) for lifecycle, foreground operation, and client configuration.
+
 The designer inspects available OMP capabilities at runtime. A particular Figma account, image-generation service, MCP server, provider or model is not required by the package. Rendered verification is still necessary when the requested result includes verified visuals. If the target rendering environment is missing, the run must report that precise gap.
 
 ## 2. Select the project and install
 
-Extract the release. Open a shell in its `ui-design-studio-v1.3.0` directory. Point `--project` at the existing repository containing the application you want to redesign:
+Extract the release. Open a shell in its `ui-design-studio-v1.4.0` directory. Point `--project` at the existing repository containing the application you want to redesign:
 
 ```bash
 bash ./install.sh --project /absolute/path/to/project --dry-run

@@ -1,10 +1,10 @@
 # Distribution and release maintenance
 
-UI Design Studio 1.3.0 is a complete project-local OMP skills distribution with an optional standalone local MCP adapter. It may be copied, modified and redistributed under the included MIT license. Keep the copyright and license with copies. Imported reference images and assets used in future design runs retain their own licenses; this package's license does not change them.
+UI Design Studio 1.4.0 is a complete project-local OMP skills distribution with an optional standalone local MCP adapter. It may be copied, modified and redistributed under the included MIT license. Keep the copyright and license with copies. Imported reference images and assets used in future design runs retain their own licenses; this package's license does not change them.
 
 ## What recipients receive
 
-The ZIP contains one top-level `ui-design-studio-v1.3.0/` directory. Start at `README.md`; follow `docs/INSTALLATION.md` and `docs/RUN-TYPES.md`. `release.json` identifies the version, default policies and compatibility scope. `docs/VALIDATION.md` states what was actually checked.
+The ZIP contains one top-level `ui-design-studio-v1.4.0/` directory. Start at `README.md`; follow `docs/INSTALLATION.md` and `docs/RUN-TYPES.md`. `release.json` identifies the version, default policies and compatibility scope. `docs/VALIDATION.md` states what was actually checked.
 
 Included: nine skills, seven native OMP specialist definitions, two convenience commands, a native status extension, the Design Server and dashboard, focused reference documents, installation/update/restore utilities, project/run/model-routing helpers, theme schema/compiler/validator, an original CSS/SVG specimen, copy-and-paste run prompts, regression tests and a reproducible release builder.
 
@@ -38,7 +38,7 @@ The only use of system Python is creating the virtual environment. The OMP helpe
 After reviewing and testing the complete source tree:
 
 ```bash
-.venv-release/bin/python scripts/package_release.py --output dist/UI-Design-Studio-OMP-v1.3.0.zip
+.venv-release/bin/python scripts/package_release.py --output dist/UI-Design-Studio-OMP-v1.4.0.zip
 ```
 
 The builder regenerates `MANIFEST.sha256`, writes the ZIP and a SHA-256 sidecar, reopens the ZIP, checks every entry against its source bytes and checks CRCs. Entries have deterministic ordering, release-date timestamps and portable file modes. `install.sh` and the project wrapper retain executable permissions.

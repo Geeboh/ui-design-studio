@@ -1,6 +1,6 @@
 # UI Design Studio
 
-**Version 1.3.0 · A portable UI design workflow for Oh My Pi and local MCP clients**
+**Version 1.4.0 · A portable UI design workflow for Oh My Pi and local MCP clients**
 
 Assess an interface, develop coherent visual directions, design its complete pages and dialogs, implement the selected system, and deliver a documented theme. UI Design Studio combines a design director, nine reusable skills, seven specialist agent roles, run records, and installation/theme utilities.
 
@@ -15,7 +15,7 @@ The designer learns the project from its own instructions, requirements, source 
 | [Installation and maintenance](docs/INSTALLATION.md) | Requirements, installation, live-session discovery, configuration, upgrades, restore and troubleshooting |
 | [Local MCP adapter](docs/MCP.md) | Python package, explicit project connection, automatic landing dashboard, verified URLs and terminal QR |
 | [Run types and copy/paste recipes](docs/RUN-TYPES.md) | Guided, YOLO, `/goal` with YOLO, assessment, mockups, references, themes, scoped work, resume and model choices |
-| [Release notes](docs/CHANGELOG.md) | Changes in 1.3.0 and compatibility with existing installations |
+| [Release notes](docs/CHANGELOG.md) | Changes in 1.4.0 and compatibility with existing installations |
 | [Validation record](docs/VALIDATION.md) | Checks actually performed on this release and their limits |
 | [Distribution and release maintenance](docs/DISTRIBUTION.md) | License, package contents, checksum verification and reproducible ZIP builds |
 | [Primary sources](docs/SOURCES.md) | Upstream OMP behaviour, accessibility, tokens and performance references |
@@ -26,16 +26,17 @@ The installer places this documentation in `docs/ui-design-studio/` inside the t
 
 For a local MCP coding client, follow [Connect UI Design Studio through local MCP](docs/MCP.md). The installable `ui-design-studio-mcp` package bundles the engine and guides without installing `.omp` files into your project. The OMP path below remains unchanged.
 
-From the extracted `ui-design-studio-v1.3.0` directory, install into the **actual project root**:
+From the extracted `ui-design-studio-v1.4.0` directory, install into the **actual project root**:
 
 ```bash
+bash ./install.sh --mcp-global
 bash ./install.sh --project /absolute/path/to/project --dry-run
 bash ./install.sh --project /absolute/path/to/project
 cd /absolute/path/to/project
 ./tools/ui-design doctor --repo .
 ```
 
-Replace `/absolute/path/to/project` with the repository you intend to redesign. The dry run is a preview of changes; the second command installs them. The OMP installer and project wrapper use a virtual environment and require no third-party Python dependencies. The separate MCP adapter has its own runtime dependencies.
+Replace `/absolute/path/to/project` with the repository you intend to redesign. The dry run previews project changes; the following command installs them. `--mcp-global` is optional and installs one isolated Python runtime for every project. It enables automatic OMP dashboard startup and locally generated QR codes. The normal project installer and wrapper remain standard-library-only.
 
 In OMP, already working in that project, submit these as separate commands:
 
@@ -168,13 +169,15 @@ Default run location: `docs/design/runs/<run-id>/`. Default themes location: `th
 
 A run records project context, model policy, actual routing, findings, coverage, decisions, evidence and blockers. The Design Server displays live progress, workers, tasks, coverage bars and gate statistics. Its Working feed shows generated artwork and mockups as clickable thumbnails. The accumulating Library retains browsable versions, and guided Approvals records submitted artistic choices against the reviewed bytes.
 
-Start it in a retained foreground service after creating or resuming a run:
+With the global runtime and project extension installed, OMP automatically starts a dashboard and prints verified local/LAN URLs and a real QR before work. It stays available during approval pauses and recovers from unexpected child exits. Use `/ui-design-dashboard` to print the links again, `/ui-design-dashboard stop` to stop it, and `/ui-design-dashboard start` to restart it.
+
+Outside OMP, run the same dashboard in a foreground terminal:
 
 ```bash
-tools/ui-design design-serve docs/design/runs/RUN_ID --host 0.0.0.0 --port 0 --public-url http://YOUR_LAN_IP
+ui-design dashboard-serve --repo /absolute/path/to/project
 ```
 
-Use the actual run directory and reachable LAN address. Readiness prints the complete URL with its actual port and access fragment. The installed OMP extension pins status and that address below the editor, separately from Pi Tasks. On hosts without that UI, `tools/ui-design status docs/design/runs/RUN_ID --watch` emits status regularly.
+The foreground banner ends with `(Ctrl-C to stop)`. OMP's banner instead names its stop command. The actual port and LAN addresses are discovered, not copied from an example. See [MCP setup](docs/MCP.md) for global installation and loopback-only configuration.
 
 The URL authorizes its holder to inspect artwork and submit guided approvals. Keep it private. Plain HTTP is for trusted LAN use; use SSH forwarding or an existing HTTPS reverse proxy on untrusted networks. Starting the server does not create a public tunnel.
 

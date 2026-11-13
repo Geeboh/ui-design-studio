@@ -11,7 +11,21 @@ python3 -m venv /absolute/path/to/ui-design-env
 /absolute/path/to/ui-design-env/bin/python -m pip install .
 ```
 
-The adapter requires `mcp==1.30.0`, `segno>=1.6,<2`, and `psutil>=7,<8`. The existing `install.sh` OMP installer and `tools/ui-design` wrapper remain standard-library-only.
+The adapter requires `mcp==1.30.0`, `segno>=1.6,<2`, and `psutil>=7,<8`. The default project-local OMP installer and `tools/ui-design` wrapper remain standard-library-only.
+
+### Install once for all projects
+
+From the distribution directory, install the optional user-global runtime.
+
+```bash
+bash ./install.sh --mcp-global
+```
+
+This creates an isolated environment at `~/.local/share/ui-design-studio/mcp` and exposes `ui-design` and `ui-design-mcp` in `~/.local/bin`. Add `~/.local/bin` to your shell's `PATH` if needed. OMP also checks the fixed environment path, so shell PATH changes are not required for automatic startup.
+
+The global option installs only the MCP runtime. Install the OMP skills and extension into each target project with the normal `--project` command. No system Python packages, client configuration, or OS service is installed. Package installation requires access to its Python dependencies.
+
+Use the same global `ui-design-mcp` executable for every project, with a separate explicit `--repo /absolute/project/path` for each connection. Project records and permissions stay separate.
 
 ## Configure a connection
 
@@ -40,6 +54,34 @@ The server supplies deterministic operations and instructions, not an autonomous
 
 The command is read-only. It verifies identity through a bounded authenticated loopback probe before printing `[ok]`. With several live connections, select one explicitly. The output contains the real loopback URL, each available LAN URL, and a locally generated Unicode half-block QR code. The QR encodes the first LAN URL, or loopback when LAN is unavailable. Keep the `#token=` fragment. No URL is sent to an external QR service.
 
+## Start a dashboard without an MCP connection
+
+The global runtime provides a foreground dashboard command.
+
+```bash
+ui-design dashboard-serve --repo /absolute/path/to/project
+```
+
+It starts before a design run exists, discovers actual LAN addresses, and prints labelled URLs followed by a real QR code. The first line ends with `(Ctrl-C to stop)`. Keep that terminal open. Add `--dashboard-host 127.0.0.1` for loopback-only access.
+
+This command differs from the low-level project wrapper's `design-serve RUN`, which requires an existing run and prints JSON readiness.
+
+## Use automatic startup in OMP
+
+Install the global runtime once, then install or update the project's OMP extension. A main OMP session starts its own dashboard automatically and prints verified links and the QR before work. No MCP connection or manual server command is required.
+
+The extension keeps its child alive through work and guided approval pauses. Unexpected child exits trigger automatic recovery. It closes its owned child on session shutdown or project change. It does not install a daemon that runs after OMP exits.
+
+Use these commands in OMP.
+
+```text
+/ui-design-dashboard
+/ui-design-dashboard stop
+/ui-design-dashboard start
+```
+
+The first command prints the live links again. An explicit stop inhibits automatic restart until you request start. OMP's banner names `/ui-design-dashboard stop` rather than promising that an OMP Ctrl-C stops only the dashboard. URLs retain the authentication fragment; do not shorten them before sharing with an authorized reviewer.
+
 ## Choose network exposure
 
 The default `--dashboard-host 0.0.0.0` permits trusted-LAN access. HTTP does not encrypt bearer credentials or project content. Use only trusted networks. To disable LAN exposure, add `--dashboard-host 127.0.0.1` to the server arguments.
@@ -56,7 +98,7 @@ Connections reuse a live run server only after its run and instance identity mat
 
 On Unix, SIGTERM requests lifespan cleanup. On Windows, close stdio normally for graceful cleanup. Python's Windows event loop does not provide Unix signal handlers. Native Windows execution remains unverified.
 
-OMP installations retain `/ui-design-progress RUN` and their Pi Tasks ownership checks. `/ui-design-dashboard [SESSION_ID]` selects a connection, pins its addresses, and prints full verified output with the QR. Waiting connections never receive Pi Tasks exports. Other clients receive links through tools and resources, not an invented pinned-widget protocol.
+OMP installations retain `/ui-design-progress RUN` and their Pi Tasks ownership checks. `/ui-design-dashboard SESSION_ID` can still select an existing MCP connection. Waiting connections never receive Pi Tasks exports. Other clients receive links through tools and resources, not an invented pinned-widget protocol.
 
 ## Read workflow guides
 

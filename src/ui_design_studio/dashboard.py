@@ -295,9 +295,11 @@ def _probe(value: str, token: str, expected: dict, *, timeout: float = PROBE_TIM
 
 
 @lru_cache(maxsize=64)
-def _formatted_text(local_url: str | None, lan_urls: tuple[str, ...], canonical_url: str) -> str:
+def format_dashboard_text(local_url: str | None, lan_urls: tuple[str, ...], canonical_url: str,
+                          *, stop_instruction: str | None = None) -> str:
     qr_url = lan_urls[0] if lan_urls else local_url or canonical_url
-    lines = ["[ok] Dashboard live → " + (local_url or canonical_url)]
+    suffix = f" ({stop_instruction})" if stop_instruction else ""
+    lines = ["[ok] Dashboard live → " + (local_url or canonical_url) + suffix]
     lines.extend("[lan] " + value for value in lan_urls)
     if not lan_urls:
         lines.append("[lan] unavailable")
@@ -325,7 +327,7 @@ def _details(repo: Path, instance_id: str, run: str | None, local_url: str | Non
     qr_url = lan_urls[0] if lan_urls else local_url or canonical_url
     result = {"schemaVersion": "1.0", "instanceId": instance_id, "repo": str(repo), "run": run, "state": "live",
               "observedAt": observed_at or _timestamp(), "localUrl": local_url, "lanUrls": list(lan_urls), "qrUrl": qr_url,
-              "text": _formatted_text(local_url, tuple(lan_urls), canonical_url)}
+              "text": format_dashboard_text(local_url, tuple(lan_urls), canonical_url)}
     if local_url is None:
         result["url"] = canonical_url
     return result
