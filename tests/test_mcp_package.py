@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import unittest
 import zipfile
@@ -94,6 +95,76 @@ asyncio.run(main())
         self.assertEqual(json.loads(result.stdout)["status"], "PASS")
         self.assertFalse((project / ".omp").exists())
         self.assertEqual(list((project / ".ui-design-studio/runtime/mcp").glob("*.json")), [])
+
+    def test_installed_console_dashboard_serves_before_any_run(self):
+        prefix = self.base / "console-prefix"
+        subprocess.run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "--no-index",
+                        "--no-deps", "--no-compile", "--ignore-installed", "--prefix", str(prefix), str(self.wheel)],
+                       check=True, capture_output=True, text=True)
+        executable = prefix / ("Scripts/ui-design.exe" if os.name == "nt" else "bin/ui-design")
+        library = sysconfig.get_path("purelib", vars={"base": str(prefix), "platbase": str(prefix)})
+        project = self.base / "console-project"
+        project.mkdir()
+        script = '''
+import asyncio, http.client, json, os, socket, sys
+from pathlib import Path
+from urllib.parse import urlsplit
+executable, library, repo = sys.argv[1:]
+async def main():
+    process = await asyncio.create_subprocess_exec(
+        executable, 'dashboard-serve', '--repo', repo, '--dashboard-host', '127.0.0.1', '--parent-stdio', '--json',
+        stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        cwd=repo, env=dict(os.environ, PYTHONPATH=library))
+    try:
+        line = await asyncio.wait_for(process.stdout.readline(), timeout=10)
+        details = json.loads(line)
+        assert details['repo'] == repo
+        assert details['run'] is None
+        assert details['state'] == 'live'
+        assert details['text'].splitlines()[0] == '[ok] Dashboard live → ' + details['localUrl'] + ' (/ui-design-dashboard stop to stop)'
+        assert not list(Path(repo).rglob('run.json'))
+        assert not (Path(repo)/'.omp').exists()
+        record, = (Path(repo)/'.ui-design-studio/runtime/mcp').glob('*.json')
+        cached = json.loads(record.read_text())
+        assert cached['instanceId'] == details['instanceId']
+        assert cached['localUrl'] == details['localUrl']
+        address = urlsplit(details['localUrl'])
+        connection = http.client.HTTPConnection(address.hostname, address.port, timeout=3)
+        try:
+            connection.request('GET', '/api/identity', headers={'Authorization':'Bearer ' + address.fragment.removeprefix('token=')})
+            response = connection.getresponse()
+            assert response.status == 200
+            assert json.loads(response.read()) == {'instanceId':details['instanceId'], 'repo':repo}
+        finally:
+            connection.close()
+        process.stdin.close()
+        await asyncio.wait_for(process.wait(), timeout=10)
+        assert process.returncode == 0
+        assert await asyncio.wait_for(process.stdout.read(), timeout=3) == b''
+        assert await asyncio.wait_for(process.stderr.read(), timeout=3) == b''
+        assert not record.exists()
+        assert not list(Path(repo).rglob('run.json'))
+        try:
+            socket.create_connection((address.hostname, address.port), timeout=0.2).close()
+        except OSError:
+            pass
+        else:
+            raise AssertionError('The installed foreground listener must close on parent EOF.')
+    finally:
+        if process.returncode is None:
+            process.terminate()
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5)
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+asyncio.run(main())
+print(json.dumps({'status':'PASS'}))
+'''
+        result = subprocess.run([sys.executable, "-I", "-c", script, str(executable), library, str(project)],
+                                cwd=self.base, capture_output=True, text=True, timeout=40)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"status": "PASS"})
 
     def test_build_rejects_symlinked_payload_and_metadata(self):
         for target in ("src/ui_design_studio/private-link", "README.md", "LICENSE.txt"):

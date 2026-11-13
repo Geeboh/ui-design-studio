@@ -1,5 +1,12 @@
 # Release notes
 
+## Unreleased
+
+- Added optional `install.sh --mcp-global` installation into one isolated user environment shared by all projects.
+- Added `ui-design dashboard-serve` with verified local/LAN addresses, a locally generated QR, and foreground or parent-stdio cleanup.
+- Made the OMP extension start and supervise a dashboard automatically, recover unexpected child exits, and expose explicit start/stop commands.
+- Preserved authentication fragments, private discovery, explicit run-director ownership, and read-only `dashboard-info`.
+
 ## 1.3.0 · 12 November 2026
 
 ### Portable local MCP adapter

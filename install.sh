@@ -13,4 +13,11 @@ if ! python3 -m venv --without-pip "$BOOTSTRAP_VENV"; then
   printf '%s\n' 'Unable to create a Python virtual environment. Ensure the Python venv module is available.' >&2
   exit 2
 fi
-"$BOOTSTRAP_VENV/bin/python" "$PACKAGE_DIR/scripts/install.py" "$@"
+INSTALLER="$PACKAGE_DIR/scripts/install.py"
+for argument in "$@"; do
+  if [[ "$argument" == "--mcp-global" ]]; then
+    INSTALLER="$PACKAGE_DIR/scripts/install_mcp.py"
+    break
+  fi
+done
+"$BOOTSTRAP_VENV/bin/python" "$INSTALLER" "$@"

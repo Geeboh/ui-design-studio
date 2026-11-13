@@ -1,5 +1,6 @@
 """Isolated adapter behavior checks, not application review evidence."""
 from concurrent.futures import ThreadPoolExecutor
+import asyncio
 import contextlib
 import datetime as dt
 import http.client
@@ -8,6 +9,7 @@ import io
 import json
 import os
 from pathlib import Path
+import signal
 import socket
 import stat
 import subprocess
@@ -23,6 +25,23 @@ from urllib.parse import urlsplit
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from ui_design_studio import dashboard
 from ui_design_studio.runtime import backend, studio
+
+
+def decode_terminal_qr(text):
+    from PIL import Image
+    import zxingcpp
+
+    lines = text.splitlines()
+    width = max(map(len, lines))
+    image = Image.new("L", (width, len(lines) * 2), 0)
+    glyphs = {" ": (0, 0), "▀": (255, 0), "▄": (0, 255), "█": (255, 255)}
+    for row, line in enumerate(lines):
+        for column, character in enumerate(line.ljust(width)):
+            top, bottom = glyphs[character]
+            image.putpixel((column, row * 2), top)
+            image.putpixel((column, row * 2 + 1), bottom)
+    decoded = zxingcpp.read_barcode(image.resize((width * 8, len(lines) * 16), Image.Resampling.NEAREST))
+    return None if decoded is None else decoded.text
 
 
 class DashboardTests(unittest.TestCase):
@@ -678,9 +697,6 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn("http://127.0.0.1:", details["text"])
 
     def test_cli_json_and_human_output_share_independently_decodable_qr(self):
-        from PIL import Image
-        import zxingcpp
-
         self.inventory.return_value = ("192.0.2.8",)
         session = self.session()
         root, relative = self.new_run()
@@ -700,18 +716,7 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(labels.splitlines(), ["[ok] Dashboard live → " + details["localUrl"], *["[lan] " + value for value in details["lanUrls"]]])
                 self.assertIn("#token=", labels)
                 self.assertTrue(all(character == " " or character == "\n" or "\u2580" <= character <= "\u259f" for character in qr))
-                lines = qr.splitlines()
-                width = max(map(len, lines))
-                image = Image.new("L", (width, len(lines) * 2), 0)
-                glyphs = {" ": (0, 0), "▀": (255, 0), "▄": (0, 255), "█": (255, 255)}
-                for row, line in enumerate(lines):
-                    for column, character in enumerate(line.ljust(width)):
-                        top, bottom = glyphs[character]
-                        image.putpixel((column, row * 2), top)
-                        image.putpixel((column, row * 2 + 1), bottom)
-                decoded = zxingcpp.read_barcode(image.resize((width * 8, len(lines) * 16), Image.Resampling.NEAREST))
-                self.assertIsNotNone(decoded, "The emitted terminal QR must decode independently")
-                self.assertEqual(decoded.text, details["qrUrl"])
+                self.assertEqual(decode_terminal_qr(qr), details["qrUrl"], "The emitted terminal QR must decode independently")
                 self.assertEqual(human.stderr, "")
         self.assertTrue((root / "run.json").exists())
 
@@ -870,6 +875,180 @@ class DashboardTests(unittest.TestCase):
         live = [run for run in data["runs"] if run["live"]]
         self.assertEqual([run["run"] for run in live], [healthy_run])
         self.assertEqual(data["selectedRun"]["instanceId"], healthy["instanceId"])
+
+
+class ForegroundDashboardTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="ui-design-foreground-")
+        self.addCleanup(self.temporary.cleanup)
+        self.repo = Path(self.temporary.name).resolve()
+        source = Path(__file__).resolve().parents[1] / "src"
+        self.environment = dict(os.environ, PYTHONPATH=str(source))
+        self.command = [sys.executable, "-m", "ui_design_studio.cli"]
+
+    async def launch(self, *extra, parent_stdio=True, json_output=True, host="127.0.0.1"):
+        arguments = [*self.command, "dashboard-serve", "--repo", str(self.repo), "--dashboard-host", host]
+        if parent_stdio:
+            arguments.append("--parent-stdio")
+        if json_output:
+            arguments.append("--json")
+        process = await asyncio.create_subprocess_exec(
+            *arguments, *extra, stdin=asyncio.subprocess.PIPE if parent_stdio else asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=self.repo, env=self.environment,
+        )
+
+        async def cleanup():
+            if process.returncode is None:
+                process.terminate()
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=10)
+                except asyncio.TimeoutError:
+                    process.kill()
+                    await process.wait()
+            if process.stdin is not None:
+                process.stdin.close()
+
+        self.addAsyncCleanup(cleanup)
+        line = await asyncio.wait_for(process.stdout.readline(), timeout=15)
+        self.assertTrue(line, "The dashboard must publish readiness before waiting.")
+        return process, line.decode("utf-8")
+
+    async def finish(self, process):
+        await asyncio.wait_for(process.wait(), timeout=10)
+        output = await asyncio.wait_for(process.stdout.read(), timeout=3)
+        errors = await asyncio.wait_for(process.stderr.read(), timeout=3)
+        return output.decode("utf-8"), errors.decode("utf-8")
+
+    def records(self):
+        return list((self.repo / dashboard.SESSION_DIRECTORY).glob("*.json"))
+
+    def request(self, url, path="/api/identity", *, body=None, authenticated=True):
+        parsed = urlsplit(url)
+        headers = {}
+        if authenticated:
+            headers["Authorization"] = "Bearer " + parsed.fragment.removeprefix("token=")
+        if body is not None:
+            body = json.dumps(body)
+            headers["Content-Type"] = "application/json"
+        connection = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=5)
+        try:
+            connection.request("GET" if body is None else "POST", path, body=body, headers=headers)
+            response = connection.getresponse()
+            return response.status, json.loads(response.read())
+        finally:
+            connection.close()
+
+    def assert_stopped(self, url):
+        parsed = urlsplit(url)
+        with self.assertRaises(OSError):
+            with socket.create_connection((parsed.hostname, parsed.port), timeout=0.2):
+                pass
+
+    async def test_parent_eof_stops_owned_listeners_and_preserves_real_run_evidence(self):
+        process, line = await self.launch()
+        details = json.loads(line)
+        self.assertEqual(set(details), {"schemaVersion", "instanceId", "repo", "run", "state", "observedAt",
+                                        "localUrl", "lanUrls", "qrUrl", "text"})
+        self.assertEqual(details["schemaVersion"], "1.0")
+        self.assertEqual(details["state"], "live")
+        self.assertEqual(details["repo"], str(self.repo))
+        self.assertIsNone(details["run"])
+        self.assertFalse(list(self.repo.rglob("run.json")))
+        self.assertEqual(self.request(details["localUrl"]), (200, {"instanceId": details["instanceId"], "repo": str(self.repo)}))
+        self.assertEqual(self.request(details["localUrl"], authenticated=False)[0], 401)
+        self.assertEqual(self.request(details["localUrl"], "/api/session")[1]["runs"], [])
+        record, = self.records()
+        self.assertEqual(record.name, details["instanceId"] + ".json")
+        cached = json.loads(record.read_text(encoding="utf-8"))
+        self.assertEqual(cached["localUrl"], details["localUrl"])
+        self.assertEqual(cached["text"].splitlines()[0], "[ok] Dashboard live → " + details["localUrl"])
+        self.assertEqual(details["text"].splitlines()[0],
+                         "[ok] Dashboard live → " + details["localUrl"] + " (/ui-design-dashboard stop to stop)")
+        self.assertEqual(decode_terminal_qr(details["text"].split("\n\n", 1)[1]), details["qrUrl"])
+        self.assertEqual(dashboard.discover(self.repo, session=details["instanceId"])["instanceId"], details["instanceId"])
+        if os.name != "nt":
+            self.assertEqual(stat.S_IMODE(record.stat().st_mode), 0o600)
+        root = Path(studio().init_run(self.repo, theme_id="foreground-regression")["run"])
+        relative = root.relative_to(self.repo).as_posix()
+        evidence = root / "foreground-evidence.txt"
+        evidence.write_bytes(b"Keep this real run evidence.\n")
+        run_before = (root / "run.json").read_bytes()
+        code, opened = self.request(details["localUrl"], "/api/open", body={"run": relative})
+        self.assertEqual(code, 200)
+        self.assertEqual(opened["run"], relative)
+        self.assertEqual(self.request(opened["localUrl"])[0], 200)
+        process.stdin.close()
+        output, errors = await self.finish(process)
+        self.assertEqual(process.returncode, 0, errors)
+        self.assertEqual(output, "")
+        self.assertEqual(errors, "")
+        self.assertEqual(self.records(), [])
+        self.assert_stopped(details["localUrl"])
+        self.assert_stopped(opened["localUrl"])
+        self.assertEqual((root / "run.json").read_bytes(), run_before)
+        self.assertEqual(evidence.read_bytes(), b"Keep this real run evidence.\n")
+        self.assertEqual(list(self.repo.rglob("run.json")), [root / "run.json"])
+
+    @unittest.skipIf(os.name == "nt", "POSIX signal delivery is required for this process check.")
+    async def test_signals_stop_with_parent_stdin_open_and_standalone_stdin_closed(self):
+        for signum, parent_stdio, expected in ((signal.SIGTERM, True, 0), (signal.SIGINT, False, 130)):
+            with self.subTest(signal=signum, parent_stdio=parent_stdio):
+                process, line = await self.launch(parent_stdio=parent_stdio)
+                details = json.loads(line)
+                suffix = " (/ui-design-dashboard stop to stop)" if parent_stdio else " (Ctrl-C to stop)"
+                self.assertEqual(details["text"].splitlines()[0], "[ok] Dashboard live → " + details["localUrl"] + suffix)
+                self.assertEqual(self.request(details["localUrl"])[0], 200)
+                process.send_signal(signum)
+                output, errors = await self.finish(process)
+                self.assertEqual(process.returncode, expected, errors)
+                self.assertEqual(output, "")
+                self.assertEqual(errors, "")
+                self.assertEqual(self.records(), [])
+                self.assert_stopped(details["localUrl"])
+                self.assertFalse(list(self.repo.rglob("run.json")))
+
+    @unittest.skipIf(os.name == "nt", "POSIX signal delivery is required for this process check.")
+    async def test_human_foreground_prints_real_labels_and_independently_decodable_qr(self):
+        process, first_line = await self.launch(parent_stdio=False, json_output=False, host="0.0.0.0")
+        record, = self.records()
+        details = json.loads(record.read_text(encoding="utf-8"))
+        self.assertEqual(first_line.rstrip("\n"), "[ok] Dashboard live → " + details["localUrl"] + " (Ctrl-C to stop)")
+        self.assertEqual(self.request(details["localUrl"])[0], 200)
+        process.send_signal(signal.SIGTERM)
+        output, errors = await self.finish(process)
+        self.assertEqual(process.returncode, 0, errors)
+        self.assertEqual(errors, "")
+        labels, qr = (first_line + output).split("\n\n", 1)
+        lan_lines = ["[lan] " + value for value in details["lanUrls"]] or ["[lan] unavailable"]
+        self.assertEqual(labels.splitlines(), [first_line.rstrip("\n"), *lan_lines])
+        self.assertNotIn('"schemaVersion"', labels)
+        self.assertEqual(decode_terminal_qr(qr), details["qrUrl"])
+        self.assertEqual(self.records(), [])
+        self.assertFalse(list(self.repo.rglob("run.json")))
+
+    async def test_occupied_port_fails_without_hanging_on_parent_stdin_or_publishing_success(self):
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen()
+            process, line = await self.launch("--dashboard-port", str(listener.getsockname()[1]))
+            output, errors = await self.finish(process)
+            self.assertEqual(process.returncode, 1)
+            self.assertEqual(json.loads(line)["status"], "FAIL")
+            self.assertNotIn("[ok]", line)
+            self.assertEqual(output, "")
+            self.assertEqual(errors, "")
+            self.assertGreater(listener.fileno(), -1)
+        self.assertEqual(self.records(), [])
+        self.assertFalse(list(self.repo.rglob("run.json")))
+
+    async def test_top_level_help_exposes_dashboard_and_preserves_engine_commands(self):
+        result = subprocess.run([*self.command, "--help"], capture_output=True, text=True,
+                                cwd=self.repo, env=self.environment, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for command in ("dashboard-serve", "dashboard-info", "init-run", "doctor", "design-serve"):
+            self.assertIn(command, result.stdout)
+        self.assertEqual(result.stderr, "")
+        self.assertEqual(self.records(), [])
 
 
 if __name__ == "__main__":

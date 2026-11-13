@@ -173,7 +173,11 @@ Do not edit checks merely to obtain green status. A deliberate contract change r
 
 ## 7. Live progress and Design Server
 
-After `init-run`, start the server in a retained named foreground service. Keep that service alive during design work and guided review pauses:
+With the optional user-global runtime and current OMP extension installed, the main OMP session automatically starts and supervises a dashboard before work. The console prints verified loopback and LAN URLs followed by a locally generated QR. It stays live through guided pauses and recovers after an unexpected child exit. Use `/ui-design-dashboard` to display its links, `/ui-design-dashboard stop` to intentionally stop it, and `/ui-design-dashboard start` to resume it. Explicit stop prevents background recovery until start. OMP shutdown closes its owned child, not other clients' borrowed servers.
+
+For standalone operation without OMP, use `ui-design dashboard-serve --repo /absolute/project` from the global runtime and retain the foreground terminal. This mode prints `(Ctrl-C to stop)`. OMP uses its explicit stop command instead.
+
+The lower-level standard-library run server remains available when the global runtime is not installed. After `init-run`, retain this foreground service:
 
 ```bash
 tools/ui-design design-serve docs/design/runs/RUN_ID --host 0.0.0.0 --port 0 --public-url http://YOUR_LAN_IP
@@ -185,7 +189,7 @@ An explicit LAN listener does not create a public tunnel, configure a firewall o
 
 The installed `.omp/extensions/ui-design-progress.ts` reads the server's status and pins a separate widget below OMP's editor. It preserves the existing Pi Tasks widget and built-in footer. Reload extensions after installation.
 
-Automatic footer discovery is read-only. Select the intended project-relative run with `/ui-design-progress docs/design/runs/RUN_ID` to pin it and designate this OMP session as the run's Pi Tasks director. Selecting the run from another session explicitly hands off that role. Each session retains its own observation file; unrelated sessions cannot replace the director's tasks. `/ui-design-progress auto` restores read-only discovery. With no active server, the extension stays silent.
+Automatic footer observation does not claim Pi Tasks ownership. Select the intended project-relative run with `/ui-design-progress docs/design/runs/RUN_ID` to pin it and designate this OMP session as the run's Pi Tasks director. Selecting the run from another session explicitly hands off that role. Each session retains its own observation file; unrelated sessions cannot replace the director's tasks. `/ui-design-progress auto` restores read-only task observation. Missing dashboard-runtime failures must produce an actionable installation message, not a fabricated live address.
 
 Without a compatible host UI, use a separate terminal:
 
@@ -244,3 +248,5 @@ Cleanup asks the authenticated owner to stop. It never kills a process solely fr
 Inert `.design-server.lock` and `.design-records.lock` coordination files remain so concurrent operations keep a stable lock identity. Their OS locks are released; no listener or active server resource remains. Do not delete a live lock to force a second owner.
 
 A yolo server watches for current final acceptance and cleans itself up on success. Successful yolo registration also requests cleanup. At completed yolo handover, run `design-cleanup` and verify shutdown even if the automatic path already ran. Blocked work is not completion. Guided review pauses retain their server; explicitly clean up when cancelling or finishing.
+
+Run cleanup does not stop OMP's waiting dashboard. That dashboard stays available for the next run until `/ui-design-dashboard stop` or OMP session shutdown. A completed or explicitly cleaned run must not be reopened merely by polling.

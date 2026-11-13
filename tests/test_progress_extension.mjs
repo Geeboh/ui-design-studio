@@ -1,27 +1,39 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { createServer } from "node:http";
-import test from "node:test";
+import test, { after } from "node:test";
 import designProgress from "../.omp/extensions/ui-design-progress.ts";
 
 const WIDGET = "ui-design-progress";
 const TASK_EVENT = "pi-tasks:state";
+const TEST_ROOT = mkdtempSync(join(tmpdir(), "design-progress-tests-"));
+const ORIGINAL_HOME = process.env.HOME;
+const ORIGINAL_PATH = process.env.PATH;
+process.env.HOME = join(TEST_ROOT, "home");
+process.env.PATH = "";
+mkdirSync(process.env.HOME);
+after(() => {
+	if (ORIGINAL_HOME === undefined) delete process.env.HOME;
+	else process.env.HOME = ORIGINAL_HOME;
+	if (ORIGINAL_PATH === undefined) delete process.env.PATH;
+	else process.env.PATH = ORIGINAL_PATH;
+	rmSync(TEST_ROOT, { recursive: true, force: true });
+});
 
 function writeJson(path, value) {
 	writeFileSync(path, JSON.stringify(value));
 }
 
 function fixture(t, options = {}) {
-	const base = mkdtempSync(join(tmpdir(), "design-progress-"));
+	const base = mkdtempSync(join(TEST_ROOT, "design-progress-"));
 	const project = join(base, "project with spaces");
 	const runsRelative = options.runs ?? "work/design-runs";
 	const runs = join(project, runsRelative);
 	mkdirSync(runs, { recursive: true });
 	writeJson(join(project, "ui-design-studio.json"), { paths: { runs: runsRelative } });
-	t.after(() => rmSync(base, { recursive: true, force: true }));
 	return { base, project, runs, runsRelative };
 }
 
@@ -108,8 +120,8 @@ function host(t, project, options = {}) {
 		sendMessage: (message, options) => reports.push({ message, options }),
 	};
 	designProgress(api);
-	function emit(name) {
-		for (const handler of handlers.get(name) ?? []) handler({ type: name }, context);
+	function emit(name, event = {}, eventContext = context) {
+		return Promise.all((handlers.get(name) ?? []).map(handler => handler({ type: name, ...event }, eventContext)));
 	}
 	t.after(() => emit("session_shutdown"));
 	return {
@@ -241,7 +253,7 @@ test("refuses paths outside configured runs, traversal, and unsafe configuration
 	runtime.command("../outside");
 	runtime.command(run.root);
 	runtime.command("other/project-run");
-	assert.equal(runtime.notifications.length, 3);
+	assert.equal(runtime.notifications.filter(item => !item.message.includes("runtime is missing")).length, 3);
 	assert.ok(runtime.notifications.every(item => item.type === "warning"));
 	writeJson(join(f.project, "ui-design-studio.json"), { paths: { runs: "../outside" } });
 	runtime.state(taskEvent());
@@ -378,8 +390,9 @@ test("uses notification fallback for UI clients without a native TUI", t => {
 	addRun(f);
 	const runtime = host(t, f.project, { mode: "rpc" });
 	runtime.emit("session_start");
-	assert.equal(runtime.notifications.length, 1);
-	assert.match(runtime.notifications[0].message, /--watch/);
+	const reports = runtime.notifications.filter(item => item.message.includes("--watch"));
+	assert.equal(reports.length, 1);
+	assert.match(reports[0].message, /--watch/);
 	assert.equal(runtime.reports.length, 0);
 	assert.equal(runtime.widgets.has(WIDGET), false);
 });
@@ -573,15 +586,15 @@ async function liveConnection(t, f, onRequest) {
 	return { ...connection, server, requests };
 }
 
-test("pins a waiting connection without progress or Pi Tasks exports", t => {
+test("pins an authenticated waiting connection without progress or Pi Tasks exports", async t => {
 	const f = fixture(t);
-	const connection = addConnection(f);
+	const connection = await liveConnection(t, f);
 	const runtime = host(t, f.project);
 	runtime.state(taskEvent());
 	runtime.emit("session_start");
+	await eventually(() => runtime.widgets.get(WIDGET)?.includes(connection.record.localUrl), "waiting connection was not authenticated");
 	const lines = runtime.widgets.get(WIDGET);
 	assert.ok(lines.includes(connection.record.localUrl));
-	assert.ok(lines.includes(connection.record.lanUrls[0]));
 	assert.match(lines.join("\n"), /Waiting for a design run/);
 	assert.match(lines[3], /ui-design dashboard-info --repo '.*project with spaces' --session a{48}/);
 	assert.doesNotMatch(lines.join("\n"), /%|Gates|Coverage/);
@@ -609,16 +622,15 @@ test("prints cached QR only after an authenticated matching identity response", 
 	const connection = await liveConnection(t, f);
 	const runtime = host(t, f.project);
 	runtime.emit("session_start");
-	await runtime.dashboard();
+	await runtime.dashboard(connection.record.instanceId);
 	assert.equal(runtime.reports.length, 1);
 	assert.equal(runtime.reports[0].message.content, connection.record.text);
-	assert.deepEqual(connection.requests, [{
-		url: "/api/identity", authorization: `Bearer ${connection.record.localUrl.split("#token=")[1]}`,
-	}]);
+	assert.ok(connection.requests.some(request => request.url === "/api/identity"
+		&& request.authorization === `Bearer ${connection.record.localUrl.split("#token=")[1]}`));
 	assert.equal(runtime.reports[0].message.customType, "ui-design-studio:dashboard");
 });
 
-test("keeps explicit run and director precedence over a selected connection run", t => {
+test("keeps explicit run and director precedence over a selected connection run", async t => {
 	const f = fixture(t);
 	const explicit = addRun(f, "alpha");
 	const automatic = addRun(f, "beta");
@@ -627,11 +639,13 @@ test("keeps explicit run and director precedence over a selected connection run"
 		schemaVersion: "1.0", instanceId: automatic.snapshot.instanceId, run: automatic.root, url: automatic.url,
 	});
 	writeJson(join(automatic.root, ".design-status.json"), automatic.snapshot);
-	const connection = addConnection(f, { selectedRun: { run: relative(f.project, automatic.root), instanceId: automatic.snapshot.instanceId } });
+	const connection = await liveConnection(t, f);
+	connection.record.selectedRun = { run: relative(f.project, automatic.root), instanceId: automatic.snapshot.instanceId };
+	connection.write();
 	const runtime = host(t, f.project);
 	runtime.state(taskEvent("Actual director work"));
 	runtime.emit("session_start");
-	assert.equal(runtime.widgets.get(WIDGET).at(-1), automatic.url);
+	await eventually(() => runtime.widgets.get(WIDGET)?.at(-1) === automatic.url, "selected connection run was not authenticated");
 	assert.equal(existsSync(exportPath(automatic)), false);
 	runtime.command(relative(f.project, explicit.root));
 	assert.equal(runtime.widgets.get(WIDGET).at(-1), explicit.url);
@@ -643,16 +657,19 @@ test("keeps explicit run and director precedence over a selected connection run"
 	assert.match(runtime.widgets.get(WIDGET).join("\n"), /Design server stopped/);
 });
 
-test("retains landing details after its automatically selected run stops", t => {
+test("retains landing details after its automatically selected run stops", async t => {
 	const f = fixture(t);
 	const run = addRun(f);
 	const instanceId = "d".repeat(48);
 	writeJson(join(run.root, ".design-server.json"), { schemaVersion: "1.0", instanceId, run: run.root, url: run.url });
 	run.snapshot.instanceId = instanceId;
 	writeJson(join(run.root, ".design-status.json"), run.snapshot);
-	const connection = addConnection(f, { selectedRun: { run: relative(f.project, run.root), instanceId } });
+	const connection = await liveConnection(t, f);
+	connection.record.selectedRun = { run: relative(f.project, run.root), instanceId };
+	connection.write();
 	const runtime = host(t, f.project);
 	runtime.emit("session_start");
+	await eventually(() => runtime.widgets.get(WIDGET)?.includes(connection.record.localUrl), "connection was not authenticated");
 	assert.equal(runtime.widgets.get(WIDGET).at(-1), run.url);
 	unlinkSync(join(run.root, ".design-server.json"));
 	runtime.tick();
@@ -661,11 +678,12 @@ test("retains landing details after its automatically selected run stops", t => 
 	assert.equal(existsSync(exportPath(run)), false);
 });
 
-test("expires waiting records and removes all access links", t => {
+test("expires waiting records and removes all access links", async t => {
 	const f = fixture(t);
-	const connection = addConnection(f);
+	const connection = await liveConnection(t, f);
 	const runtime = host(t, f.project);
 	runtime.emit("session_start");
+	await eventually(() => runtime.widgets.get(WIDGET)?.includes(connection.record.localUrl), "connection was not authenticated");
 	connection.record.observedAt = new Date(Date.now() - 16_000).toISOString();
 	connection.write();
 	runtime.tick();
@@ -708,19 +726,19 @@ test("rejects forged URLs, text, repositories and symlinked connection records",
 test("rejects wrong identities and redirects without following them", async t => {
 	for (const redirect of [false, true]) {
 		const f = fixture(t);
-		let calls = 0;
-		await liveConnection(t, f, (_request, response) => {
-			calls++;
+		const redirectTarget = await liveConnection(t, fixture(t));
+		const connection = await liveConnection(t, f, (_request, response) => {
 			if (redirect) {
 				response.statusCode = 302;
-				response.setHeader("Location", "http://127.0.0.1:1/api/identity");
+				response.setHeader("Location", redirectTarget.record.localUrl);
 				response.end("{}");
 			} else response.end(JSON.stringify({ instanceId: "b".repeat(48), repo: f.project }));
 		});
 		const runtime = host(t, f.project);
 		runtime.emit("session_start");
-		await runtime.dashboard();
-		assert.equal(calls, 1);
+		await runtime.dashboard(connection.record.instanceId);
+		assert.ok(connection.requests.some(request => request.url === "/api/identity"));
+		assert.deepEqual(redirectTarget.requests, []);
 		assert.equal(runtime.reports.length, 0);
 		assert.match(runtime.notifications.at(-1).message, /identity does not match/);
 	}
@@ -732,7 +750,7 @@ test("does not print old credentials after a session switch during the probe", a
 	const connection = await liveConnection(t, f, (_request, response) => arrived.resolve(response));
 	const runtime = host(t, f.project);
 	runtime.emit("session_start");
-	const pending = runtime.dashboard();
+	const pending = runtime.dashboard(connection.record.instanceId);
 	const response = await arrived.promise;
 	runtime.emit("session_before_switch");
 	runtime.setSession("session-B");
@@ -745,24 +763,30 @@ test("does not print old credentials after a session switch during the probe", a
 
 test("bounds stalled identity probes and escapes command errors", async t => {
 	const f = fixture(t);
-	await liveConnection(t, f, () => {});
+	const connection = await liveConnection(t, f, () => {});
 	const runtime = host(t, f.project);
 	runtime.emit("session_start");
-	await runtime.dashboard();
+	await runtime.dashboard(connection.record.instanceId);
 	assert.equal(runtime.reports.length, 0);
 	assert.match(runtime.notifications.at(-1).message, /timed out/);
 	await runtime.dashboard("bad\u001b[31m");
 	assert.doesNotMatch(runtime.notifications.at(-1).message, /\u001b/u);
 });
 
-test("accepts the effective HTTP default port in waiting connection aliases", t => {
-	const f = fixture(t);
-	const connection = addConnection(f, { localUrl: `http://127.0.0.1:80/#token=${"fixture-token-".repeat(4)}` });
-	const runtime = host(t, f.project);
-	runtime.emit("session_start");
-	assert.ok(runtime.widgets.get(WIDGET).includes(connection.record.localUrl));
-	assert.ok(runtime.widgets.get(WIDGET).includes(connection.record.lanUrls[0]));
-	assert.match(runtime.widgets.get(WIDGET).join("\n"), /Waiting for a design run/);
+test("never publishes a fresh forged connection without an authenticated listener", async t => {
+	for (const options of [{}, { mode: "json", hasUI: false }]) {
+		const f = fixture(t);
+		const connection = addConnection(f);
+		const runtime = host(t, f.project, options);
+		await runtime.emit("session_start");
+		await pause(50);
+		runtime.tick();
+		await pause(50);
+		const output = JSON.stringify({ widgets: [...runtime.widgets.values()], notifications: runtime.notifications, reports: runtime.reports });
+		assert.ok(!output.includes(connection.record.localUrl));
+		assert.ok(!output.includes(connection.record.lanUrls[0]));
+		assert.doesNotMatch(output, /fixture-token/);
+	}
 });
 
 test("an unselected expired crash record cannot hide a standalone run", t => {
@@ -776,14 +800,469 @@ test("an unselected expired crash record cannot hide a standalone run", t => {
 	assert.equal(existsSync(exportPath(run)), false);
 });
 
-test("keeps connection and warned run details within the host row contract", t => {
+test("keeps connection and warned run details within the host row contract", async t => {
 	const f = fixture(t);
 	const run = addRun(f, "alpha", { instanceId: "e".repeat(48), warnings: ["Inspect stale review evidence"] });
-	addConnection(f, { selectedRun: { run: relative(f.project, run.root), instanceId: run.snapshot.instanceId } });
+	const connection = await liveConnection(t, f);
+	connection.record.selectedRun = { run: relative(f.project, run.root), instanceId: run.snapshot.instanceId };
+	connection.write();
 	const runtime = host(t, f.project);
 	runtime.emit("session_start");
+	await eventually(() => runtime.widgets.get(WIDGET)?.includes(connection.record.localUrl), "connection was not authenticated");
 	const lines = runtime.widgets.get(WIDGET);
 	assert.ok(lines.length <= 10);
 	assert.match(lines.join("\n"), /Inspect stale review evidence/);
 	assert.equal(lines.at(-1), run.url);
+});
+
+function dashboardProcess(options, eventPath) {
+	const fs = require("node:fs");
+	const http = require("node:http");
+	const path = require("node:path");
+	const crypto = require("node:crypto");
+	const args = process.argv.slice(2);
+	const repo = args[args.indexOf("--repo") + 1];
+	const log = (type, extra = {}) => fs.appendFileSync(eventPath, JSON.stringify({ type, pid: process.pid, label: options.label, ...extra }) + "\n");
+	log("spawn", { args, repo });
+	if (options.fail) {
+		process.stderr.write("\x1b[31mBearer fixture-private-secret-never-publish\nhttp://127.0.0.1/#token=fixture-private-secret-never-publish\n");
+		process.exit(1);
+	}
+	const instanceId = crypto.randomBytes(24).toString("hex");
+	const token = crypto.randomBytes(24).toString("hex");
+	const directory = path.join(repo, ".ui-design-studio", "runtime", "mcp");
+	fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+	const recordPath = path.join(directory, `${instanceId}.json`);
+	let details;
+	let selectedRun = null;
+	let heartbeat;
+	let closed = false;
+	const ownedRuns = [];
+	const publish = () => {
+		if (selectedRun && !fs.existsSync(path.join(repo, selectedRun.run, ".design-server.json"))) selectedRun = null;
+		fs.writeFileSync(recordPath, JSON.stringify({ ...details, observedAt: new Date().toISOString(), startedAt: details.observedAt, selectedRun }));
+	};
+	const server = http.createServer((request, response) => {
+		const authorized = request.headers.authorization === `Bearer ${token}`;
+		if (!authorized) { response.writeHead(401); response.end("{}"); return; }
+		response.setHeader("Content-Type", "application/json");
+		if (request.url === "/api/identity") {
+			log("identity", { authorized });
+			setTimeout(() => response.end(JSON.stringify({ instanceId: options.wrongIdentity ? "b".repeat(48) : instanceId, repo })), options.identityDelay ?? 0);
+		} else if (request.url === "/api/open" && request.method === "POST") {
+			let body = "";
+			request.on("data", chunk => { body += chunk; });
+			request.on("end", () => {
+				const { run } = JSON.parse(body);
+				log("open", { run, authorized, contentType: request.headers["content-type"] });
+				if (options.interruptOpenOnce && !fs.existsSync(`${eventPath}.interrupted`)) {
+					fs.writeFileSync(`${eventPath}.interrupted`, "interrupted");
+					process.exit(1);
+				}
+				const root = path.join(repo, run);
+				const locatorPath = path.join(root, ".design-server.json");
+				let locator;
+				if (fs.existsSync(locatorPath)) locator = JSON.parse(fs.readFileSync(locatorPath, "utf8"));
+				else {
+					locator = { schemaVersion: "1.0", instanceId: crypto.randomBytes(24).toString("hex"), run: root, url: details.localUrl };
+					fs.writeFileSync(locatorPath, JSON.stringify(locator));
+					ownedRuns.push(locatorPath);
+				}
+				selectedRun = { run, instanceId: locator.instanceId };
+				publish();
+				response.end(JSON.stringify({ schemaVersion: "1.0", ...selectedRun, localUrl: locator.url }));
+			});
+		} else { response.writeHead(404); response.end("{}"); }
+	});
+	const stop = () => {
+		if (closed) return;
+		closed = true;
+		clearInterval(heartbeat);
+		for (const owned of ownedRuns) fs.rmSync(owned, { force: true });
+		fs.rmSync(recordPath, { force: true });
+		log("eof");
+		server.closeAllConnections();
+		server.close(() => process.exit(0));
+	};
+	process.stdin.resume();
+	process.stdin.on("end", stop);
+	process.on("SIGTERM", stop);
+	server.listen(0, "127.0.0.1", () => {
+		const localUrl = `http://127.0.0.1:${server.address().port}/#token=${token}`;
+		const lanUrls = [localUrl.replace("127.0.0.1", "192.0.2.46")];
+		details = {
+			schemaVersion: "1.0", instanceId, repo, run: null, state: "live", observedAt: new Date().toISOString(),
+			localUrl, lanUrls, qrUrl: lanUrls[0], text: `[ok] Dashboard live → ${localUrl}\n[lan] ${lanUrls[0]}\n\n ▄█▀ \n`,
+		};
+		publish();
+		heartbeat = setInterval(publish, 100);
+		setTimeout(() => {
+			if (closed) return;
+			if (options.oversized) process.stdout.write("x".repeat(128 * 1024 + 1) + "\n");
+			else if (options.malformed) process.stdout.write("{not JSON}\n");
+			else {
+				const readiness = { ...details, text: details.text.replace(`${localUrl}\n`, `${localUrl} (/ui-design-dashboard stop to stop)\n`) };
+				if (options.wrongRepo) readiness.repo += "/other-project";
+				process.stdout.write(JSON.stringify(readiness) + "\n");
+			}
+		}, options.readyDelay ?? 0);
+	});
+}
+
+function installRuntime(f, options = {}, destination = join(f.project, ".venv-ui-design", "bin", "ui-design")) {
+	const eventPath = join(f.base, `${options.label ?? "child"}-events.jsonl`);
+	mkdirSync(dirname(destination), { recursive: true });
+	writeFileSync(destination, `#!${process.execPath}\n(${dashboardProcess.toString()})(${JSON.stringify(options)}, ${JSON.stringify(eventPath)});\n`);
+	chmodSync(destination, 0o755);
+	return {
+		destination,
+		events() {
+			if (!existsSync(eventPath)) return [];
+			return readFileSync(eventPath, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
+		},
+	};
+}
+
+function pause(milliseconds) {
+	const { promise, resolve } = Promise.withResolvers();
+	setTimeout(resolve, milliseconds);
+	return promise;
+}
+
+async function eventually(predicate, message, timeout = 6_000) {
+	const deadline = Date.now() + timeout;
+	while (!predicate()) {
+		assert.ok(Date.now() < deadline, message);
+		await pause(10);
+	}
+}
+
+function dashboardReports(runtime) {
+	return runtime.reports.filter(item => item.message.customType === "ui-design-studio:dashboard");
+}
+
+test("main startup awaits authenticated readiness without MCP and shares all design gates", async t => {
+	const f = fixture(t);
+	const child = installRuntime(f, { readyDelay: 100, identityDelay: 40 });
+	const runtime = host(t, f.project);
+	runtime.state(taskEvent());
+	let started = false;
+	const startup = runtime.emit("session_start").then(() => { started = true; });
+	const beforeWork = runtime.emit("before_agent_start", { prompt: "/ui-design" });
+	const skillRead = runtime.emit("tool_call", { toolName: "read", input: { path: "skill://ui-design-studio/SKILL.md" } });
+	await eventually(() => child.events().some(event => event.type === "spawn"), "The foreground child starts.");
+	assert.equal(started, false);
+	assert.equal(dashboardReports(runtime).length, 0);
+	assert.doesNotMatch(runtime.widgets.get(WIDGET).join("\n"), /http|token=/);
+	await Promise.all([startup, beforeWork, skillRead]);
+	assert.equal(child.events().filter(event => event.type === "spawn").length, 1);
+	assert.ok(child.events().filter(event => event.type === "identity").every(event => event.authorized));
+	assert.deepEqual(child.events()[0].args, ["dashboard-serve", "--repo", f.project, "--json", "--parent-stdio"]);
+	const report = dashboardReports(runtime)[0];
+	assert.match(report.message.content, /^\[ok\] Dashboard live → http:\/\/127\.0\.0\.1:\d+\/#token=[a-f0-9]+ \(\/ui-design-dashboard stop to stop\)\n\[lan\] http:\/\/192\.0\.2\.46:/u);
+	assert.match(report.message.content, /[\u2580-\u259f]/u);
+	assert.deepEqual(report.options, { triggerTurn: false });
+	assert.match(runtime.widgets.get(WIDGET).join("\n"), /Waiting for a design run/);
+	assert.doesNotMatch(runtime.widgets.get(WIDGET).join("\n"), /Gates|Coverage|%/);
+	assert.deepEqual(readdirSync(f.runs), []);
+	assert.deepEqual(runtime.widgets.get("pi-tasks"), ["Existing Pi Tasks widget"]);
+	runtime.tick();
+	await runtime.emit("before_agent_start", { prompt: "Continue waiting for approval." });
+	assert.equal(dashboardReports(runtime).length, 1);
+	await runtime.dashboard();
+	assert.equal(dashboardReports(runtime).length, 2);
+});
+
+test("run creation selects through authenticated loopback API without claiming task direction", async t => {
+	const f = fixture(t);
+	const child = installRuntime(f);
+	const runtime = host(t, f.project);
+	runtime.state(taskEvent("The director's task"));
+	await runtime.emit("session_start");
+	const run = addRun(f, "created", { instanceId: "e".repeat(48) });
+	await runtime.emit("tool_result", { toolName: "write", input: { path: join(run.root, "run.json") } });
+	const opened = child.events().filter(event => event.type === "open");
+	assert.equal(opened.length, 1);
+	assert.equal(opened[0].run, "work/design-runs/created");
+	assert.equal(opened[0].authorized, true);
+	assert.equal(opened[0].contentType, "application/json");
+	assert.equal(existsSync(join(run.root, "progress-pi-tasks-director.json")), false);
+	assert.equal(existsSync(exportPath(run)), false);
+	const next = addRun(f, "next", { instanceId: "f".repeat(48) });
+	await runtime.emit("tool_result", { toolName: "write", input: { path: join(next.root, "run.json") } });
+	assert.deepEqual(child.events().filter(event => event.type === "open").map(event => event.run),
+		["work/design-runs/created", "work/design-runs/next"]);
+	await runtime.command("work/design-runs/created");
+	assert.equal(exported(run).state.tasks.T1.title, "The director's task");
+	assert.equal(exported(run).sessionId, "session-A");
+});
+
+test("unexpected child death recovers and reopens the previous unfinished run once", async t => {
+	const f = fixture(t);
+	const run = addRun(f, "unfinished", { instanceId: "e".repeat(48) });
+	writeJson(join(run.root, "run.json"), { schemaVersion: "1.1", id: "unfinished", phase: "design", status: "pending" });
+	const child = installRuntime(f);
+	const runtime = host(t, f.project);
+	await runtime.emit("session_start");
+	const first = child.events().find(event => event.type === "spawn");
+	const originalBanner = dashboardReports(runtime)[0].message.content;
+	process.kill(first.pid, "SIGKILL");
+	await eventually(() => dashboardReports(runtime).length === 2, "Recovery prints verified replacement credentials.");
+	const spawns = child.events().filter(event => event.type === "spawn");
+	assert.equal(spawns.length, 2);
+	assert.notEqual(spawns[0].pid, spawns[1].pid);
+	assert.equal(child.events().filter(event => event.type === "open").length, 2);
+	assert.notEqual(dashboardReports(runtime)[1].message.content, originalBanner);
+	assert.equal(existsSync(exportPath(run)), false);
+	runtime.tick();
+	await runtime.emit("tool_result");
+	assert.equal(child.events().filter(event => event.type === "open").length, 2);
+	assert.equal(dashboardReports(runtime).length, 2);
+});
+
+test("stop cancels recovery and all automatic gates stay stopped until explicit start", async t => {
+	const f = fixture(t);
+	const child = installRuntime(f);
+	const runtime = host(t, f.project);
+	await runtime.emit("session_start");
+	process.kill(child.events()[0].pid, "SIGKILL");
+	await eventually(() => runtime.widgets.get(WIDGET)?.join("\n").includes("recovering"), "The unexpected exit enters recovery.");
+	await runtime.dashboard("stop");
+	await runtime.emit("before_agent_start");
+	await runtime.emit("tool_call", { toolName: "read", input: { path: ".omp/skills/ui-yolo/SKILL.md" } });
+	await runtime.emit("tool_result");
+	await runtime.dashboard();
+	runtime.tick();
+	await pause(650);
+	assert.equal(child.events().filter(event => event.type === "spawn").length, 1);
+	assert.match(runtime.widgets.get(WIDGET).join("\n"), /Dashboard stopped/);
+	await runtime.dashboard("start");
+	assert.equal(child.events().filter(event => event.type === "spawn").length, 2);
+	assert.equal(dashboardReports(runtime).length, 2);
+	await runtime.emit("session_shutdown");
+	assert.equal(child.events().filter(event => event.type === "eof").length, 1);
+	assert.equal(runtime.timers.size, 0);
+	assert.equal(runtime.widgets.has(WIDGET), false);
+});
+
+test("subagents neither start dashboards nor shut down the main session's child", async t => {
+	const f = fixture(t);
+	const child = installRuntime(f);
+	const runtime = host(t, f.project);
+	await runtime.emit("session_start");
+	const subContext = { ...runtime.context, agent: { kind: "sub" } };
+	await runtime.emit("session_start", {}, subContext);
+	await runtime.emit("before_agent_start", {}, subContext);
+	await runtime.emit("session_shutdown", {}, subContext);
+	assert.equal(child.events().filter(event => event.type === "spawn").length, 1);
+	assert.equal(child.events().filter(event => event.type === "eof").length, 0);
+	assert.equal(runtime.timers.size, 1);
+	const sub = host(t, f.project, { agent: "sub", sessionId: "sub-session" });
+	await sub.emit("session_start");
+	await sub.emit("before_agent_start");
+	await sub.dashboard("start");
+	assert.equal(sub.timers.size, 0);
+	assert.equal(sub.reports.length, 0);
+	await sub.emit("session_shutdown");
+	assert.equal(sub.bus.get(TASK_EVENT).size, 0);
+	assert.equal(child.events().filter(event => event.type === "spawn").length, 1);
+});
+
+test("a session switch cancels pending startup and never publishes old credentials", async t => {
+	const f = fixture(t);
+	const child = installRuntime(f, { readyDelay: 150 });
+	const runtime = host(t, f.project);
+	const pending = runtime.emit("session_start");
+	await eventually(() => child.events().length > 0, "The first session owns a starting child.");
+	await runtime.emit("session_before_switch");
+	runtime.setSession("session-B");
+	await runtime.emit("session_switch");
+	await pending;
+	assert.equal(child.events().filter(event => event.type === "spawn").length, 2);
+	assert.equal(child.events().filter(event => event.type === "eof").length, 1);
+	assert.equal(dashboardReports(runtime).length, 1);
+	assert.equal(runtime.timers.size, 1);
+});
+
+test("completed and explicitly cleaned runs are not resurrected by observation or recovery", async t => {
+	const f = fixture(t);
+	const completed = addRun(f, "completed", { instanceId: "e".repeat(48) });
+	writeJson(join(completed.root, "run.json"), { schemaVersion: "1.1", id: "completed", status: "completed", phase: "finalize" });
+	const child = installRuntime(f);
+	const runtime = host(t, f.project);
+	await runtime.emit("session_start");
+	assert.equal(child.events().filter(event => event.type === "open").length, 0);
+	const run = addRun(f, "new", { instanceId: "f".repeat(48) });
+	await runtime.emit("tool_result");
+	assert.equal(child.events().filter(event => event.type === "open").length, 1);
+	unlinkSync(join(run.root, ".design-server.json"));
+	await pause(130);
+	runtime.tick();
+	await runtime.emit("tool_result");
+	process.kill(child.events()[0].pid, "SIGKILL");
+	await eventually(() => dashboardReports(runtime).length === 2, "The landing page recovers without reopening cleaned runs.");
+	assert.equal(child.events().filter(event => event.type === "open").length, 1);
+});
+
+test("borrowing an MCP connection never terminates that owner", async t => {
+	const f = fixture(t);
+	const child = installRuntime(f);
+	const runtime = host(t, f.project);
+	await runtime.emit("session_start");
+	const external = await liveConnection(t, f);
+	await runtime.dashboard(external.record.instanceId);
+	assert.equal(child.events().filter(event => event.type === "eof").length, 1);
+	assert.equal(dashboardReports(runtime).at(-1).message.content, external.record.text);
+	await runtime.dashboard("stop");
+	await runtime.emit("session_shutdown");
+	assert.equal(external.server.listening, true);
+	assert.equal(existsSync(external.path), true);
+	assert.equal(child.events().filter(event => event.type === "spawn").length, 1);
+});
+
+test("runtime resolution prefers project venv then the fixed global path then PATH", async t => {
+	const f = fixture(t);
+	const local = installRuntime(f, { label: "project" });
+	const global = installRuntime(f, { label: "global" }, join(process.env.HOME, ".local/share/ui-design-studio/mcp/bin/ui-design"));
+	const pathRuntime = installRuntime(f, { label: "path" }, join(f.base, "path-bin/ui-design"));
+	const previousPath = process.env.PATH;
+	process.env.PATH = dirname(pathRuntime.destination);
+	t.after(() => { process.env.PATH = previousPath; rmSync(global.destination, { force: true }); });
+	const runtime = host(t, f.project);
+	await runtime.emit("session_start");
+	assert.equal(local.events().filter(event => event.type === "spawn").length, 1);
+	assert.equal(global.events().length, 0);
+	assert.equal(pathRuntime.events().length, 0);
+	await runtime.dashboard("stop");
+	unlinkSync(local.destination);
+	await runtime.dashboard("start");
+	assert.equal(global.events().filter(event => event.type === "spawn").length, 1);
+	await runtime.dashboard("stop");
+	unlinkSync(global.destination);
+	await runtime.dashboard("start");
+	assert.equal(pathRuntime.events().filter(event => event.type === "spawn").length, 1);
+});
+
+test("missing runtime gives one actionable warning and never executes a Python lookalike", async t => {
+	const f = fixture(t);
+	const python = join(f.project, ".venv-ui-design/bin/python");
+	mkdirSync(dirname(python), { recursive: true });
+	writeFileSync(python, "#!/bin/sh\nexit 99\n", { mode: 0o755 });
+	const runtime = host(t, f.project);
+	await runtime.emit("session_start");
+	await runtime.emit("before_agent_start");
+	await runtime.emit("tool_result");
+	const warnings = runtime.notifications.filter(item => item.message.includes("runtime is missing"));
+	assert.equal(warnings.length, 1);
+	assert.match(warnings[0].message, /bash install\.sh --mcp-global/);
+	assert.match(warnings[0].message, /\/ui-design-dashboard start/);
+	assert.equal(dashboardReports(runtime).length, 0);
+	assert.equal(existsSync(join(f.project, ".ui-design-studio")), false);
+});
+
+test("crash-loop recovery is bounded and stderr never exposes tokens or terminal controls", async t => {
+	const f = fixture(t);
+	const child = installRuntime(f, { fail: true });
+	const runtime = host(t, f.project);
+	await runtime.emit("session_start");
+	await eventually(() => runtime.notifications.some(item => item.message.includes("Automatic recovery stopped")), "Crash-loop recovery reaches its bounded stop.", 9_000);
+	assert.equal(child.events().filter(event => event.type === "spawn").length, 4);
+	await runtime.emit("before_agent_start");
+	runtime.tick();
+	await pause(50);
+	assert.equal(child.events().filter(event => event.type === "spawn").length, 4);
+	assert.doesNotMatch(JSON.stringify(runtime.notifications), /fixture-private-secret-never-publish|\u001b/u);
+});
+
+test("rejects oversized, malformed, foreign and unauthenticated child readiness before publishing access", async t => {
+	for (const options of [{ oversized: true }, { malformed: true }, { wrongRepo: true }, { wrongIdentity: true }]) {
+		const f = fixture(t);
+		installRuntime(f, options);
+		const runtime = host(t, f.project);
+		await runtime.emit("session_start");
+		assert.equal(dashboardReports(runtime).length, 0);
+		assert.doesNotMatch(runtime.widgets.get(WIDGET)?.join("\n") ?? "", /http|token=/);
+		assert.ok(runtime.notifications.some(item => item.type === "warning"));
+		await runtime.dashboard("stop");
+	}
+});
+
+test("agent-start and known skill-read gates each await readiness without relying on session_start", async t => {
+	for (const [name, event] of [
+		["before_agent_start", { prompt: "Inspect the repository." }],
+		["tool_call", { toolName: "read", input: { path: "skill://ui-design-studio:1-3" } }],
+	]) {
+		const f = fixture(t);
+		const child = installRuntime(f, { readyDelay: 100 });
+		const runtime = host(t, f.project);
+		let released = false;
+		const gate = runtime.emit(name, event).then(() => { released = true; });
+		await eventually(() => child.events().length > 0, "The gate starts its required dashboard.");
+		assert.equal(released, false);
+		assert.equal(dashboardReports(runtime).length, 0);
+		await gate;
+		assert.equal(released, true);
+		assert.equal(dashboardReports(runtime).length, 1);
+		assert.ok(child.events().some(item => item.type === "identity" && item.authorized));
+		await runtime.dashboard("stop");
+	}
+});
+
+test("an interrupted first run-open is retried after child recovery", async t => {
+	const f = fixture(t);
+	const run = addRun(f, "interrupted", { instanceId: "f".repeat(48) });
+	writeJson(join(run.root, "run.json"), { schemaVersion: "1.1", id: "interrupted", phase: "design", status: "pending" });
+	const child = installRuntime(f, { interruptOpenOnce: true });
+	const runtime = host(t, f.project);
+	await runtime.emit("session_start");
+	await eventually(() => child.events().filter(event => event.type === "open").length === 2
+		&& child.events().filter(event => event.type === "spawn").length === 2, "interrupted run-open did not recover");
+	assert.equal(child.events().filter(event => event.type === "spawn").length, 2);
+	assert.equal(child.events().filter(event => event.type === "open" && event.run === relative(f.project, run.root)).length, 2);
+	assert.equal(JSON.parse(readFileSync(join(run.root, "run.json"), "utf8")).status, "pending");
+});
+
+test("browser selection among several unfinished runs survives child recovery", async t => {
+	const f = fixture(t);
+	const first = addRun(f, "first", { instanceId: "e".repeat(48) });
+	const second = addRun(f, "second", { instanceId: "f".repeat(48) });
+	for (const run of [first, second]) writeJson(join(run.root, "run.json"), { schemaVersion: "1.1", id: run.snapshot.run.id, phase: "design", status: "pending" });
+	const child = installRuntime(f);
+	const runtime = host(t, f.project);
+	await runtime.emit("session_start");
+	const directory = join(f.project, ".ui-design-studio", "runtime", "mcp");
+	const record = JSON.parse(readFileSync(join(directory, readdirSync(directory)[0]), "utf8"));
+	const endpoint = new URL(record.localUrl);
+	const token = endpoint.hash.slice("#token=".length);
+	endpoint.hash = "";
+	endpoint.pathname = "/api/open";
+	const selected = relative(f.project, second.root);
+	const response = await fetch(endpoint, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ run: selected }) });
+	assert.equal(response.status, 200);
+	await response.arrayBuffer();
+	runtime.tick();
+	process.kill(child.events().find(event => event.type === "spawn").pid, "SIGKILL");
+	await eventually(() => dashboardReports(runtime).length === 2, "browser-selected run did not recover");
+	assert.deepEqual(child.events().filter(event => event.type === "open").map(event => event.run), [selected, selected]);
+	assert.equal(existsSync(exportPath(second)), false);
+});
+
+test("a cancelled session switch leaves the dashboard reachable during a pause", async t => {
+	const f = fixture(t);
+	const child = installRuntime(f);
+	const runtime = host(t, f.project);
+	await runtime.emit("session_start");
+	await runtime.emit("session_before_switch");
+	runtime.tick();
+	const directory = join(f.project, ".ui-design-studio", "runtime", "mcp");
+	const record = JSON.parse(readFileSync(join(directory, readdirSync(directory)[0]), "utf8"));
+	const endpoint = new URL(record.localUrl);
+	const token = endpoint.hash.slice("#token=".length);
+	endpoint.hash = "";
+	endpoint.pathname = "/api/identity";
+	const response = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
+	assert.equal(response.status, 200);
+	assert.deepEqual(await response.json(), { instanceId: record.instanceId, repo: f.project });
+	assert.equal(child.events().filter(event => event.type === "spawn").length, 1);
+	assert.equal(child.events().filter(event => event.type === "eof").length, 0);
 });

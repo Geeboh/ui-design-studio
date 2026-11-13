@@ -1,5 +1,7 @@
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import {
+	accessSync,
 	closeSync,
 	constants,
 	fstatSync,
@@ -12,8 +14,10 @@ import {
 	renameSync,
 	unlinkSync,
 	writeFileSync,
+	statSync,
 } from "node:fs";
-import { dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
+import { delimiter, dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
+import { homedir } from "node:os";
 import { request as httpRequest } from "node:http";
 import { isIP } from "node:net";
 
@@ -22,6 +26,9 @@ const TASK_EVENT = "pi-tasks:state";
 const POLL_MS = 2_000;
 const REPORT_MS = 30_000;
 const MAX_JSON_BYTES = 8 * 1024 * 1024;
+const MAX_READINESS_BYTES = 128 * 1024;
+const STARTUP_MS = 8_000;
+const MAX_RESTARTS = 3;
 
 // The bundled host has no resolvable package types in offline installations.
 // This subset follows the public docs/extensions.md contract and is checked at entry.
@@ -40,7 +47,7 @@ type HostContext = {
 	clearTimer?: (timer: unknown) => void;
 };
 type HostAPI = {
-	on(event: string, handler: (event: unknown, context: unknown) => void): void;
+	on(event: string, handler: (event: unknown, context: unknown) => void | Promise<void>): void;
 	registerCommand(name: string, command: { description: string; handler(args: string, context: unknown): void | Promise<void> }): void;
 	events: { on(name: string, handler: (event: unknown) => void): () => void };
 	sendMessage(message: { customType: string; content: string; display: true }, options: { triggerTurn: false }): void;
@@ -80,6 +87,26 @@ type Connection = {
 };
 type ConnectionSelection = { kind: "none" } | { kind: "selected"; connection: Connection }
 	| { kind: "ambiguous"; ids: string[] } | { kind: "unavailable"; id: string };
+type DashboardChild = {
+	process: ChildProcessWithoutNullStreams;
+	readiness: Promise<unknown>;
+	exited: Promise<void>;
+	stop(): Promise<void>;
+};
+type DashboardOwner = { kind: "owned"; child: DashboardChild } | { kind: "borrowed" };
+type DashboardSupervisor =
+	| { kind: "idle" }
+	| { kind: "starting"; generation: number; attempt: number; child: DashboardChild; promise: Promise<Connection | undefined> }
+	| { kind: "selecting"; generation: number; promise: Promise<Connection | undefined> }
+	| { kind: "live"; generation: number; attempt: number; since: number; connection: Connection; owner: DashboardOwner }
+	| { kind: "recovering"; promise: Promise<Connection | undefined>; cancel(): void }
+	| { kind: "unavailable"; warning: string }
+	| { kind: "missing"; warning: string }
+	| { kind: "stopped" };
+type DiscoveryProof =
+	| { kind: "none" }
+	| { kind: "pending"; connection: Connection }
+	| { kind: "verified" | "rejected"; connection: Connection; checkedAt: number };
 type Session = {
 	context: HostContext;
 	id: string;
@@ -88,6 +115,13 @@ type Session = {
 	run: (Run & { source: "auto" | "explicit" }) | undefined;
 	dashboardId: string | undefined;
 	dashboardGeneration: number;
+	dashboard: DashboardSupervisor;
+	discoveryProof: DiscoveryProof;
+	children: Set<DashboardChild>;
+	banners: number;
+	resumeRun: Run | undefined;
+	openedRuns: Set<string>;
+	opening: Promise<void> | undefined;
 	tasks: PiTasks | undefined;
 	exported: PiTasks | undefined;
 	lastLines: string;
@@ -404,11 +438,12 @@ function connectionUrl(value: unknown, loopback: boolean): string {
 	return raw;
 }
 
-function connectionRecord(value: unknown, project: string, id: string): Connection {
+function connectionRecord(value: unknown, project: string, id: string, readiness = false): Connection {
 	const fields = objectFields(value);
 	if (!fields || fields.schemaVersion !== "1.0" || fields.state !== "live" || fields.run !== null
 		|| fields.instanceId !== id || !/^[0-9a-f]{48}$/u.test(id) || fields.repo !== plainDirectory(project)
-		|| typeof fields.observedAt !== "string" || typeof fields.startedAt !== "string" || !Number.isFinite(Date.parse(fields.startedAt))
+		|| typeof fields.observedAt !== "string"
+		|| (!readiness && (typeof fields.startedAt !== "string" || !Number.isFinite(Date.parse(fields.startedAt))))
 		|| !Array.isArray(fields.lanUrls) || fields.lanUrls.length > 256) throw new Error("Invalid dashboard connection record.");
 	const observed = Date.parse(fields.observedAt);
 	if (!Number.isFinite(observed) || Date.now() - observed > 15_000 || observed - Date.now() > 5_000) {
@@ -426,13 +461,15 @@ function connectionRecord(value: unknown, project: string, id: string): Connecti
 	if (fields.qrUrl !== qrUrl || typeof fields.text !== "string" || fields.text.length > 65_536) {
 		throw new Error("Invalid dashboard command text.");
 	}
-	const heading = `[ok] Dashboard live → ${localUrl}\n${lanUrls.length ? lanUrls.map(url => `[lan] ${url}`).join("\n") : "[lan] unavailable"}\n\n`;
-	if (!fields.text.startsWith(heading) || !/^[ \n\u2580-\u259f]+$/u.test(fields.text.slice(heading.length))
-		|| !/[\u2580-\u259f]/u.test(fields.text.slice(heading.length))) {
-		throw new Error("Invalid dashboard QR output.");
-	}
+	const commandText = fields.text;
+	const hints = readiness ? [" (/ui-design-dashboard stop to stop)"] : [""];
+	const headings = hints.map(hint =>
+		`[ok] Dashboard live → ${localUrl}${hint}\n${lanUrls.length ? lanUrls.map(url => `[lan] ${url}`).join("\n") : "[lan] unavailable"}\n\n`);
+	const heading = headings.find(value => commandText.startsWith(value));
+	if (!heading || !/^[ \n\u2580-\u259f]+$/u.test(commandText.slice(heading.length))
+		|| !/[\u2580-\u259f]/u.test(commandText.slice(heading.length))) throw new Error("Invalid dashboard QR output.");
 	let selectedRun: Connection["selectedRun"] = null;
-	if (fields.selectedRun !== null) {
+	if (fields.selectedRun !== null && !(readiness && fields.selectedRun === undefined)) {
 		const selected = objectFields(fields.selectedRun);
 		if (!selected || typeof selected.instanceId !== "string" || !/^[0-9a-f]{48}$/u.test(selected.instanceId)) {
 			throw new Error("Invalid selected dashboard run.");
@@ -513,6 +550,146 @@ function probeConnection(connection: Connection): Promise<void> {
 	return promise;
 }
 
+function dashboardRuntime(project: string): string {
+	const binary = process.platform === "win32" ? "ui-design.exe" : "ui-design";
+	const bin = process.platform === "win32" ? "Scripts" : "bin";
+	const candidates = [
+		join(project, ".venv-ui-design", bin, binary),
+		join(homedir(), ".local", "share", "ui-design-studio", "mcp", bin, binary),
+		...(process.env.PATH ?? "").split(delimiter).filter(Boolean).map(directory => resolve(project, directory, binary)),
+	];
+	for (const candidate of candidates) {
+		try {
+			if (!statSync(candidate).isFile()) continue;
+			accessSync(candidate, constants.X_OK);
+			return candidate;
+		} catch { /* A missing runtime candidate must not hide a later installed runtime. */ }
+	}
+	throw new Error("Dashboard runtime is missing. From the UI Design Studio release directory, run bash install.sh --mcp-global, then /ui-design-dashboard start.");
+}
+
+function diagnostic(value: unknown): string {
+	return text(String(value).replace(/https?:\/\/[^\s]+/giu, "[URL redacted]")
+		.replace(/\bBearer\s+\S+/giu, "Bearer [redacted]")
+		.replace(/(?:#token=|token[=:]\s*)[A-Za-z0-9_-]+/giu, "token=[redacted]")
+		.replace(/[A-Za-z0-9_-]{32,}/gu, "[redacted]"));
+}
+
+function spawnDashboard(project: string): DashboardChild {
+	const child = spawn(dashboardRuntime(project), ["dashboard-serve", "--repo", project, "--json", "--parent-stdio"], {
+		cwd: project, shell: false, detached: false, stdio: ["pipe", "pipe", "pipe"],
+	});
+	const ready = Promise.withResolvers<unknown>();
+	const exited = Promise.withResolvers<void>();
+	let output = Buffer.alloc(0);
+	let stderr = "";
+	let settled = false;
+	let stopped: Promise<void> | undefined;
+	const fail = (message: string): void => {
+		if (settled) return;
+		settled = true;
+		clearTimeout(timer);
+		ready.reject(new Error(message));
+	};
+	const timer = setTimeout(() => fail("Dashboard startup timed out."), STARTUP_MS);
+	child.stdout.on("data", (chunk: Buffer) => {
+		if (settled) return;
+		if (output.length + chunk.length > MAX_READINESS_BYTES) {
+			fail("Dashboard readiness exceeds the safe JSON size.");
+			return;
+		}
+		output = Buffer.concat([output, chunk]);
+		const newline = output.indexOf(10);
+		if (newline < 0) return;
+		try {
+			if (output.subarray(newline + 1).toString("utf8").trim()) throw new Error();
+			const value: unknown = JSON.parse(output.subarray(0, newline).toString("utf8"));
+			settled = true;
+			clearTimeout(timer);
+			ready.resolve(value);
+		} catch { fail("Dashboard returned invalid JSON readiness."); }
+		output = Buffer.alloc(0);
+	});
+	child.stderr.on("data", (chunk: Buffer) => {
+		stderr = diagnostic(stderr + chunk.toString("utf8")).slice(-4_096);
+	});
+	child.stdin.on("error", () => {});
+	child.once("error", error => {
+		fail(`Dashboard could not start. ${diagnostic(error.message)}`);
+		exited.resolve();
+	});
+	child.once("close", () => {
+		fail(`Dashboard exited before readiness.${stderr ? " The runtime reported startup errors; run dashboard-serve directly for diagnostics." : ""}`);
+		exited.resolve();
+	});
+	return {
+		process: child, readiness: ready.promise, exited: exited.promise,
+		stop() {
+			if (stopped) return stopped;
+			fail("Dashboard startup was stopped.");
+			child.stdin.end();
+			const terminate = setTimeout(() => child.kill("SIGTERM"), 1_000);
+			const kill = setTimeout(() => child.kill("SIGKILL"), 2_000);
+			const deadline = Promise.withResolvers<void>();
+			const timeout = setTimeout(deadline.resolve, 3_000);
+			stopped = Promise.race([exited.promise, deadline.promise]).then(() => {
+				clearTimeout(timeout); clearTimeout(terminate); clearTimeout(kill);
+			});
+			return stopped;
+		},
+	};
+}
+
+function openConnectionRun(connection: Connection, run: string): Promise<void> {
+	const { promise, resolve, reject } = Promise.withResolvers<void>();
+	const endpoint = new URL(connection.localUrl);
+	const token = endpoint.hash.slice("#token=".length);
+	endpoint.hash = "";
+	endpoint.pathname = "/api/open";
+	const body = JSON.stringify({ run });
+	const request = httpRequest(endpoint, { method: "POST", agent: false, headers: {
+		Authorization: `Bearer ${token}`, "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body),
+	} }, response => {
+		let length = 0;
+		response.on("data", (chunk: Buffer) => {
+			length += chunk.length;
+			if (length > MAX_READINESS_BYTES) request.destroy(new Error("Dashboard open response exceeds the safe size."));
+		});
+		response.on("error", reject);
+		response.on("end", () => {
+			clearTimeout(timer);
+			if (response.statusCode === 200) resolve();
+			else reject(new Error("Dashboard could not open the selected run."));
+		});
+	});
+	const timer = setTimeout(() => request.destroy(new Error("Dashboard run selection timed out.")), STARTUP_MS);
+	request.on("error", error => { clearTimeout(timer); reject(error); });
+	request.end(body);
+	return promise;
+}
+
+function unfinished(run: Run): boolean {
+	const record = objectFields(readJson(join(run.root, "run.json")));
+	return record?.id === run.id && !["complete", "completed", "done", "cancelled", "registered"].includes(String(record.status))
+		&& !["complete", "completed"].includes(String(record.phase));
+}
+
+function resumableRuns(runs: string): Run[] {
+	try {
+		plainDirectory(runs);
+		return readdirSync(runs, { withFileTypes: true }).flatMap(entry => {
+			if (!entry.isDirectory() || entry.isSymbolicLink()) return [];
+			try {
+				const run = readRun(join(runs, portablePath(entry.name)));
+				return unfinished(run) ? [run] : [];
+			} catch { return []; }
+		});
+	} catch (error) {
+		if (isMissing(error)) return [];
+		throw error;
+	}
+}
+
 export default function designProgress(value: unknown): void {
 	if (!isHost(value)) throw new Error("UI Design Studio requires the documented OMP extension API.");
 	const pi = value;
@@ -525,9 +702,190 @@ export default function designProgress(value: unknown): void {
 		session.lastReport = 0;
 	}
 
-	function clear(session: Session): void {
+	function current(session: Session, generation = session.dashboardGeneration): boolean {
+		return lifecycle.kind === "active" && lifecycle.session === session && session.dashboardGeneration === generation
+			&& session.context.agent?.kind !== "sub" && session.context.sessionManager.getSessionId() === session.id
+			&& resolve(session.context.cwd) === session.project;
+	}
+
+	function clear(session: Session): Promise<void> {
+		if (session.dashboard.kind === "recovering") session.dashboard.cancel();
+		session.dashboardGeneration++;
+		session.dashboard = { kind: "stopped" };
 		try { session.stopTimer(); }
 		finally { hide(session); }
+		return Promise.all([...session.children].map(child => child.stop())).then(() => {});
+	}
+
+	function banner(session: Session, connection: Connection): void {
+		if (!current(session) || session.dashboard.kind !== "live" || session.dashboard.connection.instanceId !== connection.instanceId) return;
+		pi.sendMessage({ customType: "ui-design-studio:dashboard", content: connection.text, display: true }, { triggerTurn: false });
+		session.banners++;
+	}
+
+	function recovery(session: Session, attempt: number, warning: string): void {
+		if (!current(session)) return;
+		const generation = ++session.dashboardGeneration;
+		session.dashboardId = undefined;
+		if (attempt > MAX_RESTARTS) {
+			session.dashboard = { kind: "unavailable", warning: `${warning} Automatic recovery stopped. Use /ui-design-dashboard start.` };
+			session.context.ui.notify(session.dashboard.warning, "warning");
+		} else {
+			const flight = Promise.withResolvers<Connection | undefined>();
+			const timer = setTimeout(() => {
+				if (!current(session, generation)) { flight.resolve(undefined); return; }
+				session.dashboard = { kind: "idle" };
+				ensureDashboard(session, attempt).then(flight.resolve, flight.reject);
+			}, Math.min(4_000, 500 * 2 ** (attempt - 1)));
+			session.dashboard = { kind: "recovering", promise: flight.promise,
+				cancel() { clearTimeout(timer); flight.resolve(undefined); } };
+		}
+		refresh();
+	}
+
+	function ensureDashboard(session: Session, attempt = 0): Promise<Connection | undefined> {
+		if (!current(session)) return Promise.resolve(undefined);
+		const state = session.dashboard;
+		if (state.kind === "live") return Promise.resolve(state.connection);
+		if (state.kind === "starting" || state.kind === "selecting" || state.kind === "recovering") return state.promise;
+		if (state.kind === "stopped" || state.kind === "unavailable" || state.kind === "missing") return Promise.resolve(undefined);
+		const generation = ++session.dashboardGeneration;
+		let child: DashboardChild;
+		try { child = spawnDashboard(session.project); }
+		catch (error) {
+			const warning = diagnostic(error instanceof Error ? error.message : error);
+			session.dashboard = { kind: "missing", warning };
+			session.context.ui.notify(warning, "warning");
+			return Promise.resolve(undefined);
+		}
+		session.children.add(child);
+		const flight = Promise.withResolvers<Connection | undefined>();
+		session.dashboard = { kind: "starting", generation, attempt, child, promise: flight.promise };
+		child.exited.then(() => {
+			session.children.delete(child);
+			if (!current(session, generation)) return;
+			const state = session.dashboard;
+			if (state.kind === "live" && state.owner.kind === "owned" && state.owner.child === child) {
+				recovery(session, Date.now() - state.since > REPORT_MS ? 1 : attempt + 1, "Dashboard process exited.");
+			}
+		});
+		void (async () => {
+			try {
+				const value = await child.readiness;
+				const id = objectFields(value)?.instanceId;
+				if (typeof id !== "string") throw new Error("Dashboard readiness is missing its instance identity.");
+				const connection = connectionRecord(value, session.project, id, true);
+				await probeConnection(connection);
+				if (!current(session, generation)) { await child.stop(); flight.resolve(undefined); return; }
+				if (child.process.exitCode !== null || child.process.signalCode !== null) throw new Error("Dashboard exited during readiness verification.");
+				session.dashboardId = id;
+				session.dashboard = { kind: "live", generation, attempt, since: Date.now(), connection, owner: { kind: "owned", child } };
+				await synchronizeRun(session);
+				if (current(session, generation)) {
+					banner(session, connection);
+					refresh();
+				}
+				flight.resolve(current(session, generation) ? connection : undefined);
+			} catch (error) {
+				await child.stop();
+				if (current(session, generation)) {
+					const warning = diagnostic(error instanceof Error ? error.message : error);
+					session.context.ui.notify(warning, "warning");
+					recovery(session, attempt + 1, warning);
+				}
+				flight.resolve(undefined);
+			}
+		})();
+		refresh();
+		return flight.promise;
+	}
+
+	function synchronizeRun(session: Session, explicit?: Run): Promise<void> {
+		if (!current(session) || session.dashboard.kind !== "live") return Promise.resolve();
+		if (session.opening) return session.opening.then(() => explicit ? synchronizeRun(session, explicit) : undefined);
+		const state = session.dashboard;
+		const generation = session.dashboardGeneration;
+		let run: Run | undefined = explicit;
+		try {
+			if (!run && !state.connection.selectedRun && session.resumeRun && unfinished(session.resumeRun)) run = session.resumeRun;
+			if (!run) {
+				const candidates = resumableRuns(configuredRuns(session.project)).filter(item => !session.openedRuns.has(item.root));
+				if (candidates.length === 1) run = candidates[0];
+			}
+			if (!run || (!explicit && session.openedRuns.has(run.root) && !session.resumeRun)) return Promise.resolve();
+			if (!explicit && state.connection.selectedRun?.run === relative(session.project, run.root).split(sep).join("/")) return Promise.resolve();
+			const selected = run;
+			session.resumeRun = selected;
+			session.opening = openConnectionRun(state.connection, relative(session.project, selected.root).split(sep).join("/"))
+				.then(() => {
+					if (!current(session, generation) || session.dashboard !== state) return;
+					session.openedRuns.add(selected.root);
+					session.resumeRun = selected;
+					refresh();
+				}).catch(error => {
+					if (current(session, generation)) session.context.ui.notify(diagnostic(error instanceof Error ? error.message : error), "warning");
+				}).finally(() => { session.opening = undefined; });
+			return session.opening;
+		} catch (error) {
+			session.context.ui.notify(diagnostic(error instanceof Error ? error.message : error), "warning");
+			return Promise.resolve();
+		}
+	}
+
+	function selectedConnection(session: Session): ConnectionSelection {
+		const state = session.dashboard;
+		if (state.kind !== "live") {
+			const selection = connections(session);
+			if (selection.kind !== "selected") return selection;
+			const connection = selection.connection;
+			const proof = session.discoveryProof;
+			const same = proof.kind !== "none" && proof.connection.instanceId === connection.instanceId
+				&& proof.connection.localUrl === connection.localUrl && proof.connection.text === connection.text;
+			if (same && proof.kind === "pending") return { kind: "none" };
+			if (same && proof.kind !== "none" && proof.kind !== "pending" && Date.now() - proof.checkedAt < POLL_MS) {
+				return proof.kind === "verified" ? selection : { kind: "none" };
+			}
+			const pending: DiscoveryProof = { kind: "pending", connection };
+			session.discoveryProof = pending;
+			void probeConnection(connection).then(() => {
+				if (!current(session) || session.discoveryProof !== pending) return;
+				session.discoveryProof = { kind: "verified", connection, checkedAt: Date.now() };
+				refresh();
+			}).catch(() => {
+				if (!current(session) || session.discoveryProof !== pending) return;
+				session.discoveryProof = { kind: "rejected", connection, checkedAt: Date.now() };
+				refresh();
+			});
+			return { kind: "none" };
+		}
+		const selection = connections(session);
+		if (selection.kind !== "selected" || selection.connection.instanceId !== state.connection.instanceId
+			|| selection.connection.localUrl !== state.connection.localUrl) return { kind: "unavailable", id: state.connection.instanceId };
+		const connection = selection.connection;
+		if (state.owner.kind === "owned") {
+			connection.text = connection.text.replace(`[ok] Dashboard live → ${connection.localUrl}\n`,
+				`[ok] Dashboard live → ${connection.localUrl} (/ui-design-dashboard stop to stop)\n`);
+		}
+		state.connection = connection;
+		if (!session.opening && connection.selectedRun) {
+			const root = join(session.project, connection.selectedRun.run);
+			const scope = relative(configuredRuns(session.project), root);
+			if (!scope || scope === ".." || scope.startsWith(`..${sep}`) || isAbsolute(scope)) {
+				throw new Error("Selected connection run is outside paths.runs.");
+			}
+			const locator = readLocator(root);
+			if (locator?.instanceId === connection.selectedRun.instanceId) {
+				const selected = readRun(root);
+				if (unfinished(selected)) {
+					session.resumeRun = selected;
+					session.openedRuns.add(selected.root);
+				}
+			}
+		}
+		if (session.resumeRun && !session.opening && (!connection.selectedRun || !readLocator(session.resumeRun.root))) {
+			session.resumeRun = undefined;
+		}
+		return { kind: "selected", connection };
 	}
 
 	function display(session: Session, lines: string[]): void {
@@ -548,9 +906,21 @@ export default function designProgress(value: unknown): void {
 	function refresh(): void {
 		if (lifecycle.kind !== "active") return;
 		const session = lifecycle.session;
-		if (session.context.sessionManager.getSessionId() !== session.id) {
+		if (!current(session)) {
 			clear(session);
 			lifecycle = { kind: "waiting", tasks: undefined };
+			return;
+		}
+		if (session.dashboard.kind === "stopped") {
+			display(session, ["UI Design Studio | Dashboard stopped. Use /ui-design-dashboard start."]);
+			return;
+		}
+		if (session.dashboard.kind === "unavailable") {
+			display(session, [`UI Design Studio | Dashboard unavailable. ${session.dashboard.warning}`]);
+			return;
+		}
+		if (session.dashboard.kind === "starting" || session.dashboard.kind === "selecting" || session.dashboard.kind === "recovering") {
+			display(session, [`UI Design Studio | Dashboard ${session.dashboard.kind === "recovering" ? "recovering" : "starting"}.`]);
 			return;
 		}
 		let url: string | undefined;
@@ -563,7 +933,7 @@ export default function designProgress(value: unknown): void {
 				session.exported = undefined;
 			}
 			session.runs = runs;
-			let selection = connections(session);
+			let selection = selectedConnection(session);
 			if (selection.kind === "unavailable" && !session.dashboardId && session.run?.source !== "explicit" && discover(runs).length) {
 				selection = { kind: "none" };
 				session.run = undefined;
@@ -652,7 +1022,7 @@ export default function designProgress(value: unknown): void {
 		}
 	}
 
-	function start(context: unknown): void {
+	function start(context: unknown): Session | undefined {
 		if (!isContext(context) || context.agent?.kind === "sub" || lifecycle.kind === "stopped") return;
 		const id = context.sessionManager.getSessionId();
 		if (typeof id !== "string" || !id) return;
@@ -660,11 +1030,13 @@ export default function designProgress(value: unknown): void {
 		if (lifecycle.kind === "active" && lifecycle.session.id === id && lifecycle.session.project === project) {
 			lifecycle.session.context = context;
 			refresh();
-			return;
+			return lifecycle.session;
 		}
 		const tasks = lifecycle.kind === "waiting" ? lifecycle.tasks : undefined;
 		if (lifecycle.kind === "active") clear(lifecycle.session);
 		const session: Session = { context, id, project, runs: undefined, run: undefined, dashboardId: undefined, dashboardGeneration: 0,
+			dashboard: { kind: "idle" }, children: new Set(), banners: 0, resumeRun: undefined, openedRuns: new Set(), opening: undefined,
+			discoveryProof: { kind: "none" },
 			tasks, exported: undefined, lastLines: "", lastReport: 0, stopTimer: () => {} };
 		lifecycle = { kind: "active", session };
 		if (context.setInterval && context.clearTimer) {
@@ -679,6 +1051,7 @@ export default function designProgress(value: unknown): void {
 			session.stopTimer = () => clearInterval(timer);
 		}
 		refresh();
+		return session;
 	}
 
 	const unsubscribe = pi.events.on(TASK_EVENT, event => {
@@ -694,25 +1067,57 @@ export default function designProgress(value: unknown): void {
 			// Malformed observer data must not interrupt a persisted Pi Tasks transition.
 		}
 	});
-	for (const event of ["session_start", "session_switch", "session_branch", "session_tree", "tool_call", "tool_result", "turn_start"]) {
-		pi.on(event, (_event, context) => start(context));
+	for (const event of ["session_start", "session_switch", "session_branch", "session_tree", "before_agent_start"]) {
+		pi.on(event, async (_event, context) => {
+			if (isContext(context) && context.agent?.kind !== "sub" && lifecycle.kind === "active"
+				&& (lifecycle.session.id !== context.sessionManager.getSessionId() || lifecycle.session.project !== resolve(context.cwd))) {
+				const previous = lifecycle.session;
+				lifecycle = { kind: "waiting", tasks: undefined };
+				await clear(previous);
+			}
+			const session = start(context);
+			if (!session) return;
+			await ensureDashboard(session);
+			await synchronizeRun(session);
+		});
 	}
-	pi.on("session_before_switch", () => {
-		if (lifecycle.kind === "active") clear(lifecycle.session);
-		lifecycle = { kind: "waiting", tasks: undefined };
+	pi.on("turn_start", (_event, context) => { start(context); });
+	pi.on("tool_call", async (event, context) => {
+		const session = start(context);
+		if (!session) return;
+		const fields = objectFields(event);
+		const input = objectFields(fields?.input);
+		if (fields?.toolName === "read" && typeof input?.path === "string"
+			&& /^(?:skill:\/\/|(?:.*\/)?\.omp\/skills\/)ui-(?:assess|design(?:-studio)?|plan|theme|produce|review|finalize|yolo)(?:\/|:|$)/u.test(input.path)) {
+			await ensureDashboard(session);
+			await synchronizeRun(session);
+		}
 	});
-	pi.on("session_shutdown", () => {
+	pi.on("tool_result", async (_event, context) => {
+		const session = start(context);
+		if (!session) return;
+		await ensureDashboard(session);
+		await synchronizeRun(session);
+		refresh();
+	});
+	pi.on("session_shutdown", async (_event, context) => {
+		if (isContext(context) && context.agent?.kind === "sub") {
+			if (lifecycle.kind !== "active") {
+				lifecycle = { kind: "stopped" };
+				unsubscribe();
+			}
+			return;
+		}
 		const previous = lifecycle;
 		lifecycle = { kind: "stopped" };
-		try { if (previous.kind === "active") clear(previous.session); }
-		finally { unsubscribe(); }
+		unsubscribe();
+		if (previous.kind === "active") await clear(previous.session);
 	});
 	pi.registerCommand("ui-design-progress", {
 		description: "Pin a design run and select this session as its task director, or use auto for read-only discovery.",
-		handler(args, context) {
-			start(context);
-			if (lifecycle.kind !== "active") return;
-			const session = lifecycle.session;
+		async handler(args, context) {
+			const session = start(context);
+			if (!session) return;
 			try {
 				const argument = args.trim();
 				if (argument && argument !== "auto") {
@@ -730,38 +1135,95 @@ export default function designProgress(value: unknown): void {
 				} else if (argument === "auto") session.run = undefined;
 				session.exported = undefined;
 				refresh();
+				await ensureDashboard(session);
+				await synchronizeRun(session, session.run?.source === "explicit" ? session.run : undefined);
 			} catch (error) {
 				session.context.ui.notify(text(error instanceof Error ? error.message : String(error)), "warning");
 			}
 		},
 	});
 	pi.registerCommand("ui-design-dashboard", {
-		description: "Select an MCP dashboard connection and print its verified URLs and terminal QR.",
+		description: "Start or stop this session's dashboard, or select a connection by SESSION_ID, and print verified URLs and QR.",
 		async handler(args, context) {
-			start(context);
-			if (lifecycle.kind !== "active") return;
-			const generation = ++lifecycle.session.dashboardGeneration;
-			const session = lifecycle.session;
+			const session = start(context);
+			if (!session) return;
+			let requestGeneration = session.dashboardGeneration;
 			try {
 				const argument = args.trim();
-				if (argument && !/^[0-9a-f]{48}$/u.test(argument)) throw new Error("Use /ui-design-dashboard SESSION_ID.");
-				if (argument) session.dashboardId = argument;
-				const selection = connections(session);
+				if (argument === "stop") {
+					if (session.dashboard.kind === "recovering") session.dashboard.cancel();
+					session.dashboardGeneration++;
+					session.dashboard = { kind: "stopped" };
+					session.dashboardId = undefined;
+					refresh();
+					await Promise.all([...session.children].map(child => child.stop()));
+					return;
+				}
+				if (argument && argument !== "start" && !/^[0-9a-f]{48}$/u.test(argument)) {
+					throw new Error("Use /ui-design-dashboard [start|stop|SESSION_ID].");
+				}
+				if (!argument && session.dashboard.kind === "stopped") {
+					session.context.ui.notify("Dashboard is stopped. Use /ui-design-dashboard start.", "info");
+					return;
+				}
+				if (!argument || argument === "start") {
+					if (session.dashboard.kind === "stopped" || session.dashboard.kind === "unavailable" || session.dashboard.kind === "missing"
+						|| (session.dashboard.kind === "live" && session.dashboard.owner.kind === "borrowed")) {
+						session.dashboardGeneration++;
+						session.dashboardId = undefined;
+						session.dashboard = { kind: "idle" };
+					}
+					const before = session.banners;
+					const connection = await ensureDashboard(session);
+					if (connection && current(session) && session.banners === before) {
+						requestGeneration = session.dashboardGeneration;
+						const state = session.dashboard;
+						await probeConnection(connection);
+						if (!current(session) || session.dashboard !== state) return;
+						refresh();
+						banner(session, connection);
+					}
+					return;
+				}
+				const owned = session.dashboard.kind === "live" && session.dashboard.owner.kind === "owned"
+					&& session.dashboard.connection.instanceId === argument ? session.dashboard : undefined;
+				if (owned) {
+					await probeConnection(owned.connection);
+					if (current(session) && session.dashboard === owned) banner(session, owned.connection);
+					return;
+				}
+				if (session.dashboard.kind === "recovering") session.dashboard.cancel();
+				const generation = ++session.dashboardGeneration;
+				requestGeneration = generation;
+				const flight = Promise.withResolvers<Connection | undefined>();
+				session.dashboard = { kind: "selecting", generation, promise: flight.promise };
+				session.dashboardId = argument;
+				session.resumeRun = undefined;
 				refresh();
-				if (selection.kind === "ambiguous") throw new Error(`Multiple dashboard connections. Select /ui-design-dashboard SESSION_ID. ${selection.ids.join(" ")}`);
-				if (selection.kind !== "selected") throw new Error("Dashboard is not running.");
-				const connection = selection.connection;
-				const selectedId = session.dashboardId;
-				await probeConnection(connection);
-				if (lifecycle.kind !== "active" || lifecycle.session !== session || session.context.sessionManager.getSessionId() !== session.id
-					|| resolve(session.context.cwd) !== session.project || session.dashboardId !== selectedId || session.dashboardGeneration !== generation) return;
-				const current = connections(session);
-				if (current.kind !== "selected" || current.connection.instanceId !== connection.instanceId
-					|| current.connection.localUrl !== connection.localUrl || current.connection.text !== connection.text) return;
-				pi.sendMessage({ customType: "ui-design-studio:dashboard", content: connection.text, display: true }, { triggerTurn: false });
+				try {
+					await Promise.all([...session.children].map(child => child.stop()));
+					if (!current(session, generation)) return;
+					const selection = connections(session);
+					if (selection.kind !== "selected") throw new Error("Dashboard is not running.");
+					const connection = selection.connection;
+					await probeConnection(connection);
+					if (!current(session, generation)) return;
+					const latest = connections(session);
+					if (latest.kind !== "selected" || latest.connection.instanceId !== connection.instanceId
+						|| latest.connection.localUrl !== connection.localUrl || latest.connection.text !== connection.text) {
+						throw new Error("Dashboard changed during verification. Select the connection again.");
+					}
+					session.dashboard = { kind: "live", generation, attempt: 0, since: Date.now(), connection, owner: { kind: "borrowed" } };
+					refresh();
+					banner(session, connection);
+					flight.resolve(connection);
+				} finally { flight.resolve(undefined); }
 			} catch (error) {
-				if (lifecycle.kind === "active" && lifecycle.session === session && session.context.sessionManager.getSessionId() === session.id) {
-					session.context.ui.notify(text(error instanceof Error ? error.message : String(error)), "warning");
+				if (current(session, requestGeneration)) {
+					const warning = diagnostic(error instanceof Error ? error.message : error);
+					if (session.dashboard.kind === "selecting") session.dashboard = { kind: "unavailable", warning };
+					session.context.ui.notify(warning, "warning");
+					refresh();
 				}
 			}
 		},
