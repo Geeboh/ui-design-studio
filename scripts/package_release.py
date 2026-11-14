@@ -119,7 +119,7 @@ def build(output: Path, check: bool = False) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=ROOT / "dist/UI-Design-Studio-OMP-v1.4.0.zip")
+    parser.add_argument("--output", type=Path, default=ROOT / "dist/UI-Design-Studio-OMP-v1.4.1.zip")
     parser.add_argument("--check", action="store_true", help="Check source hashes without building")
     args = parser.parse_args()
     if sys.prefix == sys.base_prefix:

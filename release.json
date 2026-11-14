@@ -1,8 +1,8 @@
 {
   "name": "UI Design Studio",
   "package": "ui-design-studio",
-  "version": "1.4.0",
-  "releaseDate": "2026-11-13",
+  "version": "1.4.1",
+  "releaseDate": "2026-11-14",
   "license": "MIT",
   "runtime": "Oh My Pi or a local MCP stdio coding client",
   "distribution": "project-local OMP skills package and standalone Python MCP adapter",

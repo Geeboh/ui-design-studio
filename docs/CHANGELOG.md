@@ -1,5 +1,12 @@
 # Release notes
 
+## 1.4.1 · 14 November 2026
+
+- Hardened evidence, status, coverage, resume, worker-packet, and host-feasibility validation.
+- Added deterministic remediation benchmarks, compatibility records, and release handoff documentation.
+- Added regression coverage for evidence-input binding, model-field normalization, bounded status output, and package integrity.
+- Included three existing redacted synthetic dashboard screenshots as v1.4.1 visual references.
+
 ## 1.4.0 · 13 November 2026
 
 - Added optional `install.sh --mcp-global` installation into one isolated user environment shared by all projects.

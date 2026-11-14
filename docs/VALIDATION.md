@@ -1,5 +1,18 @@
 # Release validation
 
+## Version 1.4.1 Cortex remediation · 14 November 2026
+
+The release checks cover the remediation changes on Linux with Python 3.12.3 and Node 24.22.2. They use synthetic fixtures and do not establish recipient-application design evidence.
+
+| Check | Observed result | Scope |
+| --- | --- | --- |
+| Remediation, design, and Studio focused suite | 143 passed, 50 subtests | Focused remediation, design, and Studio regression checks |
+| Dashboard suite | 43 passed, 37 subtests | Dashboard regression checks |
+| Wheel package suite | 4 passed, 3 subtests | Built 1.4.1 wheel |
+| Wheel build | PASS | Standalone MCP runtime package |
+| Release package validation | PASS, 103 files verified | Manifest and package metadata |
+| Screenshots | Three redacted synthetic dashboard captures included | Visual reference only |
+
 ## Version 1.4.0 global installation and automatic OMP dashboard · 13 November 2026
 
 Checked on Linux with Python 3.12.3, Node 24.22.2, and actual OMP 18.20.0. These checks used temporary HOME directories and synthetic projects, not a production application's design evidence.
