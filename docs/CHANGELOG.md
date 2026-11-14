@@ -9,6 +9,7 @@
 - Isolated global pip installation from inherited destination configuration and preserved unrelated user executables during upgrades.
 - Required authenticated identity verification before discovery output and preserved selected runs across recovery and cancelled session switches.
 - Added [setup, recovery, and release limits](RELEASE-v1.4.0.md), backed by 91 Python tests, 49 Node tests, and actual Linux global-runtime and OMP lifecycle checks.
+- Added shared evidence dependency validation, revision-bound compact/paged MCP status, explicit scoped completion, applicability-aware coverage, dependency-aware resume manifests, selected-role worker packets, early host-feasibility guidance, conditional offline review policy and deterministic offline benchmark evidence.
 
 ## 1.3.0 · 12 November 2026
 

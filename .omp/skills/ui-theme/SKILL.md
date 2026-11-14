@@ -7,6 +7,15 @@ description: Create, adapt, inspect or refine a versioned UI theme module with s
 
 Perform the requested theme operation only. Determine whether the user wants inspection, scaffolding, refinement, adapter integration or validation.
 
+## Phase contract
+
+Trigger: a bounded theme, token or host-adapter operation.
+Minimum inputs: context, theme contract, host mechanism and rollback target.
+Task contract: change one versioned adapter surface without redesigning all pages.
+Outputs: tokens, declarative resources, adapter validation and rollback notes.
+Gate: theme compiler plus host-specific selection, persistence and fallback checks.
+Escalate: native target without adapter, unsafe asset, stale evidence or registry risk.
+
 Resolve or refresh the [project context](../ui-design-studio/references/project-context.md) for this scope. Use the selected run's model policy, or `models=auto-models` by default for a new run; honor `models=current-model` when requested. Follow [model routing](../ui-design-studio/references/model-routing.md) before delegation. These settings do not expand this phase's scope.
 
 1. Read the [theme contract](../ui-design-studio/references/theme-module.md), [visual system](../ui-design-studio/references/visual-system.md), [run records](../ui-design-studio/references/run-records.md) and [quality gates](../ui-design-studio/references/quality-gates.md).

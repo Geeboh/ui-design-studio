@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -60,7 +61,8 @@ def fixture_run(repo, theme, mode="guided", action="new"):
     (root / "project-context.md").write_text("Synthetic project requirements for unit tests. Offline operation is required. Source: fixture requirements.\n", encoding="utf-8")
     run["projectContext"].update(status="resolved", offline="required", sources=["fixture requirements"], sha256=studio.sha_file(root / "project-context.md"))
     (root / "model-routing.md").write_text("Synthetic routing fixture; no actual model calls were made.\n", encoding="utf-8")
-    run["modelRouting"].update(status="resolved", sessionModel="fixture/model", sessionThinking="high",
+    run["modelRouting"].update(schemaVersion="1.2", selectedRoles=sorted(studio.SPECIALIST_AGENTS), status="resolved",
+        sessionModel="fixture/model", sessionThinking="high",
         assignments=[{"agent": name, "model": "fixture/model", "thinking": "high", "rationale": "Synthetic model-routing fixture"} for name in sorted(studio.SPECIALIST_AGENTS)],
         sha256=studio.sha_file(root / "model-routing.md"))
     evidence = []
@@ -269,6 +271,67 @@ class StudioTests(unittest.TestCase):
         with self.assertRaisesRegex(studio.StudioError, "Model policy"):
             studio.init_run(self.repo, theme_id="fixture", model_policy="invented-policy")
 
+    def test_scoped_completion_is_versioned_and_never_full_release(self):
+        result = studio.init_run(self.repo, theme_id="fixture", scope="component")
+        root = Path(result["run"])
+        (root / "component.md").write_text("Bounded component fix\n", encoding="utf-8")
+        completed = studio.complete_scope(root, "settings button state", ["component.md"])
+        self.assertEqual(completed["status"], "PASS")
+        self.assertEqual(completed["fullThemeRelease"], "BLOCKED")
+        record = studio.read_json(root / "run.json")
+        self.assertEqual(record["scope"], "component")
+        self.assertEqual(record["scopedCompletion"]["schemaVersion"], "1.0")
+        self.assertEqual(record["status"], "pending")
+        self.assertEqual(record["phase"], "assessment")
+        self.assertEqual(studio.check_run(root)["status"], "BLOCKED")
+        with self.assertRaisesRegex(studio.StudioError, "Run is BLOCKED"):
+            studio.register_theme(self.repo, "fixture", root)
+
+    def test_scoped_completion_rejects_full_redesign_scope(self):
+        result = studio.init_run(self.repo, theme_id="fixture")
+        root = Path(result["run"])
+        (root / "artifact.md").write_text("Full release artifact\n", encoding="utf-8")
+        with self.assertRaisesRegex(studio.StudioError, "Full-redesign scope"):
+            studio.complete_scope(root, "full theme", ["artifact.md"])
+
+    def test_scope_cli_option_is_explicit_and_profile_stays_ignored(self):
+        args = studio.parser().parse_args(["init-run", "--repo", str(self.repo), "--theme-id", "fixture", "--scope", "fix"])
+        self.assertEqual(args.scope, "fix")
+        self.assertIsNone(args.profile)
+    def test_resume_manifest_marks_only_transitive_dependents_stale(self):
+        result = studio.init_run(self.repo, theme_id="fixture", scope="component")
+        root = Path(result["run"])
+        self.assertEqual(studio.resume_check(root)["status"], "PASS")
+        (root / "project-context.md").write_text("Changed requirement source\n", encoding="utf-8")
+        (root / "unrelated.txt").write_text("Ignored unrelated file\n", encoding="utf-8")
+        resumed = studio.resume_check(root)
+        self.assertEqual(resumed["status"], "BLOCKED")
+        changed = {entry["id"] for entry in resumed["changedDependencies"]}
+        self.assertIn("project-context", changed)
+        self.assertIn("coverage", resumed["staleNodes"])
+        self.assertIn("approvals", resumed["staleNodes"])
+        self.assertTrue(resumed["unrelatedChangesIgnored"])
+
+    def test_missing_resume_manifest_blocks_legacy_conservatively(self):
+        result = studio.init_run(self.repo, theme_id="fixture")
+        root = Path(result["run"])
+        (root / "manifest.json").unlink()
+        resumed = studio.resume_check(root)
+        self.assertEqual(resumed["status"], "BLOCKED")
+        self.assertTrue(resumed["conservative"])
+
+    def test_worker_packet_requires_original_instructions_and_selected_role(self):
+        result = studio.init_run(self.repo, theme_id="fixture", scope="component")
+        root = Path(result["run"])
+        (root / "component.md").write_text("Owned component artifact\n", encoding="utf-8")
+        packet = studio.worker_packet(root, "ui-implementer", "Fix component state", ["component.md"])
+        self.assertEqual(packet["status"], "PASS")
+        self.assertEqual(packet["scope"], "component")
+        self.assertTrue(packet["instructions"])
+        with self.assertRaisesRegex(studio.StudioError, "original applicable instructions"):
+            studio.worker_packet(root, "ui-implementer", "Fix component state", ["component.md"], ["project-context.md"])
+
+
     def test_unresolved_project_context_blocks_complete_fixture(self):
         root = fixture_run(self.repo, self.theme)
         record = studio.read_json(root / "run.json")
@@ -282,7 +345,24 @@ class StudioTests(unittest.TestCase):
         self.assertTrue(any("Project requirements" in message for message in result["pending"]))
         self.assertTrue(any("offline requirement" in message for message in result["pending"]))
 
-    def test_project_context_bytes_and_fields_invalidate_final_approval(self):
+    def test_validation_context_reuses_hashes_and_detects_mutation(self):
+        root = fixture_run(self.repo, self.theme)
+        run = studio.read_json(root / "run.json")
+        entry = next(item for item in run["evidence"] if item["kind"] == "visual")
+        entry["inputs"] = ["visual.md"]
+        entry["inputsDigest"] = studio.digest_bytes(studio.canonical({"visual.md": entry["sha256"]}))
+        cache = {}
+        with mock.patch.object(studio, "sha_file", wraps=studio.sha_file) as hashed:
+            first = studio.validate_evidence_entry(root, entry, cache)
+            second = studio.validate_evidence_entry(root, entry, cache)
+            self.assertTrue(first["valid"])
+            self.assertTrue(second["valid"])
+            self.assertEqual(hashed.call_count, 1)
+            (root / "visual.md").write_text("mutated fixture evidence\n", encoding="utf-8")
+            third = studio.validate_evidence_entry(root, entry, cache)
+            self.assertFalse(third["valid"])
+            self.assertEqual(hashed.call_count, 2)
+
         root = fixture_run(self.repo, self.theme)
         record = studio.read_json(root / "run.json")
         (root / "project-context.md").write_text("Changed synthetic requirement\n", encoding="utf-8")
@@ -326,7 +406,7 @@ class StudioTests(unittest.TestCase):
         original = copy.deepcopy(record["modelRouting"]["assignments"])
         record["modelRouting"]["assignments"].pop()
         write_json(root / "run.json", record)
-        with self.assertRaisesRegex(studio.StudioError, "all seven"):
+        with self.assertRaisesRegex(studio.StudioError, "(all seven|exactly cover selected roles)"):
             studio.check_run(root)
         record["modelRouting"]["assignments"] = original
         record["modelRouting"]["assignments"][0]["model"] = "@task"
@@ -335,7 +415,7 @@ class StudioTests(unittest.TestCase):
             studio.check_run(root)
         record["modelRouting"]["assignments"][0] = copy.deepcopy(original[1])
         write_json(root / "run.json", record)
-        with self.assertRaisesRegex(studio.StudioError, "duplicate"):
+        with self.assertRaisesRegex(studio.StudioError, "(duplicate|exactly cover selected roles)"):
             studio.check_run(root)
 
     def test_model_routing_content_and_policy_bound_to_approval(self):
@@ -348,6 +428,36 @@ class StudioTests(unittest.TestCase):
         write_json(root / "run.json", record)
         with self.assertRaisesRegex(studio.StudioError, "Stale/missing finalize"):
             studio.check_run(root)
+    def test_bound_inputs_invalidate_evidence_after_mutation(self):
+        root = fixture_run(self.repo, self.theme)
+        (root / "visual-source.txt").write_text("Initial bound synthetic input\n", encoding="utf-8")
+        record = studio.read_json(root / "run.json")
+        visual = next(entry for entry in record["evidence"] if entry["kind"] == "visual")
+        visual["inputs"] = ["visual-source.txt"]
+        visual["inputsDigest"] = studio.file_digest(root, visual["inputs"])
+        decisions = studio.read_json(root / "decisions.json")
+        decisions["decisions"] = [entry for entry in decisions["decisions"] if entry["stage"] != "finalize"]
+        write_json(root / "run.json", record)
+        write_json(root / "decisions.json", decisions)
+        review = studio.check_run(root)
+        decisions["decisions"].append({"stage": "finalize", "actor": "director", "outcome": "approved",
+                                       "rationale": "Synthetic bound-input regression fixture",
+                                       "inputsDigest": review["reviewDigest"]})
+        write_json(root / "decisions.json", decisions)
+        self.assertEqual(studio.check_run(root)["status"], "PASS")
+        (root / "visual-source.txt").write_text("Changed bound synthetic input\n", encoding="utf-8")
+        with self.assertRaisesRegex(studio.StudioError, "Stale/missing finalize"):
+            studio.check_run(root)
+        cli = subprocess.run([sys.executable, str(SCRIPT), "check-run", str(root)],
+                             text=True, capture_output=True, check=False)
+        self.assertEqual(cli.returncode, 1)
+        self.assertEqual(json.loads(cli.stdout)["status"], "FAIL")
+        with self.assertRaisesRegex(studio.StudioError, "Stale/missing finalize"):
+            studio.register_theme(self.repo, "fixture", root)
+        self.assertFalse((self.repo / "themes/registry.json").exists())
+
+
+
 
     def test_offline_waiver_follows_resolved_project_requirement(self):
         root = fixture_run(self.repo, self.theme)
@@ -364,6 +474,31 @@ class StudioTests(unittest.TestCase):
         write_json(root / "decisions.json", decisions)
         self.assertEqual(studio.check_run(root)["pending"], ["Missing approved finalize decision"])
 
+
+    def test_sparse_applicability_requires_explicit_exclusions(self):
+        root = fixture_run(self.repo, self.theme)
+        coverage = studio.read_json(root / "coverage.json")
+        surface = coverage["surfaces"][0]
+        required = [("ready", "mobile"), ("ready", "desktop"), ("error", "mobile")]
+        surface["applicabilitySchema"] = "1.1"
+        surface["applicableCases"] = [{"state": state, "viewport": viewport} for state, viewport in required]
+        surface["excludedCases"] = [{"state": "error", "viewport": "desktop", "reason": "Desktop uses inline recovery."}]
+        surface["cases"] = [case for case in surface["cases"] if (case["state"], case["viewport"]) in set(required)]
+        write_json(root / "coverage.json", coverage)
+        decisions = studio.read_json(root / "decisions.json")
+        decisions["decisions"] = [item for item in decisions["decisions"] if item["stage"] != "finalize"]
+        write_json(root / "decisions.json", decisions)
+        self.assertEqual(studio.check_run(root)["cases"], 3)
+
+    def test_sparse_applicability_rejects_unexplained_omission(self):
+        root = fixture_run(self.repo, self.theme)
+        coverage = studio.read_json(root / "coverage.json")
+        surface = coverage["surfaces"][0]
+        surface["applicableCases"] = [{"state": "ready", "viewport": "mobile"}]
+        surface["cases"] = [surface["cases"][0]]
+        write_json(root / "coverage.json", coverage)
+        with self.assertRaisesRegex(studio.StudioError, "explicit exclusion reason"):
+            studio.check_run(root)
     def test_legacy_run_approvals_remain_readable_and_tada_offline_cannot_be_waived(self):
         root = fixture_run(self.repo, self.theme)
         record = studio.read_json(root / "run.json")
@@ -426,7 +561,7 @@ class StudioTests(unittest.TestCase):
     def test_evidence_tamper_invalidates_run(self):
         root = fixture_run(self.repo, self.theme)
         (root / "integration.md").write_text("Changed fixture", encoding="utf-8")
-        with self.assertRaisesRegex(studio.StudioError, "Evidence changed"):
+        with self.assertRaisesRegex(studio.StudioError, "(Evidence changed|Stale/missing finalize)"):
             studio.check_run(root)
 
     def test_missing_coverage_case_blocks(self):
@@ -548,7 +683,8 @@ class ModelRoutingTests(unittest.TestCase):
         self.repo = Path(self.temp.name)
         self.root = Path(studio.init_run(self.repo, theme_id="fixture")["run"])
         self.record = studio.read_json(self.root / "run.json")
-        self.record["modelRouting"].update(sessionModel="fixture/director", sessionThinking="high",
+        self.record["modelRouting"].update(schemaVersion="1.2", selectedRoles=sorted(studio.SPECIALIST_AGENTS),
+            sessionModel="fixture/director", sessionThinking="high",
             assignments=[{"agent": name, "model": "fixture/design", "thinking": "high", "rationale": "Synthetic available-model fixture"} for name in sorted(studio.SPECIALIST_AGENTS)])
         write_json(self.root / "run.json", self.record)
         self.original = {}
@@ -601,6 +737,59 @@ class ModelRoutingTests(unittest.TestCase):
             self.assertNotIn(b"thinking", path.read_bytes())
         studio.models_restore(self.repo, self.root)
         self.assertEqual(self.snapshot(), self.original)
+
+    def test_selected_roles_allow_partial_dispatch_and_restore(self):
+        selected = ["ui-art-director"]
+        self.record["modelRouting"].update(selectedRoles=selected, assignments=[
+            {"agent": selected[0], "model": "fixture/director", "thinking": "high", "rationale": "Synthetic first dispatch"}])
+        write_json(self.root / "run.json", self.record)
+        _, _, plan = studio.routing_plan(self.repo, self.root)
+        self.assertEqual([item["agent"] for item in plan["assignments"]], selected)
+        studio.models_apply(self.repo, self.root)
+        changed = {path for path in self.original if path.read_bytes() != self.original[path][0]}
+        self.assertEqual(changed, {self.repo / ".omp/agents/ui-art-director.md"})
+        studio.models_restore(self.repo, self.root)
+        self.assertEqual(self.snapshot(), self.original)
+
+    def test_camel_case_thinking_level_replaces_legacy_reasoning(self):
+        path = next(iter(self.original))
+        path.write_bytes(path.read_bytes().replace(
+            b"thinking-level: low\n", b"thinking-level: high\nthinkingLevel: low\n"))
+        before = self.snapshot()
+        for item in self.record["modelRouting"]["assignments"]:
+            item["thinking"] = "low"
+        write_json(self.root / "run.json", self.record)
+        studio.models_apply(self.repo, self.root)
+        data = path.read_bytes()
+        self.assertNotIn(b"thinking-level", data)
+        self.assertNotIn(b"thinkingLevel", data)
+        self.assertIn(b'thinking: "low"', data)
+        studio.models_restore(self.repo, self.root)
+        self.assertEqual(self.snapshot(), before)
+    def test_routing_variants_preserve_crlf_body_and_metadata(self):
+        data = (
+            b"---\r\nname: ui-art-director\r\n"
+            b"\"model\": old/model\r\n'thinking_level': high\r\n"
+            b"# preserve this comment\r\nowner: fixture\r\n---\r\n\r\nKeep body\r\n"
+        )
+        rendered = studio.render_agent_model(data, {"agent": "ui-art-director", "model": "fixture/design", "thinking": "low"})
+        self.assertIn(b"# preserve this comment\r\n", rendered)
+        self.assertIn(b"model: \"fixture/design\"\r\n", rendered)
+        self.assertIn(b"thinking: \"low\"\r\n", rendered)
+        self.assertNotIn(b"thinking_level", rendered)
+        self.assertTrue(rendered.endswith(b"---\r\n\r\nKeep body\r\n"))
+
+    def test_duplicate_and_yaml_alias_routing_fields_are_rejected(self):
+        duplicate = b"---\nname: ui-art-director\nthinking: low\nthinking: high\n---\n"
+        with self.assertRaisesRegex(studio.StudioError, "Duplicate routing key"):
+            studio.render_agent_model(duplicate, {"agent": "ui-art-director", "model": "fixture/design", "thinking": "low"})
+        alias = b"---\nname: ui-art-director\nthinking: *old\n---\n"
+        with self.assertRaisesRegex(studio.StudioError, "Unsupported YAML routing value"):
+            studio.render_agent_model(alias, {"agent": "ui-art-director", "model": "fixture/design", "thinking": "low"})
+        block = b"---\nname: ui-art-director\nthinking: |\n  low\n---\n"
+        with self.assertRaisesRegex(studio.StudioError, "Unsupported YAML routing value"):
+            studio.render_agent_model(block, {"agent": "ui-art-director", "model": "fixture/design", "thinking": "low"})
+
 
     def test_later_user_edit_blocks_restore_and_reapply_without_partial_writes(self):
         studio.models_apply(self.repo, self.root)
@@ -656,6 +845,13 @@ class ModelRoutingTests(unittest.TestCase):
         self.assertTrue((self.repo / studio.ROUTING_DIRECTORY / "active.json").exists())
         studio.models_restore(self.repo, self.root)
         self.assertEqual(self.snapshot(), self.original)
+
+    def test_permission_failure_does_not_publish_routing_state(self):
+        with mock.patch.object(studio, "atomic_bytes", side_effect=PermissionError("Synthetic permission failure")):
+            with self.assertRaises(PermissionError):
+                studio.models_apply(self.repo, self.root)
+        self.assertEqual(self.snapshot(), self.original)
+        self.assertFalse((self.repo / studio.ROUTING_DIRECTORY / "active.json").exists())
 
     def test_effective_agent_override_or_unreadable_settings_blocks_apply(self):
         self.native.return_value.stdout = json.dumps({"key": "task.agentModelOverrides", "value": {"ui-art-director": "@operator-choice"}})

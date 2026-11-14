@@ -16,8 +16,8 @@ Resolve the policy from the explicit invocation, then the existing run when resu
 
 | Policy | Behaviour |
 | --- | --- |
-| `auto-models` (default) | Choose suitable available models and reasoning levels for the seven specialist roles. Respect existing operator routing, provider restrictions, budgets and actual task difficulty. Use the active model when it is suitable or no better eligible alternative is established. |
-| `current-model` | Observe the active session's exact provider/model and effective thinking setting; assign that same model and setting to all seven specialists. Recheck the snapshot when resuming or after a deliberate session model change. |
+| `auto-models` (default) | Choose suitable available models and reasoning levels for selected/dispatched specialist roles. Respect existing operator routing, provider restrictions, budgets and actual task difficulty. Unused roles need no assignment in the new routing schema. |
+| `current-model` | Observe the active session's exact provider/model and effective thinking setting; assign that same model and setting to every dispatched specialist. Recheck the snapshot when resuming or after a deliberate session model change. |
 
 The main session remains the director on its currently selected model. This skill does not silently switch the main session, sign in to providers, install models, purchase capacity or change approval settings. The user can choose the main model with OMP's `/model` interface. Model policy controls specialist routing; guided/yolo controls design decisions; `/goal` controls continuation. Keep those choices independent.
 
@@ -67,19 +67,19 @@ On a new session/resume, `current-model` means the model currently active there.
 
 ## 5. Apply and verify native routing
 
-Model selection is work performed by the director, not a request for the user to hand-edit seven files. Populate all assignments in `run.json`, retain `modelRouting.status: "pending"`, then use one supported route:
+Model selection is work performed by the director, not a request for the user to hand-edit agent files. Populate selected assignments in `run.json`, retain `modelRouting.status: "pending"`, then use one supported route:
 
 1. If the runtime already resolves the exact intended identities/efforts, use its existing routing and record the source. Do not rewrite matching configuration.
 2. If authorized per-call selection is actually advertised, pass exact selectors using that live schema. Do not send an unavailable tool field.
-3. Otherwise use the included local helper to apply the assignments to this package's seven native agent definitions:
+3. Otherwise use the included local helper to apply the selected assignments to this package's native agent definitions:
 
    ```bash
    tools/ui-design models-apply --repo . --run docs/design/runs/RUN_ID
    ```
 
-   Replace `RUN_ID` with the actual initialized directory. This helper backs up the original agent files and modes, updates only their model/thinking frontmatter, and journals the applied hashes. It leaves global configuration and project `.omp/config.yml` alone. It checks relevant native agent overrides through the CLI and conservatively refuses any nonempty override for a UI specialist, including an alias or an apparently matching value. Use existing routing when it already implements the intended assignments; otherwise report the specific routing conflict. A CLI failure is reported, not interpreted as “no overrides”.
+   Replace `RUN_ID` with the actual initialized directory. This helper backs up original agent files and modes, updates only selected model/thinking frontmatter, and journals applied hashes. It leaves global configuration and project `.omp/config.yml` alone. It checks relevant native agent overrides through the CLI and conservatively refuses any nonempty override for a selected UI specialist, including an alias or an apparently matching value. A CLI failure is reported, not interpreted as "no overrides".
 
-Use the seven existing agent names. Do not create aliases to escape a higher-priority override. Keep one routing owner per project; do not run competing model policies over the same seven files concurrently. Restore a prior run's temporary assignments before applying a different run.
+Use existing agent names. Do not create aliases to escape a higher-priority override. Keep one routing owner per project; do not run competing model policies over the same files concurrently. Restore a prior run's temporary assignments before applying a different run.
 
 Inspect the live task agent discovery/resolved metadata after routing changes. Current OMP refreshes agent definitions at task preflight, but session-only state and extensions can still alter the result. Verify actual model/effort in each task's metadata or other authoritative runtime evidence. Do not treat a worker's prose claim as equivalent to native metadata. A successful `models-apply` proves files were changed; it does not prove provider execution.
 
@@ -93,6 +93,8 @@ The required record is:
 {
   "modelPolicy": "auto-models",
   "modelRouting": {
+    "schemaVersion": "1.2",
+    "selectedRoles": [],
     "status": "pending",
     "path": "model-routing.md",
     "sha256": null,
@@ -103,7 +105,7 @@ The required record is:
 }
 ```
 
-Each assignment has `agent`, `model`, `thinking` and `rationale`. Include exactly the seven names listed above. Store concrete provider/model identities, not unresolved `@role` aliases. Fill the record from observed information; the template above is intentionally incomplete.
+Each assignment has `agent`, `model`, `thinking` and `rationale`. New schema 1.2 records only selected/dispatched roles in `selectedRoles`; unused roles need no assignment. Legacy 1.1 records remain readable with all seven assignments. Store concrete provider/model identities, not unresolved `@role` aliases. Fill the record from observed information; the template above is intentionally incomplete.
 
 Keep `model-routing.md` as the readable audit trail: policy, main-session snapshot, eligible candidates, routing source, reasons, actual task observations, unused roles, fallbacks, unresolved conflicts, and temporary configuration state. After the routing is genuinely resolved and all executed task observations agree, set status to `resolved` and obtain the file digest:
 

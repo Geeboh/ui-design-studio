@@ -55,6 +55,10 @@ SPECIALIST_AGENTS = {
     "ui-implementer", "ui-quality-reviewer", "ui-performance-reviewer",
 }
 
+SCOPE_VALUES = ("fix", "component", "single-flow", "reference-adaptation", "full-redesign",
+                "assess-only", "design-only")
+CRITICAL_STATE_MARKERS = ("error", "fail", "unavailable", "recovery", "empty")
+
 
 class StudioError(Exception):
     """A failed deterministic check or invalid input."""
@@ -74,7 +78,21 @@ def digest_bytes(value):
 
 
 def sha_file(path):
-    return digest_bytes(Path(path).read_bytes())
+    path = Path(path)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        with os.fdopen(descriptor, "rb") as handle:
+            descriptor = None
+            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                raise StudioError(f"Not a regular file: {path}")
+            hasher = hashlib.sha256()
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                hasher.update(chunk)
+            return hasher.hexdigest()
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
 
 
 def now():
@@ -413,6 +431,78 @@ def file_digest(root, files):
     require(isinstance(files, list) and files and all(isinstance(x, str) for x in files), "Decision inputs must be a nonempty path list")
     return digest_bytes(canonical({file: sha_file(safe_path(root, file)) for file in sorted(set(files))}))
 
+def _file_signature(path):
+    metadata = Path(path).stat()
+    return (metadata.st_dev, metadata.st_ino, metadata.st_size, metadata.st_mtime_ns)
+
+
+def _validated_sha(path, digest_cache):
+    path = Path(path)
+    signature = _file_signature(path)
+    cached = digest_cache.get(str(path))
+    if cached is not None and cached[0] == signature:
+        return cached[1]
+    value = sha_file(path)
+    require(signature == _file_signature(path), f"File changed during validation: {path}")
+    digest_cache[str(path)] = (signature, value)
+    return value
+
+
+def validate_evidence_entry(root, entry, digest_cache=None, *, offline_required=True):
+    """Return one normalized evidence result using only current confined bytes."""
+    root = Path(root).resolve()
+    cache = digest_cache if digest_cache is not None else {}
+    require(isinstance(entry, dict), "Evidence entries must be objects")
+    evidence_id = entry.get("id")
+    kind = entry.get("kind")
+    status = entry.get("status")
+    require(isinstance(evidence_id, str) and evidence_id.strip(), "Evidence entry needs a nonempty id")
+    require(isinstance(kind, str) and kind.strip(), f"Evidence {evidence_id} has no kind")
+    require(status in ("passed", "failed", "pending", "not-applicable"),
+            f"Evidence {evidence_id} has invalid status: {status}")
+    require(isinstance(entry.get("reviewer"), str) and entry["reviewer"].strip(),
+            f"Evidence {evidence_id} has no reviewer")
+    require(isinstance(entry.get("recordedAt"), str) and entry["recordedAt"].strip(),
+            f"Evidence {evidence_id} has no recordedAt")
+    result = {"id": evidence_id, "kind": kind, "status": status, "fresh": False,
+              "reviewer": entry["reviewer"], "recordedAt": entry["recordedAt"],
+              "reasons": []}
+    if status == "not-applicable":
+        require(not offline_required and kind == "offline" and isinstance(entry.get("reason"), str)
+                and entry["reason"].strip(),
+                "Only an explicitly non-required offline check may be not-applicable, with a source-backed reason")
+        result.update(valid=True, fresh=True, reason=entry["reason"])
+        return result
+    if status != "passed":
+        result["reasons"].append(f"Evidence {evidence_id} is {status}")
+        result["valid"] = False
+        return result
+    path = entry.get("path")
+    require(isinstance(path, str) and path.strip(), f"Evidence {evidence_id} has no path")
+    actual = _validated_sha(safe_path(root, path), cache)
+    result["path"], result["sha256"] = path, actual
+    recorded = entry.get("sha256")
+    if not isinstance(recorded, str) or not SHA.fullmatch(recorded) or recorded != actual:
+        result["reasons"].append(f"Evidence changed or missing sha256: {evidence_id}")
+    has_inputs = "inputs" in entry or "inputsDigest" in entry
+    if has_inputs:
+        require(isinstance(entry.get("inputs"), list) and entry["inputs"]
+                and all(isinstance(item, str) and item.strip() for item in entry["inputs"]),
+                f"Evidence {evidence_id} inputs must be a nonempty path list")
+        require(len(entry["inputs"]) == len(set(entry["inputs"])),
+                f"Evidence {evidence_id} inputs must not contain duplicates")
+        input_hashes = {item: _validated_sha(safe_path(root, item), cache) for item in sorted(entry["inputs"])}
+        input_digest = digest_bytes(canonical(input_hashes))
+        result.update(inputs=list(entry["inputs"]), inputsDigest=input_digest)
+        recorded_inputs = entry.get("inputsDigest")
+        if not isinstance(recorded_inputs, str) or not SHA.fullmatch(recorded_inputs) or recorded_inputs != input_digest:
+            result["reasons"].append(f"Evidence inputs changed or missing inputsDigest: {evidence_id}")
+    else:
+        result["legacyUnbound"] = True
+    result["valid"] = not result["reasons"]
+    result["fresh"] = result["valid"]
+    return result
+
 
 def context_digest(path):
     """Hash the observed context file; this does not resolve its requirements."""
@@ -460,8 +550,19 @@ def check_model_routing(root, run, pending):
     require(isinstance(routing.get("sessionThinking"), str) and routing["sessionThinking"].strip(),
             "modelRouting.sessionThinking must record the active effort or provider-default")
     assignments = routing.get("assignments")
-    require(isinstance(assignments, list) and len(assignments) == len(SPECIALIST_AGENTS),
-            "modelRouting must record all seven specialist assignments")
+    routing_version = routing.get("schemaVersion", "1.1")
+    require(routing_version in ("1.1", "1.2"), "Unsupported modelRouting schemaVersion")
+    if routing_version == "1.2":
+        selected = routing.get("selectedRoles")
+        require(isinstance(selected, list) and selected and all(isinstance(item, str) and item in SPECIALIST_AGENTS for item in selected)
+                and len(selected) == len(set(selected)), "Selected model-routing roles must be unique specialist names")
+        require(isinstance(assignments, list) and len(assignments) == len(selected)
+                and {item.get("agent") for item in assignments if isinstance(item, dict)} == set(selected),
+                "Model assignments must exactly cover selected roles")
+    else:
+        selected = sorted(SPECIALIST_AGENTS)
+        require(isinstance(assignments, list) and len(assignments) == len(SPECIALIST_AGENTS),
+                "Legacy modelRouting must record all seven specialist assignments")
     seen = set()
     for assignment in assignments:
         require(isinstance(assignment, dict), "Model assignments must be objects")
@@ -475,6 +576,7 @@ def check_model_routing(root, run, pending):
         if policy == "current-model":
             require(assignment["model"] == routing["sessionModel"] and assignment["thinking"] == routing["sessionThinking"],
                     f"current-model must retain the active session model and thinking for {agent}")
+    require(seen == set(selected), "Model assignments do not match selected roles")
     recorded = routing.get("sha256")
     require(isinstance(recorded, str) and SHA.fullmatch(recorded) and recorded == actual,
             "Model routing changed or has no current sha256; inspect actual assignments and record its digest")
@@ -539,7 +641,20 @@ def routing_plan(repo, run_path):
     require(is_model_identity(routing.get("sessionModel")), "Record the active exact provider/model before applying routing")
     require(isinstance(routing.get("sessionThinking"), str) and routing["sessionThinking"].strip(), "Record active session thinking before applying routing")
     assignments = routing.get("assignments")
-    require(isinstance(assignments, list) and len(assignments) == len(SPECIALIST_AGENTS), "Record all seven specialist assignments before applying routing")
+    routing_version = routing.get("schemaVersion", "1.1")
+    require(routing_version in ("1.1", "1.2"), "Unsupported modelRouting schemaVersion")
+    if routing_version == "1.2":
+        selected = routing.get("selectedRoles")
+        require(isinstance(selected, list) and selected and len(selected) == len(set(selected))
+                and all(isinstance(item, str) and item in SPECIALIST_AGENTS for item in selected),
+                "Selected model-routing roles must be unique specialist names")
+        require(isinstance(assignments, list) and len(assignments) == len(selected)
+                and {item.get("agent") for item in assignments if isinstance(item, dict)} == set(selected),
+                "Model assignments must exactly cover selected roles")
+    else:
+        selected = sorted(SPECIALIST_AGENTS)
+        require(isinstance(assignments, list) and len(assignments) == len(SPECIALIST_AGENTS),
+                "Legacy model routing requires all seven specialist assignments")
     seen = set()
     for assignment in assignments:
         require(isinstance(assignment, dict), "Model assignments must be objects")
@@ -552,6 +667,7 @@ def routing_plan(repo, run_path):
         if run["modelPolicy"] == "current-model":
             require(assignment["model"] == routing["sessionModel"] and assignment["thinking"] == routing["sessionThinking"],
                     f"current-model must retain the active session model and thinking for {agent}")
+    require(seen == set(selected), "Model assignments do not match selected roles")
     plan = {"modelPolicy": run["modelPolicy"], "sessionModel": routing["sessionModel"],
             "sessionThinking": routing["sessionThinking"], "assignments": sorted(assignments, key=lambda item: item["agent"])}
     return repo, run_root, plan
@@ -575,7 +691,7 @@ def check_native_overrides(repo, assignments):
 
 
 def render_agent_model(data, assignment):
-    """Change the shipped agent's model fields, retaining body and other keys."""
+    """Change shipped model fields while preserving body, metadata, and newline style."""
     try:
         text = data.decode("utf-8")
     except UnicodeError as exc:
@@ -585,23 +701,40 @@ def render_agent_model(data, assignment):
     end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
     require(end is not None, "Agent frontmatter has no closing delimiter")
     newline = "\r\n" if lines[0].endswith("\r\n") else "\n"
-    fields = []
+    routing_keys = {"model", "thinking", "thinking-level"}
+    fields, seen_routing = [], set()
     skipping = False
     matched_name = False
     for line in lines[1:end]:
-        key = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*)\s*:", line)
+        if line.lstrip().startswith("<<:"):
+            raise StudioError("Agent uses unsupported YAML merge indirection; inspect it before changing models")
+        key = re.match(r"^(?P<quote>['\"]?)(?P<name>[A-Za-z_][A-Za-z0-9_-]*)(?P=quote)\s*:", line)
         if key:
-            normalized = key.group(1).replace("_", "-")
-            skipping = normalized in ("model", "thinking", "thinking-level")
+            raw_key = key.group("name")
+            normalized = raw_key.replace("_", "-").lower()
+            if normalized == "thinkinglevel":
+                normalized = "thinking-level"
+            skipping = normalized in routing_keys
+            if skipping:
+                require(raw_key not in seen_routing, f"Duplicate routing key: {raw_key}")
+                seen_routing.add(raw_key)
+                value = line[key.end():].strip()
+                require(not value.startswith(("*", "&", "<<:", "|", ">")),
+                        f"Unsupported YAML routing value for {raw_key}")
             if normalized == "name":
                 value = line[key.end():].strip().strip("\"'")
                 require(value == assignment["agent"], "Agent filename and frontmatter name disagree")
                 matched_name = True
             if not skipping:
                 fields.append(line)
-        elif line.lstrip().startswith("<<:") or re.match(r"^['\"](?:model|thinking|thinking[-_]level)['\"]\s*:", line):
-            raise StudioError("Agent uses unsupported YAML routing indirection; inspect it before changing models")
-        elif skipping and (not line.strip() or line.startswith((" ", "\t", "-")) or line.lstrip().startswith("#")):
+        elif skipping and line.lstrip().startswith("#"):
+            fields.append(line)
+        elif skipping and not line.strip():
+            fields.append(line)
+        elif skipping and line.startswith((" ", "\t")):
+            stripped = line.strip()
+            require(not stripped.startswith(("<<:", "*", "&")) and not (stripped.startswith("-") and ":" in stripped),
+                    "Unsupported YAML routing structure; inspect it before changing models")
             continue
         else:
             fields.append(line)
@@ -631,7 +764,7 @@ def checked_routing_journal(repo, path):
     journal = read_json(path)
     require(isinstance(journal, dict) and journal.get("schemaVersion") == "1.0" and journal.get("projectRoot") == str(repo), "Invalid model-routing journal")
     entries = journal.get("files")
-    require(isinstance(entries, list) and len(entries) == len(SPECIALIST_AGENTS), "Invalid model-routing backup entries")
+    require(isinstance(entries, list) and 0 < len(entries) <= len(SPECIALIST_AGENTS), "Invalid model-routing backup entries")
     expected = {f".omp/agents/{name}.md" for name in SPECIALIST_AGENTS}
     seen = set()
     for entry in entries:
@@ -780,6 +913,45 @@ def check_project_context(root, run, pending):
     can_waive_offline = status == "resolved" and bool(sources) and offline == "not-required"
     return not can_waive_offline, {**context, "actualSha256": actual}
 
+def coverage_case_sets(surface):
+    """Return required and explicitly excluded state/viewport pairs."""
+    states, viewports = surface.get("states"), surface.get("viewports")
+    require(isinstance(states, list) and states and all(isinstance(x, str) and x for x in states)
+            and len(states) == len(set(states)), "Coverage states must be unique nonempty strings")
+    require(isinstance(viewports, list) and viewports and all(isinstance(x, str) and x for x in viewports)
+            and len(viewports) == len(set(viewports)), "Coverage viewports must be unique nonempty strings")
+    domain = {(state, viewport) for state in states for viewport in viewports}
+    applicable = surface.get("applicableCases")
+    if applicable is None:
+        return domain, set()
+    require(surface.get("applicabilitySchema", "1.0") in ("1.0", "1.1"),
+            "Unsupported coverage applicability schema")
+    require(isinstance(applicable, list) and applicable, "applicableCases must be a nonempty list")
+    excluded = surface.get("excludedCases", [])
+    require(isinstance(excluded, list), "excludedCases must be a list")
+
+    def parse(items, *, require_reason):
+        result = set()
+        for item in items:
+            require(isinstance(item, dict), "Applicability entries must be objects")
+            key = (item.get("state"), item.get("viewport"))
+            require(key in domain and key not in result, f"Duplicate/unknown applicability case {key}")
+            if require_reason:
+                require(isinstance(item.get("reason"), str) and item["reason"].strip(),
+                        f"Excluded applicability case {key} needs a reason")
+            result.add(key)
+        return result
+
+    required = parse(applicable, require_reason=False)
+    omitted = parse(excluded, require_reason=True)
+    require(required.isdisjoint(omitted), "A coverage case cannot be both applicable and excluded")
+    require(required | omitted == domain, "Every omitted state/viewport case needs an explicit exclusion reason")
+    critical = [state for state in states if any(marker in state.lower() for marker in CRITICAL_STATE_MARKERS)]
+    if critical:
+        require(any(state in {key[0] for key in required} for state in critical),
+                f"Critical state has no applicable case: {critical[0]}")
+    return required, omitted
+
 
 def check_run(path):
     root = Path(path).resolve()
@@ -787,38 +959,33 @@ def check_run(path):
     coverage = read_json(safe_path(root, "coverage.json"))
     decisions = read_json(safe_path(root, "decisions.json"))
     require(isinstance(run, dict) and run.get("schemaVersion") in ("1.0", "1.1"), "Run must use schemaVersion 1.0 or 1.1")
-    require(all(isinstance(doc, dict) and doc.get("schemaVersion") == "1.0" for doc in (coverage, decisions)), "Coverage and decisions must use schemaVersion 1.0")
+    require(isinstance(coverage, dict) and coverage.get("schemaVersion") in ("1.0", "1.1")
+            and isinstance(decisions, dict) and decisions.get("schemaVersion") == "1.0",
+            "Coverage must use schemaVersion 1.0 or 1.1 and decisions must use schemaVersion 1.0")
     require(run.get("mode") in ("guided", "yolo"), "Run mode must be guided or yolo")
     require(run.get("themeAction") in ("new", "modify-default"), "Run themeAction must be new or modify-default")
+    scope = run.get("scope", "full-redesign")
+    require(scope in SCOPE_VALUES, f"Run scope must be one of {', '.join(SCOPE_VALUES)}")
     validate_slug(run.get("themeId"))
     pending, errors = [], []
     offline_required, project_context = check_project_context(root, run, pending)
     model_routing = check_model_routing(root, run, pending)
     evidence = run.get("evidence", [])
     require(isinstance(evidence, list), "run.evidence must be a list")
-    ids, kinds, hashes = {}, set(), {}
+    ids, kinds, hashes, digest_cache = {}, set(), {}, {}
     for entry in evidence:
         require(isinstance(entry, dict), "Evidence entries must be objects")
         eid = entry.get("id")
         require(isinstance(eid, str) and eid and eid not in ids, f"Duplicate/missing evidence ID: {eid}")
         ids[eid] = entry
-        kind, status = entry.get("kind"), entry.get("status")
-        require(isinstance(kind, str) and kind, f"Evidence {eid} has no kind")
-        require(isinstance(entry.get("reviewer"), str) and entry["reviewer"].strip(), f"Evidence {eid} has no reviewer")
-        require(isinstance(entry.get("recordedAt"), str) and entry["recordedAt"].strip(), f"Evidence {eid} has no recordedAt")
-        if status == "not-applicable":
-            require(not offline_required and kind == "offline" and isinstance(entry.get("reason"), str) and entry["reason"].strip(),
-                    "Only an explicitly non-required offline check may be not-applicable, with a source-backed reason")
-            kinds.add(kind)
-            hashes[eid] = {"kind": kind, "status": status, "reason": entry["reason"], "reviewer": entry["reviewer"], "recordedAt": entry["recordedAt"]}
-            continue
-        if status != "passed":
-            (errors if status == "failed" else pending).append(f"Evidence {eid} is {status or 'unverified'}")
-            continue
-        actual = sha_file(safe_path(root, entry.get("path")))
-        require(isinstance(entry.get("sha256"), str) and entry["sha256"] == actual, f"Evidence changed or missing sha256: {eid}")
-        hashes[eid] = {"path": entry["path"], "sha256": actual, "kind": kind, "reviewer": entry["reviewer"]}
-        kinds.add(kind)
+        result = validate_evidence_entry(root, entry, digest_cache, offline_required=offline_required)
+        normalized = {key: value for key, value in result.items() if key not in ("valid", "fresh")}
+        hashes[eid] = normalized
+        if result.get("valid"):
+            kinds.add(result["kind"])
+        else:
+            message = "; ".join(result["reasons"]) or f"Evidence {eid} is not valid"
+            (pending if result["status"] in ("pending",) else errors).append(message)
     for kind in sorted(REQUIRED_EVIDENCE - kinds):
         pending.append(f"Required evidence missing: {kind}")
     if coverage.get("inventoryComplete") is not True:
@@ -835,12 +1002,9 @@ def check_run(path):
         surface_ids.add(sid)
         require(surface.get("kind") in ("page", "dialog"), f"Surface {sid}: kind must be page or dialog")
         require(isinstance(surface.get("route"), str) and surface["route"].strip(), f"Surface {sid}: route/entry point missing")
-        states, viewports = surface.get("states"), surface.get("viewports")
-        require(isinstance(states, list) and states and all(isinstance(x, str) and x for x in states) and len(states) == len(set(states)), f"Surface {sid}: states must be unique nonempty strings")
-        require(isinstance(viewports, list) and viewports and all(isinstance(x, str) and x for x in viewports) and len(viewports) == len(set(viewports)), f"Surface {sid}: viewports must be unique nonempty strings")
         cases = surface.get("cases", [])
         require(isinstance(cases, list), f"Surface {sid}: cases must be a list")
-        expected = {(s, v) for s in states for v in viewports}
+        expected, _ = coverage_case_sets(surface)
         observed = set()
         for case in cases:
             require(isinstance(case, dict), f"Surface {sid}: case must be object")
@@ -863,7 +1027,7 @@ def check_run(path):
                         pending.append(f"{sid}/{key}: QA evidence {eid} has not passed")
         for key in sorted(expected - observed):
             pending.append(f"{sid}: missing case {key[0]}/{key[1]}")
-        total_cases += len(cases)
+        total_cases += len(expected)
     theme_digest = run.get("themeDigest")
     if not isinstance(theme_digest, str) or not SHA.fullmatch(theme_digest):
         pending.append("Final themeDigest has not been recorded")
@@ -874,6 +1038,9 @@ def check_run(path):
         review_inputs["context"]["projectContext"] = project_context
         review_inputs["context"]["modelPolicy"] = run["modelPolicy"]
         review_inputs["context"]["modelRouting"] = model_routing
+        if "scope" in run:
+            review_inputs["context"]["scope"] = run["scope"]
+            review_inputs["context"]["scopeRationale"] = run.get("scopeRationale", "")
     decisions_list = decisions.get("decisions", [])
     require(isinstance(decisions_list, list), "decisions.decisions must be a list")
     approved, latest = set(), {}
@@ -915,8 +1082,10 @@ def check_run(path):
     elif not reviewers or implementer in reviewers:
         pending.append("Independent review must name a reviewer distinct from the implementer")
     return {"status": "FAIL" if errors else "BLOCKED" if pending else "PASS", "runId": run.get("id"),
-            "themeId": run["themeId"], "themeDigest": theme_digest, "reviewDigest": review_digest,
+            "themeId": run["themeId"], "scope": run.get("scope", "full-redesign"),
+            "themeDigest": theme_digest, "reviewDigest": review_digest,
             "surfaces": len(surfaces), "cases": total_cases, "pending": pending, "errors": errors,
+            "scopedCompletion": run.get("scopedCompletion"),
             "limits": ["Evidence files and recorded approvals are checked for completeness and freshness, not for truth. The director must inspect actual logs/screenshots and independently review the application."]}
 
 
@@ -935,10 +1104,253 @@ def registry_read(root):
     return data
 
 
-def init_run(repo, mode="guided", profile=None, action="auto", theme_id=None, model_policy=None):
+def _repo_root(path):
+    path = Path(path).resolve()
+    for candidate in (path, *path.parents):
+        if (candidate / "UI-Design-Studio-v1.4.0-Cortex-Remediation.md").is_file():
+            return candidate
+        if (candidate / ".git").exists():
+            return candidate
+    return path
+
+
+def _git_facts(repo):
+    facts = {"revision": None, "dirty": None}
+    try:
+        revision = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                                  capture_output=True, text=True, timeout=10, check=False)
+        dirty = subprocess.run(["git", "-C", str(repo), "status", "--porcelain"],
+                                capture_output=True, text=True, timeout=10, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return facts
+    if revision.returncode == 0:
+        facts["revision"] = revision.stdout.strip()
+    if dirty.returncode == 0:
+        facts["dirty"] = bool(dirty.stdout.strip())
+    return facts
+
+
+def _environment_facts(repo):
+    node = None
+    try:
+        result = subprocess.run(["node", "--version"], capture_output=True, text=True, timeout=5, check=False)
+        if result.returncode == 0:
+            node = result.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return {"python": sys.version.split()[0], "node": node, "platform": sys.platform,
+            "git": _git_facts(repo)}
+
+
+def _manifest_file(root, relative, kind, node):
+    path = safe_path(root, relative)
+    return {"id": node, "kind": kind, "path": relative, "sha256": sha_file(path)}
+
+
+def _resume_manifest(root, repo):
+    run = read_json(safe_path(root, "run.json"))
+    dependencies = []
+    seen = set()
+
+    def add(relative, kind, node):
+        if relative in seen:
+            return
+        seen.add(relative)
+        dependencies.append(_manifest_file(root, relative, kind, node))
+
+    add("run.json", "run-record", "run")
+    add("project-context.md", "project-context", "project-context")
+    add("model-routing.md", "model-routing", "model-routing")
+    add("coverage.json", "coverage", "coverage")
+    add("decisions.json", "approvals", "approvals")
+    add("report.md", "assessment", "assessment")
+    for entry in run.get("evidence", []):
+        if isinstance(entry, dict) and isinstance(entry.get("path"), str):
+            add(entry["path"], "evidence", f"evidence:{entry.get('id', entry['path'])}")
+        if isinstance(entry, dict):
+            for relative in entry.get("inputs", []) if isinstance(entry.get("inputs"), list) else []:
+                if isinstance(relative, str):
+                    add(relative, "evidence-input", f"input:{relative}")
+    coverage = read_json(safe_path(root, "coverage.json"))
+    for surface in coverage.get("surfaces", []) if isinstance(coverage, dict) else []:
+        for case in surface.get("cases", []) if isinstance(surface, dict) else []:
+            if isinstance(case, dict):
+                for field in ("mockup", "implementation"):
+                    if isinstance(case.get(field), str):
+                        add(case[field], "coverage-artifact", f"coverage:{surface.get('id')}:{field}:{case[field]}")
+    for decision in read_json(safe_path(root, "decisions.json")).get("decisions", []):
+        for relative in decision.get("inputs", []) if isinstance(decision, dict) and isinstance(decision.get("inputs"), list) else []:
+            if isinstance(relative, str):
+                add(relative, "approval-input", f"approval-input:{relative}")
+
+    sources = []
+    contract = repo / "UI-Design-Studio-v1.4.0-Cortex-Remediation.md"
+    if contract.is_file():
+        relative = contract.relative_to(repo).as_posix()
+        sources.append({"id": "remediation-contract", "path": relative, "sha256": sha_file(contract)})
+    graph = [
+        {"id": "project-context", "dependsOn": []},
+        {"id": "model-routing", "dependsOn": []},
+        {"id": "run", "dependsOn": ["project-context", "model-routing"]},
+        {"id": "coverage", "dependsOn": ["project-context", "run"]},
+        {"id": "evidence", "dependsOn": ["project-context", "coverage", "run"]},
+        {"id": "assessment", "dependsOn": ["project-context", "run"]},
+        {"id": "approvals", "dependsOn": ["project-context", "model-routing", "coverage", "assessment", "run"]},
+    ]
+    graph.extend({"id": entry["id"], "dependsOn": [entry["kind"].split(":", 1)[0]]}
+                 for entry in dependencies if entry["id"] not in {item["id"] for item in graph})
+    return {"schemaVersion": "1.0", "runId": run["id"], "revision": 1,
+            "dependencies": dependencies, "sources": sources, "graph": graph,
+            "environment": _environment_facts(repo)}
+
+
+def write_resume_manifest(root, repo):
+    manifest = _resume_manifest(Path(root).resolve(), Path(repo).resolve())
+    atomic_json(Path(root) / "manifest.json", manifest)
+    return manifest
+
+
+def _manifest_repo(root, manifest):
+    repo = _repo_root(root)
+    for source in manifest.get("sources", []):
+        if isinstance(source, dict) and isinstance(source.get("path"), str):
+            candidate = repo / source["path"]
+            if candidate.is_file():
+                return repo
+    return repo
+
+
+def resume_check(path, current_environment=None):
+    root = Path(path).resolve()
+    manifest_path = root / "manifest.json"
+    if not manifest_path.is_file():
+        return {"status": "BLOCKED", "conservative": True, "staleNodes": ["run"],
+                "changedDependencies": [], "message": "Missing resume manifest; verify legacy run conservatively."}
+    manifest = read_json(safe_path(root, "manifest.json"))
+    require(manifest.get("schemaVersion") == "1.0", "Unsupported resume manifest schemaVersion")
+    dependencies, changed = manifest.get("dependencies"), []
+    require(isinstance(dependencies, list), "Resume manifest dependencies must be a list")
+    for entry in dependencies:
+        require(isinstance(entry, dict) and isinstance(entry.get("id"), str)
+                and isinstance(entry.get("path"), str) and SHA.fullmatch(entry.get("sha256", "")),
+                "Resume manifest dependency is malformed")
+        try:
+            actual = sha_file(safe_path(root, entry["path"]))
+        except (StudioError, OSError) as exc:
+            changed.append({"id": entry["id"], "path": entry["path"], "reason": "missing", "error": str(exc)})
+            continue
+        if actual != entry["sha256"]:
+            changed.append({"id": entry["id"], "path": entry["path"], "reason": "changed",
+                            "expected": entry["sha256"], "actual": actual})
+    repo = _manifest_repo(root, manifest)
+    for source in manifest.get("sources", []):
+        require(isinstance(source, dict) and isinstance(source.get("id"), str)
+                and isinstance(source.get("path"), str) and SHA.fullmatch(source.get("sha256", "")),
+                "Resume manifest source is malformed")
+        try:
+            actual = sha_file(safe_path(repo, source["path"]))
+        except (StudioError, OSError) as exc:
+            changed.append({"id": source["id"], "path": source["path"], "reason": "missing", "error": str(exc)})
+            continue
+        if actual != source["sha256"]:
+            changed.append({"id": source["id"], "path": source["path"], "reason": "changed",
+                            "expected": source["sha256"], "actual": actual})
+    expected_environment = manifest.get("environment", {})
+    observed_environment = current_environment or _environment_facts(repo)
+    if expected_environment != observed_environment:
+        changed.append({"id": "environment", "reason": "changed",
+                        "expected": expected_environment, "actual": observed_environment})
+    direct = {entry["id"] for entry in changed}
+    graph = manifest.get("graph", [])
+    require(isinstance(graph, list), "Resume manifest graph must be a list")
+    dependents = {}
+    for node in graph:
+        require(isinstance(node, dict) and isinstance(node.get("id"), str)
+                and isinstance(node.get("dependsOn", []), list), "Resume manifest graph node is malformed")
+        for parent in node["dependsOn"]:
+            dependents.setdefault(parent, set()).add(node["id"])
+    stale = set(direct)
+    queue = list(direct)
+    while queue:
+        parent = queue.pop()
+        for child in dependents.get(parent, ()):
+            if child not in stale:
+                stale.add(child)
+                queue.append(child)
+    dirty = expected_environment.get("git", {}).get("dirty") != observed_environment.get("git", {}).get("dirty")
+    return {"status": "BLOCKED" if changed else "PASS", "conservative": False,
+            "manifestRevision": manifest.get("revision"), "changedDependencies": changed,
+            "staleNodes": sorted(stale), "unrelatedChangesIgnored": True,
+            "gitDirtyChanged": dirty,
+            "message": "Only changed dependencies and transitive dependents are stale." if changed
+            else "Manifest dependencies are current; no dependent work is stale."}
+
+
+def worker_packet(path, role, objective, owned_files, instruction_files=None, artifacts=None, allowed_actions=None):
+    root = Path(path).resolve()
+    run = read_json(safe_path(root, "run.json"))
+    require(role in SPECIALIST_AGENTS, f"Unknown specialist role: {role}")
+    require(isinstance(objective, str) and objective.strip(), "Worker objective is required")
+    require(isinstance(owned_files, list) and owned_files and all(isinstance(item, str) and item.strip() for item in owned_files),
+            "Worker owned files are required")
+    require(len(owned_files) == len(set(owned_files)), "Worker owned files must be unique")
+    owned = [{"path": item, "sha256": sha_file(safe_path(root, item))} for item in owned_files]
+    artifacts = artifacts if artifacts is not None else list(owned_files)
+    require(isinstance(artifacts, list) and artifacts and all(isinstance(item, str) and item.strip() for item in artifacts),
+            "Worker artifacts are required")
+    artifact_records = [{"path": item, "sha256": sha_file(safe_path(root, item))} for item in artifacts]
+    routing = run.get("modelRouting", {})
+    selected = routing.get("selectedRoles") if routing.get("schemaVersion") == "1.2" else sorted(SPECIALIST_AGENTS)
+    require(isinstance(selected, list), "Selected specialist roles must be a list")
+    require(not selected or role in selected, f"Role is not selected for this run: {role}")
+    required_instructions = [run.get("projectContext", {}).get("path", "project-context.md"),
+                             routing.get("path", "model-routing.md")]
+    repo = _repo_root(root)
+    contract = repo / "UI-Design-Studio-v1.4.0-Cortex-Remediation.md"
+    if contract.is_file():
+        required_instructions.append(contract.relative_to(repo).as_posix())
+    instructions = required_instructions if instruction_files is None else instruction_files
+    require(isinstance(instructions, list) and instructions and len(instructions) == len(set(instructions)),
+            "Worker original instruction paths are required")
+    require(set(required_instructions).issubset(set(instructions)),
+            "Worker packet must include original applicable instructions")
+    instruction_records = []
+    for item in instructions:
+        candidate = root / item if (root / item).exists() else repo / item
+        if candidate.is_relative_to(root):
+            relative = candidate.relative_to(root).as_posix()
+            digest = sha_file(safe_path(root, relative))
+        else:
+            require(candidate.is_relative_to(repo), f"Worker instruction escapes repository: {item}")
+            relative = candidate.relative_to(repo).as_posix()
+            digest = sha_file(safe_path(repo, relative))
+        instruction_records.append({"path": relative, "sha256": digest})
+    assignment = next((item for item in routing.get("assignments", []) if isinstance(item, dict) and item.get("agent") == role), None)
+    return {"status": "PASS", "schemaVersion": "1.0", "runId": run.get("id"), "role": role,
+            "objective": objective, "scope": run.get("scope", "full-redesign"),
+            "scopeRationale": run.get("scopeRationale", ""),
+            "routing": {"schemaVersion": routing.get("schemaVersion", "1.1"),
+                        "status": routing.get("status", "pending"), "policy": run.get("modelPolicy"),
+                        "selected": selected, "assignment": assignment},
+            "ownedFiles": owned, "instructions": instruction_records, "artifacts": artifact_records,
+            "contractRevision": digest_bytes(canonical({"scope": run.get("scope"), "instructions": instruction_records})),
+            "acceptance": {"requiredEvidence": sorted(REQUIRED_EVIDENCE),
+                           "fullThemeReleaseBlocked": run.get("scope", "full-redesign") != "full-redesign",
+                           "reviewerMustDifferFromImplementer": True},
+            "allowedActions": allowed_actions or ["read", "write-owned", "publish-evidence"],
+            "concurrencyCeiling": 3}
+
+
+def init_run(repo, mode="guided", profile=None, action="auto", theme_id=None, model_policy=None, scope=None, scope_rationale=None):
     # Keep the old positional Python signature for callers. Profiles no longer
     # select constraints; the director must read the project's current sources.
     require(mode in ("guided", "yolo"), "Run mode must be guided or yolo")
+    explicit_scope = scope is not None
+    scope = scope or "full-redesign"
+    require(scope in SCOPE_VALUES, f"Invalid scope: {scope}")
+    scope_rationale = scope_rationale or (
+        "Explicit scope supplied by the request." if explicit_scope
+        else "Default full-redesign scope; refine after project inventory.")
     require(action in ("auto", "new", "modify-default"), "Invalid theme action")
     validate_slug(theme_id)
     repo = Path(repo).resolve()
@@ -965,16 +1377,50 @@ def init_run(repo, mode="guided", profile=None, action="auto", theme_id=None, mo
     atomic_json(root / "run.json", {"schemaVersion": "1.1", "id": run_id, "createdAt": now(), "mode": mode,
         "projectContext": {"status": "pending", "path": "project-context.md", "sha256": None, "offline": "unknown", "sources": []},
         "modelPolicy": model_policy,
-        "modelRouting": {"status": "pending", "path": "model-routing.md", "sha256": None, "sessionModel": None, "sessionThinking": None, "assignments": []},
+        "modelRouting": {"schemaVersion": "1.2", "selectedRoles": [], "status": "pending", "path": "model-routing.md", "sha256": None, "sessionModel": None, "sessionThinking": None, "assignments": []},
+        "scopeSchemaVersion": "1.0", "scope": scope, "scopeRationale": scope_rationale,
         "themeAction": action, "themeId": theme_id, "phase": "assessment", "status": "pending",
         "themeDigest": None, "implementer": None, "evidence": []})
+
     atomic_json(root / "coverage.json", {"schemaVersion": "1.0", "inventoryComplete": False, "surfaces": []})
     atomic_json(root / "decisions.json", {"schemaVersion": "1.0", "decisions": []})
     (root / "project-context.md").write_text("# Project context\n\nStatus: pending. Read the project's current requirements before resolving this record.\n\n## Sources inspected\n\nList applicable instructions, requirements, current user brief, architecture, implementation, and existing theme contracts with their locations/revisions.\n\n## Required behaviour and constraints\n\nRecord the users/tasks, platforms, accessibility, brand, layout, offline/network, performance, dependencies, Git, and verification requirements. Cite each material constraint and distinguish observed facts, explicit requirements, assumptions, and unresolved conflicts.\n\n## Offline applicability\n\nUnknown. Determine whether offline operation is required from the sources; do not infer it from a project name or an old profile.\n", encoding="utf-8")
     (root / "model-routing.md").write_text("# Model routing\n\nStatus: pending. Discover the active model, available authorized models, supported thinking levels, and existing per-agent routing.\n\n## Active session snapshot\n\nRecord exact provider/model and actual thinking level, or provider-default. The director remains on the selected active session model.\n\n## Specialist assignments\n\nRecord all seven specialist agent names, selected provider/model, actual thinking, rationale, fallback constraints, and observed native routing. In current-model mode every specialist must match the active session snapshot; in auto-models mode choose suitable available models through authorized native routing. Do not enable permissions or providers to make a selection work.\n", encoding="utf-8")
     (root / "report.md").write_text("# UI assessment\n\nStatus: pending. No assessment or verification has been performed.\n\n## Scope and evidence\n\nRecord the inspected commit, pages/dialogs, users/tasks, constraints, evidence, severity, recommendations, confidence, and unverified areas.\n", encoding="utf-8")
+    write_resume_manifest(root, repo)
     return {"status": "PASS", "run": str(root), "themeAction": action,
             "message": "Run initialized pending. Inventory any existing app theme before treating this as a first theme; no theme or approval has been created."}
+
+
+def complete_scope(path, target, artifacts, blockers=None, next_action=None):
+    """Record bounded scope closure without changing full-theme run status or approvals."""
+    root = Path(path).resolve()
+    run = read_json(safe_path(root, "run.json"))
+    scope = run.get("scope", "full-redesign")
+    require(scope in SCOPE_VALUES, f"Invalid run scope: {scope}")
+    require(scope != "full-redesign", "Full-redesign scope requires the normal full-theme gates")
+    require(isinstance(target, str) and target.strip(), "Scoped completion target is required")
+    require(isinstance(artifacts, list) and artifacts, "Scoped completion needs at least one artifact path")
+    require(all(isinstance(item, str) and item.strip() for item in artifacts), "Scoped artifacts must be paths")
+    require(len(artifacts) == len(set(artifacts)), "Scoped artifacts must be unique")
+    artifact_records = [{"path": item, "sha256": sha_file(safe_path(root, item))} for item in artifacts]
+    blockers = blockers or []
+    require(isinstance(blockers, list) and all(isinstance(item, str) and item.strip() for item in blockers),
+            "Scoped blockers must be nonempty strings")
+    completion = {"schemaVersion": "1.0", "scope": scope, "target": target,
+                  "artifacts": artifact_records, "blockers": blockers,
+                  "nextAction": next_action or ("Resolve blockers before continuing." if blockers else
+                                                "Scoped objective complete; full-theme release remains gated."),
+                  "status": "BLOCKED" if blockers else "PASS", "recordedAt": now()}
+    run["scopedCompletion"] = completion
+    atomic_json(safe_path(root, "run.json"), run)
+    try:
+        full_check = check_run(root)
+    except (StudioError, OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
+        full_check = {"status": "BLOCKED", "error": str(exc)}
+    return {"status": completion["status"], "scope": scope, "scopedCompletion": completion,
+            "fullThemeRelease": "BLOCKED", "fullThemeCheck": full_check,
+            "message": "Scoped closure is recorded; it never grants full-theme finalization or registration."}
 
 
 def theme_new(repo, theme_id, name):
@@ -1185,6 +1631,8 @@ def parser():
                      help="Model policy; defaults to project modelPolicy or auto-models")
     sub.add_argument("--theme-action", choices=("auto", "modify-default", "new"), default="auto")
     sub.add_argument("--theme-id", required=True)
+    sub.add_argument("--scope", choices=SCOPE_VALUES, default=None,
+                     help="Explicit bounded workflow scope; defaults to full-redesign")
     sub = subs.add_parser("theme-new", help="Copy bundled specimen into a new unregistered theme")
     sub.add_argument("--repo", required=True)
     sub.add_argument("--id", required=True)
@@ -1195,6 +1643,22 @@ def parser():
     sub = subs.add_parser("decision-digest", help="Hash current run-relative Plan/Design approval input files")
     sub.add_argument("path")
     sub.add_argument("--files", required=True, nargs="+")
+    sub = subs.add_parser("scope-complete", help="Record bounded scope closure without granting full-theme release")
+    sub.add_argument("path")
+    sub.add_argument("--target", required=True)
+    sub.add_argument("--artifacts", required=True, nargs="+")
+    sub.add_argument("--blocker", action="append")
+    sub.add_argument("--next")
+    sub = subs.add_parser("resume-check", help="Check only changed run dependencies and transitive stale nodes")
+    sub.add_argument("path")
+    sub = subs.add_parser("worker-packet", help="Generate a bounded role packet with original instructions and hashes")
+    sub.add_argument("path")
+    sub.add_argument("--role", required=True, choices=sorted(SPECIALIST_AGENTS))
+    sub.add_argument("--objective", required=True)
+    sub.add_argument("--owned", required=True, nargs="+")
+    sub.add_argument("--instruction", action="append")
+    sub.add_argument("--artifact", action="append")
+    sub.add_argument("--allow", action="append")
     sub = subs.add_parser("package", help="Validate and create a deterministic portable theme ZIP")
     sub.add_argument("path")
     sub.add_argument("--output", required=True)
@@ -1220,7 +1684,7 @@ def main(argv=None):
         elif args.command == "init-run":
             if args.profile is not None:
                 print("NOTICE: --profile is deprecated and ignored; read requirements from the project.", file=sys.stderr)
-            result = init_run(args.repo, args.mode, args.profile, args.theme_action, args.theme_id, args.models)
+            result = init_run(args.repo, args.mode, args.profile, args.theme_action, args.theme_id, args.models, args.scope)
         elif args.command == "theme-new":
             result = theme_new(args.repo, args.id, args.name)
         elif args.command == "build-theme":
@@ -1237,6 +1701,13 @@ def main(argv=None):
             result = models_digest(args.path)
         elif args.command == "decision-digest":
             result = {"status": "PASS", "inputs": args.files, "inputsDigest": file_digest(Path(args.path).resolve(), args.files)}
+        elif args.command == "scope-complete":
+            result = complete_scope(args.path, args.target, args.artifacts, args.blocker, args.next)
+        elif args.command == "resume-check":
+            result = resume_check(args.path)
+        elif args.command == "worker-packet":
+            result = worker_packet(args.path, args.role, args.objective, args.owned,
+                                   args.instruction, args.artifact, args.allow)
         elif args.command == "package":
             result = package_theme(args.path, args.output)
         elif args.command == "models-apply":

@@ -11,6 +11,7 @@ If initialization creates a run but dashboard opening fails, keep the returned r
 ## Map CLI examples to tools
 
 Replace `tools/ui-design <command>` with `ui_design_<command_with_underscores>`. Omit `--repo`; the connection supplies it. Use named arguments and repository-relative paths. `init-run` maps to `ui_design_start_run`. `design-serve` maps to `ui_design_resume_run`. `status` is one-shot. `progress` uses `next_action` and `blocker`. `worker` keeps `id`, `task`, `status`, `message`, and optional `model`. `artwork` keeps `run`, `file`, `context`, and optional `title`. `approval-request` publishes a review request; it never grants a human approval.
+Use `ui_design_status_compact` for bounded metadata and `ui_design_status_page` for revision-bound artwork/evidence detail. Use `ui_design_resume_check(path=...)` before continuing work. Use `ui_design_worker_packet(path=..., role=..., objective=..., owned=[...])` to generate a bounded role context; it requires original instructions and never claims worker execution.
 
 All nested path arguments are also repository-relative. For `approval-request`, prefix each `files` entry and `choices` with the run path. For `artwork`, supply a file under that run or its verified active theme. The adapter validates those paths and converts them to the engine's internal relative form.
 

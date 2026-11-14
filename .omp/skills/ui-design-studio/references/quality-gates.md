@@ -8,6 +8,8 @@ For each required check, retain the method, command or procedure, source revisio
 
 Use an independent reviewer for implementation approval. Reviewers inspect rendered output and task behavior, not just code or the author's summary. Yolo mode may make aesthetic choices automatically; it cannot relax acceptance criteria or convert missing evidence into approval.
 
+Cap repair rounds at the project policy's `maxReviewIterations` value. After the cap, unresolved material findings remain `BLOCKED` with severity, reproducible case, evidence path and fix criterion; do not continue an infinite aesthetic loop.
+
 ## Accessibility and interaction
 
 Apply the project's accessibility requirements and the host platform's guidance. The web checklist below targets [WCAG 2.2 AA](https://www.w3.org/TR/WCAG22/), applying criterion-specific exceptions accurately. For native desktop/mobile controls, use the actual platform accessibility tree, assistive technology, focus/input behaviour, text scaling and target-size rules; do not claim a web scanner or CSS-token pass establishes native accessibility. At minimum check the applicable items:
@@ -36,11 +38,15 @@ Use configured budgets and baseline comparisons. Avoid adding a framework, font 
 
 [Core Web Vitals](https://web.dev/articles/vitals) uses good thresholds of LCP ≤2.5s, INP ≤200ms and CLS ≤0.1 at field p75. Laboratory and offline appliance measurements must be labelled as such; they cannot establish field compliance. Treat TBT or a scripted click measurement as its own metric, not as INP under another name.
 
-Establish offline applicability from the resolved project context. A required offline check cannot be waived because testing is unavailable. Only a scope with documented `offline: "not-required"` may mark offline evidence not applicable with a specific reason. Preserve legacy runs' recorded requirements. For an offline requirement, distinguish three conditions:
+Resolve offline applicability from the recorded project context before selecting checks. A required offline check cannot be waived because testing is unavailable. Only a resolved `offline: "not-required"` scope may mark offline evidence not applicable, with a specific reason. Unknown applicability stays pending.
+
+For `offline: "required"`, distinguish three conditions:
 
 1. **Cold installed operation:** start with fresh browser state and installed local resources, without WAN access. This exposes hidden CDN/font/bootstrap dependencies.
 2. **WAN-disabled operation:** preserve required LAN/local services while denying external connectivity. This is often the meaningful appliance condition.
 3. **Warm cached operation:** repeat with caches populated and document their role. It cannot substitute for the cold check.
+
+For `offline: "not-required"`, do not invent an offline product gate. Test relevant network failure and recovery behavior, and record why offline product operation is out of scope.
 
 Browser “offline” may disable local server access too; do not confuse that with WAN loss. Verify actual requests and failure handling. Required application assets must be installed locally before claiming offline readiness. A service worker that only works after an online visit does not demonstrate a cold offline deployment.
 

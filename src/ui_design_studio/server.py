@@ -28,6 +28,10 @@ ModelPolicy = Literal["auto-models", "current-model"]
 WorkerStatus = Literal["active", "blocked", "done", "failed", "pending"]
 ReviewStage = Literal["plan", "design"]
 WorkflowIntent = Literal["guided", "yolo", "assess-only", "resume"]
+Scope = Literal["fix", "component", "single-flow", "reference-adaptation", "full-redesign", "assess-only", "design-only"]
+Role = Literal["ui-art-director", "ui-implementer", "ui-page-designer", "ui-performance-reviewer",
+               "ui-quality-reviewer", "ui-theme-engineer", "ui-ux-researcher"]
+StatusCollection = Literal["artworks", "evidence"]
 FileList = Annotated[list[str], Field(min_length=1)]
 SKILLS = (
     "ui-design-studio", "ui-assess", "ui-plan", "ui-design", "ui-produce",
@@ -178,11 +182,25 @@ def create_server(repo: Path | str, dashboard_host: str = "0.0.0.0", dashboard_p
         result.update(connection_details(run_root.relative_to(root).as_posix()))
         return result
 
+    def compact_status_result(run: str, interval: float = 1.0) -> dict[str, Any]:
+        result = status_result(run, interval)
+        compact = design.compact_status(result)
+        compact.update(connection_details(run))
+        return compact
+
+    def status_page_result(run: str, collection: StatusCollection, page_size: int = 50,
+                           cursor: str | None = None, interval: float = 1.0) -> dict[str, Any]:
+        result = status_result(run, interval)
+        page = design.status_page(result, collection, page_size, cursor)
+        page.update({"run": result["run"], "observedAt": result["observedAt"]})
+        page.update(connection_details(run))
+        return page
+
     @tool()
     def ui_design_start_run(theme_id: str, mode: Mode = "guided", theme_action: ThemeAction = "auto",
-                            models: ModelPolicy | None = None) -> dict[str, Any] | CallToolResult:
+                            models: ModelPolicy | None = None, scope: Scope | None = None) -> dict[str, Any] | CallToolResult:
         """Create a pending run and select its dashboard. Resume the returned run after an opening failure."""
-        result = engine.init_run(root, mode=mode, action=theme_action, theme_id=theme_id, model_policy=models)
+        result = engine.init_run(root, mode=mode, action=theme_action, theme_id=theme_id, model_policy=models, scope=scope)
         relative = Path(result["run"]).relative_to(root).as_posix()
         result["run"] = relative
         try:
@@ -236,6 +254,30 @@ def create_server(repo: Path | str, dashboard_host: str = "0.0.0.0", dashboard_p
         """Check the selected run's evidence, coverage, freshness and approvals without weakening gates."""
         return engine.check_run(path_in(path, "run"))
 
+    @tool(destructive=True, idempotent=True)
+    def ui_design_scope_complete(path: str, target: str, artifacts: FileList,
+                                 blocker: list[str] | None = None, next: str | None = None) -> dict[str, Any]:
+        """Record bounded scope closure without granting full-theme release."""
+        return engine.complete_scope(path_in(path, "run"), target, run_files(path_in(path, "run"), artifacts), blocker, next)
+    @tool(read_only=True)
+    def ui_design_resume_check(path: str) -> dict[str, Any]:
+        """Check changed run dependencies and transitive stale nodes without rerunning unchanged work."""
+        return engine.resume_check(path_in(path, "run"))
+
+    @tool(read_only=True)
+    def ui_design_worker_packet(path: str, role: Role, objective: str, owned: FileList,
+                                instruction: list[str] | None = None,
+                                artifact: list[str] | None = None,
+                                allow: list[str] | None = None) -> dict[str, Any]:
+        """Generate a bounded role packet with original instructions and exact artifact hashes."""
+        run_root = path_in(path, "run")
+        if instruction is not None:
+            for item in instruction:
+                if not (run_root / item).exists():
+                    engine.safe_path(root, item)
+        return engine.worker_packet(run_root, role, objective, run_files(run_root, owned),
+                                    instruction, run_files(run_root, artifact) if artifact else None, allow)
+
     @tool(read_only=True)
     def ui_design_context_digest(path: str) -> dict[str, Any]:
         """Hash recorded project context. This does not resolve requirements."""
@@ -272,6 +314,17 @@ def create_server(repo: Path | str, dashboard_host: str = "0.0.0.0", dashboard_p
     def ui_design_status(run: str, interval: float = 1.0) -> dict[str, Any]:
         """Read one status snapshot plus verified dashboard details. Never start a watch loop."""
         return status_result(run, interval)
+
+    @tool(read_only=True)
+    def ui_design_status_compact(run: str, interval: float = 1.0) -> dict[str, Any]:
+        """Read bounded status metadata. Use status-page for artwork or evidence listings."""
+        return compact_status_result(run, interval)
+
+    @tool(read_only=True)
+    def ui_design_status_page(run: str, collection: StatusCollection, page_size: int = 50,
+                              cursor: str | None = None, interval: float = 1.0) -> dict[str, Any]:
+        """Read one revision-bound page of artwork or evidence metadata."""
+        return status_page_result(run, collection, page_size, cursor, interval)
 
     @tool(destructive=True, idempotent=True)
     def ui_design_progress(run: str, next_action: str | None = None,

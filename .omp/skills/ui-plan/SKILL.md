@@ -7,6 +7,15 @@ description: Develop and compare coherent UI concepts, palettes, storyboards, SV
 
 Perform the Plan phase only unless the user explicitly requests more.
 
+## Phase contract
+
+Trigger: a concept or visual-direction request after assessment.
+Minimum inputs: resolved context, findings, brief and constraints.
+Task contract: produce comparable directions against one shared brief.
+Outputs: rendered concepts, visual rules, selection and approval digest.
+Gate: guided user selection or independent `agent-yolo` decision.
+Escalate: missing assessment, unusable host constraints or unresolved choice.
+
 Resolve or refresh the [project context](../ui-design-studio/references/project-context.md) for this scope. Use the selected run's model policy, or `models=auto-models` by default for a new run; honor `models=current-model` when requested. Follow [model routing](../ui-design-studio/references/model-routing.md) before delegation. These settings do not expand this phase's scope.
 
 1. Read the [workflow](../ui-design-studio/references/workflow.md), [visual system](../ui-design-studio/references/visual-system.md), [decisions](../ui-design-studio/references/decisions.md) and [multi-agent guidance](../ui-design-studio/references/multi-agent.md).

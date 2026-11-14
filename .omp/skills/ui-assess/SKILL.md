@@ -7,6 +7,15 @@ description: Assess an existing interface and produce an evidence-based usabilit
 
 Perform the Assess phase only unless the user explicitly asks for the full lifecycle.
 
+## Phase contract
+
+Trigger: an assessment or `assess-only` request.
+Minimum inputs: project context, target inventory and a selected or new run.
+Task contract: inspect actual behavior and label evidence, inference and gaps.
+Outputs: findings, surface/state inventory, baselines and next-phase prerequisites.
+Gate: evidence-labelled findings and reconciled inventory.
+Escalate: missing requirements, runtime access or required automated checks.
+
 Resolve or refresh the [project context](../ui-design-studio/references/project-context.md) for this scope. Use the selected run's model policy, or `models=auto-models` by default for a new run; honor `models=current-model` when requested. Follow [model routing](../ui-design-studio/references/model-routing.md) before delegation. These settings do not expand this phase's scope.
 
 1. Read the director's [workflow](../ui-design-studio/references/workflow.md), [assessment](../ui-design-studio/references/assessment.md) and [quality gates](../ui-design-studio/references/quality-gates.md).

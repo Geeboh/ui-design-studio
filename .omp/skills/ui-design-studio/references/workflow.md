@@ -50,6 +50,8 @@ Record `plan/selection.md` and a Plan approval with actor, chosen elements, reje
 
 **Gate P:** Actual rendered alternatives exist; one coherent direction is selected; scope and design constraints are stable.
 
+Before freezing the shared contract, run one early host-feasibility slice from the selected direction. Use a representative real host component, page or dialog with deterministic data. Exercise typography, focus, dynamic content, theme variables, portal/dialog behavior, narrow viewport layout and one failure or recovery state. Keep writes confined to the prototype until this slice passes. Record host, fixture, contract revision, findings and limits; a web prototype does not prove native behavior. Stop expansion and escalate when the host cannot support the selected direction.
+
 ## 3. Design: every page and dialog
 
 The theme engineer freezes `design/contract.md`: tokens, semantic roles, shared components, states, responsive breakpoints, focus behaviour, icon grammar, density/motion axes, and intended theme API. Keep this readable by every worker. Allocate page families across at least two workers when the inventory permits; one additional reviewer checks coherence.

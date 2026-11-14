@@ -740,6 +740,36 @@ class DesignServerTests(unittest.TestCase):
         (root / "implementation.md").unlink()
         self.assertEqual(state.snapshot()["coverage"]["verified"], 0)
 
+    def test_sparse_applicability_changes_dashboard_required_count(self):
+        root = fixture_run(self.repo, self.theme)
+        coverage = studio.read_json(root / "coverage.json")
+        surface = coverage["surfaces"][0]
+        required = {("ready", "mobile"), ("ready", "desktop"), ("error", "mobile")}
+        surface["applicableCases"] = [{"state": state, "viewport": viewport} for state, viewport in sorted(required)]
+        surface["excludedCases"] = [{"state": "error", "viewport": "desktop", "reason": "Desktop uses inline recovery."}]
+        surface["cases"] = [case for case in surface["cases"] if (case["state"], case["viewport"]) in required]
+        write_json(root / "coverage.json", coverage)
+        snapshot = backend.DesignState(studio, root).snapshot()
+        self.assertEqual(snapshot["coverage"]["required"], 3)
+        self.assertEqual(snapshot["coverage"]["verified"], 3)
+
+    def test_status_page_rejects_stale_revision_cursor(self):
+        snapshot = backend.DesignState(studio, fixture_run(self.repo, self.theme)).snapshot()
+        page = backend.status_page(snapshot, "artworks", 1)
+        with self.assertRaisesRegex(ValueError, "stale or invalid"):
+            backend.status_page(snapshot, "artworks", 1, "old-revision:0")
+
+    def test_status_page_rejects_malformed_inputs(self):
+        snapshot = backend.DesignState(studio, fixture_run(self.repo, self.theme)).snapshot()
+        with self.assertRaisesRegex(ValueError, "stale or invalid"):
+            backend.status_page(snapshot, "artworks", 1, "malformed")
+        with self.assertRaisesRegex(ValueError, "must be artworks or evidence"):
+            backend.status_page(snapshot, "decisions", 1)
+        with self.assertRaisesRegex(ValueError, "between 1 and 100"):
+            backend.status_page(snapshot, "artworks", 0)
+        with self.assertRaisesRegex(ValueError, "stale or invalid"):
+            backend.status_page(snapshot, "artworks", 1, f"{snapshot['revision']}:999")
+
     def test_missing_duplicate_cases_do_not_inflate_coverage(self):
         root = fixture_run(self.repo, self.theme)
         coverage = studio.read_json(root / "coverage.json")

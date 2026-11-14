@@ -228,6 +228,14 @@ Name actual routes, components or user tasks if possible. The director resolves 
 
 If an existing finalized theme is involved, specify `theme=modify-default` when that is your intention. The package's first/new/default rules still apply when a run creates and finalizes a Studio theme; a one-dialog request is not permission to silently retheme unrelated pages.
 
+For an explicitly bounded run, record closure without changing `run.status` or `run.phase`:
+
+```bash
+tools/ui-design scope-complete docs/design/runs/ACTUAL_RUN_ID --target "settings button state" --artifacts component.md
+```
+
+This produces versioned `scopedCompletion` evidence. It never grants full-theme finalization or registration. Full-redesign runs must use the normal gates.
+
 ## 9. Modify the default theme
 
 **Use when:** you want to evolve the existing default rather than add another selectable theme.
@@ -279,6 +287,14 @@ If more than one run is relevant, identify the actual run directory or theme:
 ```
 
 Replace `ACTUAL_RUN_ID` with the real directory. Do not type that placeholder literally. The director checks for meaningful changes, refreshes stale evidence and retains valid decisions. It does not restart the interview because the conversation was compacted.
+
+The deterministic engine check is also available without reopening the dashboard:
+
+```bash
+tools/ui-design resume-check docs/design/runs/ACTUAL_RUN_ID
+```
+
+It reports changed dependencies and only their transitive stale nodes. A missing manifest blocks conservatively. Unchanged references are not bulk reread.
 
 ### Continue a version 1.0 dossier after upgrading
 

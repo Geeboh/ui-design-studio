@@ -7,6 +7,15 @@ description: Validate, document, register and package a completed reviewed UI th
 
 Perform Finalize only. Do not invent missing design, implementation or review work to satisfy a release gate.
 
+## Phase contract
+
+Trigger: explicit finalization of a completed, reviewed theme.
+Minimum inputs: current approvals, fresh evidence, package metadata and rollback.
+Task contract: validate current bytes, document, register only after full gates.
+Outputs: package, registry result, rollback record and handoff.
+Gate: all required full-theme checks and independent review pass.
+Escalate: stale evidence, missing approval, adapter check or authorization.
+
 Resolve or refresh the [project context](../ui-design-studio/references/project-context.md) for this scope. Use the selected run's model policy, or `models=auto-models` by default for a new run; honor `models=current-model` when requested. Follow [model routing](../ui-design-studio/references/model-routing.md) before delegation. These settings do not expand this phase's scope.
 
 1. Read the [workflow](../ui-design-studio/references/workflow.md), [theme contract](../ui-design-studio/references/theme-module.md), [run records](../ui-design-studio/references/run-records.md), [quality gates](../ui-design-studio/references/quality-gates.md) and [decision lifecycle](../ui-design-studio/references/decisions.md).

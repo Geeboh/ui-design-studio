@@ -44,6 +44,10 @@ Initialization starts an authenticated landing dashboard before any design run e
 
 The server supplies deterministic operations and instructions, not an autonomous design model. Your client supplies authorized file editing, browsers, models, and subagents. Without subagents, record sequential role passes. Missing model identity or required evidence remains a blocker. Existing evidence and registration gates do not change.
 
+`ui_design_status` remains the full compatibility snapshot. Use `ui_design_status_compact` for bounded gate, count, worker and blocker metadata. Use `ui_design_status_page` with `collection="artworks"` or `"evidence"`, a page size from 1 to 100, and the returned revision-bound cursor for detail. Full detail remains reachable; compact status does not include artwork bodies or evidence records.
+
+`ui_design_resume_check` reports changed manifest dependencies and transitive stale nodes. A missing manifest blocks conservatively. `ui_design_worker_packet` generates one selected-role packet with exact owned-file hashes, original instructions, scope, acceptance gates and reviewer independence. These tools do not execute workers or claim model observation.
+
 ## Print a verified address and QR code
 
 ```bash

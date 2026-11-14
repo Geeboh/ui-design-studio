@@ -7,6 +7,15 @@ description: Create complete adaptable screen, window and dialog mockups from an
 
 Perform the Design phase only unless the user explicitly requests implementation or the full lifecycle.
 
+## Phase contract
+
+Trigger: an approved-direction mockup or `design-only` request.
+Minimum inputs: resolved context, selected direction, contract owner and coverage.
+Task contract: specify applicable surfaces, states, viewports and interactions.
+Outputs: shared design contract, mockups, fixture links and interaction notes.
+Gate: applicable coverage complete and approval bound to current artifacts.
+Escalate: missing selection, host feasibility failure or unexplained coverage gaps.
+
 Resolve or refresh the [project context](../ui-design-studio/references/project-context.md) for this scope. Use the selected run's model policy, or `models=auto-models` by default for a new run; honor `models=current-model` when requested. Follow [model routing](../ui-design-studio/references/model-routing.md) before delegation. These settings do not expand this phase's scope.
 
 1. Read the [workflow](../ui-design-studio/references/workflow.md), [visual system](../ui-design-studio/references/visual-system.md), [quality gates](../ui-design-studio/references/quality-gates.md) and [multi-agent guidance](../ui-design-studio/references/multi-agent.md).

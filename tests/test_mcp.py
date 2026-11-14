@@ -26,7 +26,7 @@ from mcp.client.stdio import stdio_client
 from mcp.shared.exceptions import McpError
 from mcp.types import CallToolResult
 
-from test_studio import fixture_theme, studio, write_json
+from test_studio import fixture_run, fixture_theme, studio, write_json
 
 SOURCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SOURCE / "src"))
@@ -38,7 +38,8 @@ ENTRY = "from ui_design_studio.cli import mcp_main; raise SystemExit(mcp_main())
 CLI_ENTRY = "from ui_design_studio.cli import main; raise SystemExit(main())"
 COMMANDS = (
     "doctor", "theme-new", "build-theme", "check-theme", "theme-digest", "check-run",
-    "context-digest", "models-digest", "decision-digest", "package", "register", "status",
+    "context-digest", "models-digest", "decision-digest", "scope-complete", "resume-check", "worker-packet",
+    "package", "register", "status",
     "progress", "worker", "artwork", "approval-request", "design-cleanup",
 )
 
@@ -155,6 +156,7 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             listed = await client.list_tools()
             tools = {tool.name: tool for tool in listed.tools}
             expected = {"ui_design_" + name.replace("-", "_") for name in COMMANDS}
+            expected.update({"ui_design_status_compact", "ui_design_status_page"})
             expected.update({"ui_design_start_run", "ui_design_resume_run", "ui_design_dashboard_info", "ui_design_read_guide"})
             self.assertEqual(set(tools), expected)
             parser = studio.parser()
@@ -177,7 +179,8 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                             enum = next(item["enum"] for item in alternatives if "enum" in item)
                             self.assertEqual(set(enum), set(action.choices))
             self.assertFalse(tools["ui_design_status"].annotations.readOnlyHint)
-            for name in ("doctor", "check_theme", "check_run", "decision_digest", "context_digest", "models_digest"):
+            for name in ("doctor", "check_theme", "check_run", "decision_digest", "context_digest", "models_digest",
+                         "status_compact", "status_page"):
                 self.assertTrue(tools["ui_design_" + name].annotations.readOnlyHint)
             self.assertNotIn("ui_design_models_apply", tools)
             self.assertNotIn("ui_design_design_serve", tools)
@@ -258,6 +261,21 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             status = await self.call(client, "ui_design_status", run=relative)
             self.assertEqual(status["nextAction"], "Review the first concept")
             self.assertEqual(status["dashboard"]["instanceId"], started["dashboard"]["instanceId"])
+            compact = await self.call(client, "ui_design_status_compact", run=relative)
+            self.assertNotIn("artworks", compact)
+            self.assertNotIn("evidence", compact)
+            self.assertEqual(compact["revision"], status["revision"])
+            page = await self.call(client, "ui_design_status_page", run=relative, collection="artworks", page_size=1)
+            self.assertEqual(page["collection"], "artworks")
+            pages = [page]
+            while pages[-1]["nextCursor"] is not None:
+                pages.append(await self.call(client, "ui_design_status_page", run=relative, collection="artworks",
+                                              page_size=1, cursor=pages[-1]["nextCursor"]))
+            paths = [item["path"] for item in sum((entry["items"] for entry in pages), [])]
+            self.assertIn("tiny.png", paths)
+            self.assertEqual(len(paths), page["total"])
+            evidence_page = await self.call(client, "ui_design_status_page", run=relative, collection="evidence", page_size=1)
+            self.assertEqual(evidence_page["total"], 0)
             resource = self.resource_json(await client.read_resource("ui-design://status/" + quote(relative, safe="")))
             self.assertEqual(resource["run"]["id"], document["id"])
             self.assertEqual(resource["nextAction"], "Review the first concept")
@@ -275,6 +293,66 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assert_closed(started["landing"]["localUrl"])
         self.assertTrue((root / "run.json").exists())
         self.assertTrue((root / "artwork-library").is_dir())
+
+    async def test_resume_check_and_worker_packet_are_bounded(self):
+        async with self.connect() as (client, unused):
+            started = await self.call(client, "ui_design_start_run", theme_id="fixture", scope="component")
+            relative = started["run"]
+            root = self.repo / relative
+            (root / "component.md").write_text("Synthetic owned component\n", encoding="utf-8")
+            resume = await self.call(client, "ui_design_resume_check", path=relative)
+            self.assertEqual(resume["status"], "PASS")
+            packet = await self.call(client, "ui_design_worker_packet", path=relative,
+                                     role="ui-implementer", objective="Fix component state", owned=[relative + "/component.md"])
+            self.assertEqual(packet["status"], "PASS")
+            self.assertEqual(packet["role"], "ui-implementer")
+            self.assertTrue(packet["instructions"])
+            self.assertEqual(packet["concurrencyCeiling"], 3)
+            missing = await self.fail(client, "ui_design_worker_packet", path=relative,
+                                       role="ui-implementer", objective="Fix component state",
+                                       owned=[relative + "/component.md"], instruction=["project-context.md"])
+            self.assertTrue("original applicable instructions" in missing.structuredContent["error"])
+
+    async def test_stale_bound_input_never_passes_mcp_check_or_status(self):
+        root = fixture_run(self.repo, self.theme)
+        relative = root.relative_to(self.repo).as_posix()
+        (root / "visual-source.txt").write_text("Initial MCP-bound input\n", encoding="utf-8")
+        record = studio.read_json(root / "run.json")
+        visual = next(entry for entry in record["evidence"] if entry["kind"] == "visual")
+        visual["inputs"] = ["visual-source.txt"]
+        visual["inputsDigest"] = studio.file_digest(root, visual["inputs"])
+        decisions = studio.read_json(root / "decisions.json")
+        decisions["decisions"] = [entry for entry in decisions["decisions"] if entry["stage"] != "finalize"]
+        write_json(root / "run.json", record)
+        write_json(root / "decisions.json", decisions)
+        review = studio.check_run(root)
+        decisions["decisions"].append({"stage": "finalize", "actor": "director", "outcome": "approved",
+                                       "rationale": "Synthetic MCP bound-input fixture",
+                                       "inputsDigest": review["reviewDigest"]})
+        write_json(root / "decisions.json", decisions)
+        (root / "visual-source.txt").write_text("Changed MCP-bound input\n", encoding="utf-8")
+        async with self.connect() as (client, unused):
+            checked = await self.fail(client, "ui_design_check_run", path=relative)
+            self.assertEqual(checked.structuredContent["status"], "FAIL")
+            status = await self.call(client, "ui_design_status", run=relative)
+            finalize = next(gate for gate in status["gates"] if gate["id"] == "finalize")
+            self.assertNotEqual(finalize["status"], "passed")
+
+    async def test_scoped_completion_never_grants_mcp_release(self):
+        async with self.connect() as (client, unused):
+            started = await self.call(client, "ui_design_start_run", theme_id="fixture", scope="component")
+            relative = started["run"]
+            root = self.repo / relative
+            (root / "component.md").write_text("Synthetic component closure\n", encoding="utf-8")
+            completed = await self.call(client, "ui_design_scope_complete", path=relative,
+                                        target="settings button state",
+                                        artifacts=[relative + "/component.md"])
+            self.assertEqual(completed["status"], "PASS")
+            self.assertEqual(completed["fullThemeRelease"], "BLOCKED")
+            document = json.loads((root / "run.json").read_text(encoding="utf-8"))
+            self.assertEqual(document["status"], "pending")
+            blocked = await self.fail(client, "ui_design_register", theme="fixture", run=relative)
+            self.assertIn("Run is BLOCKED", blocked.structuredContent["error"])
 
     async def test_repository_relative_inputs_and_configured_directory_boundaries(self):
         async with self.connect() as (client, unused):

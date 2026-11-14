@@ -7,6 +7,15 @@ description: Implement approved UI mockups and a portable theme through bounded 
 
 Perform the Produce phase only unless the user explicitly includes finalization or release.
 
+## Phase contract
+
+Trigger: an approved design ready for host implementation.
+Minimum inputs: context, Git policy, design contract, mockups and coverage.
+Task contract: implement a vertical slice, then bounded non-overlapping surfaces.
+Outputs: host code, adapter, rendered checks and implementation evidence.
+Gate: actual host behavior, accessibility, performance and independent review.
+Escalate: missing approval, host mismatch, shared-file conflict or failed check.
+
 Resolve or refresh the [project context](../ui-design-studio/references/project-context.md) for this scope. Use the selected run's model policy, or `models=auto-models` by default for a new run; honor `models=current-model` when requested. Follow [model routing](../ui-design-studio/references/model-routing.md) before delegation. These settings do not expand this phase's scope.
 
 1. Read the [workflow](../ui-design-studio/references/workflow.md), [theme contract](../ui-design-studio/references/theme-module.md), [quality gates](../ui-design-studio/references/quality-gates.md) and [multi-agent guidance](../ui-design-studio/references/multi-agent.md).

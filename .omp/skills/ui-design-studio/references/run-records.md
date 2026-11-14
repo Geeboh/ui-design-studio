@@ -16,6 +16,8 @@ Run all helpers through `tools/ui-design`, which selects the installed virtual e
 ```bash
 tools/ui-design doctor --repo .
 tools/ui-design init-run --repo . --mode guided --theme-action auto --theme-id working-title
+tools/ui-design resume-check docs/design/runs/RUN_ID
+tools/ui-design worker-packet docs/design/runs/RUN_ID --role ui-implementer --objective "Bounded component state" --owned component.md
 tools/ui-design context-digest docs/design/runs/RUN_ID
 tools/ui-design models-digest docs/design/runs/RUN_ID
 tools/ui-design theme-new --repo . --id fieldstone --name "Fieldstone"
@@ -52,6 +54,8 @@ Replace `RUN_ID` with the exact directory returned by `init-run`; do not type th
     "sources": []
   },
   "modelRouting": {
+    "schemaVersion": "1.2",
+    "selectedRoles": [],
     "status": "pending",
     "path": "model-routing.md",
     "sha256": null,
@@ -59,6 +63,9 @@ Replace `RUN_ID` with the exact directory returned by `init-run`; do not type th
     "sessionThinking": null,
     "assignments": []
   },
+  "scopeSchemaVersion": "1.0",
+  "scope": "full-redesign",
+  "scopeRationale": "Source-backed scope rationale",
   "themeAction": "new",
   "themeId": "working-title",
   "phase": "assessment",
@@ -72,6 +79,9 @@ Replace `RUN_ID` with the exact directory returned by `init-run`; do not type th
 Resolve the actual project requirements using [project-context.md](project-context.md), then record its source labels, resolved offline applicability and current context-file hash. Resolve models through [model-routing.md](model-routing.md), record the exact active provider/model and thinking setting, and record verified `agent`, `model`, `thinking` and `rationale` entries for each of the seven shipped specialists. `provider-default` is an explicit thinking value where no controllable effort exists. Under `current-model`, every assignment must match both the session model and thinking snapshot. Set each context/routing status to `resolved` only after the corresponding work is complete, and record its actual document hash. Pending or unknown records block complete finalization; model names written into a record do not configure or prove OMP routing.
 
 `coverage.json` and `decisions.json` continue to use schema version `1.0`. Existing v1.0 `run.json` files remain readable under their legacy contract. `models-apply` and the new context/routing records require run schema 1.1. Preserve completed legacy dossiers; for incomplete legacy work create the linked 1.1 continuation described in [workflow.md](workflow.md#7-continue-a-legacy-10-run). The director performs that procedure; the user need not hand-edit a schema. Do not rewrite old records merely to make a check pass, or drop required evidence during an upgrade.
+New runs also contain `manifest.json` schema `1.0`. It records confined dependency paths and hashes, source IDs, a small dependency DAG, Git/environment facts and a revision. `resume-check` re-reads only listed sources, reports changed dependencies and transitive stale nodes, ignores unrelated files and blocks conservatively when the manifest is absent. It never fabricates legacy freshness.
+
+`worker-packet` accepts one selected specialist role, objective and owned run-relative files. It emits hashes for owned artifacts and original applicable instructions, the selected scope, contract revision, required evidence, allowed actions and reviewer-independence rules. New schema `1.2` may select a subset of roles; legacy `1.1` still requires all seven assignments. Packet generation does not claim that a worker executed or that a model was observed.
 
 Set `implementer` to the actual integrator/team identity, not a made-up external person. Finalization needs passed evidence of kinds `integration`, `visual`, `accessibility`, `offline`, `performance`, and `review`. A result file should name the command/procedure, source revision, tested scope, viewport/device/browser/cache/network conditions, observed outcome, reviewer, limitations and relevant screenshots/logs. Distinguish lab performance from field performance and expert review from user research.
 
@@ -117,6 +127,7 @@ Populate `coverage.json` from discovery, not from the subset a designer happened
 ```
 
 Kinds are `page` or `dialog`; use `page` for a native full screen/window and `dialog` for a native sheet or modal surface. `route` identifies the actual navigation path or trigger, including native navigation when relevant. Viewport labels may name required device/window sizes, orientations and scaling conditions. Keep native-toolkit resources and checks explicit in the evidence; this coverage mapping does not make the web theme compiler validate a native package. Keep optional provenance/applicability explanations as additional fields or in the report. For each declared state × viewport combination add:
+Coverage schema `1.1` may add `applicabilitySchema: "1.0"`, `applicableCases` and `excludedCases`. Each case is a `{ "state", "viewport" }` object; every excluded case needs a nonempty `reason`. The union of applicable and excluded cases must equal the declared state × viewport domain, and critical failure/recovery/empty states cannot be entirely excluded. Legacy records without these fields retain the full Cartesian interpretation.
 
 ```json
 {

@@ -15,7 +15,7 @@ Measure the actual host's payload and runtime cost: CSS/JS, fonts, icons and req
 
 Compare baseline and candidate under the same recorded conditions: source revision, browser/device or emulation, viewport, network/local services, cache, commands and sample count. State variability and measurement limitations. Do not invent speedups or equate one noisy run with a stable improvement.
 
-Test cold installed operation, WAN-disabled operation with necessary LAN/local services retained, and warm cached operation distinctly. Browser offline mode may also block local servers. Verify actual requests and local bootstrap assets; successful operation after an online visit does not prove cold offline readiness.
+Apply offline checks only after resolving `projectContext.offline`. For `required`, run cold installed, WAN-disabled with required LAN/local services, and warm-cache checks. For `not-required`, do not invent an offline product gate; run relevant network failure/recovery checks and record the applicability reason. For `unknown` or unresolved context, leave offline applicability pending and do not waive the required checks.
 
 Label laboratory results accurately. Core Web Vitals field p75 cannot be established by a single local run; do not rename TBT or a scripted interaction measurement as INP.
 

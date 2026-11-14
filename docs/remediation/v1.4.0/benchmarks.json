@@ -1,0 +1,240 @@
+{
+  "compactStatus": [
+    {
+      "baseline": {
+        "maxMs": 0.0165,
+        "meanMs": 0.013,
+        "minMs": 0.0113,
+        "samples": 5,
+        "stdevMs": 0.0019
+      },
+      "baselineBytes": 394,
+      "changed": {
+        "maxMs": 0.0063,
+        "meanMs": 0.0035,
+        "minMs": 0.0024,
+        "samples": 5,
+        "stdevMs": 0.0015
+      },
+      "changedBytes": 388,
+      "items": 0
+    },
+    {
+      "baseline": {
+        "maxMs": 0.2712,
+        "meanMs": 0.2229,
+        "minMs": 0.2075,
+        "samples": 5,
+        "stdevMs": 0.0244
+      },
+      "baselineBytes": 37298,
+      "changed": {
+        "maxMs": 0.006,
+        "meanMs": 0.0035,
+        "minMs": 0.0023,
+        "samples": 5,
+        "stdevMs": 0.0014
+      },
+      "changedBytes": 394,
+      "items": 100
+    },
+    {
+      "baseline": {
+        "maxMs": 2.1397,
+        "meanMs": 2.0263,
+        "minMs": 1.9785,
+        "samples": 5,
+        "stdevMs": 0.0584
+      },
+      "baselineBytes": 369401,
+      "changed": {
+        "maxMs": 0.0056,
+        "meanMs": 0.0038,
+        "minMs": 0.003,
+        "samples": 5,
+        "stdevMs": 0.0009
+      },
+      "changedBytes": 397,
+      "items": 1000
+    }
+  ],
+  "fixture": "fixed in scripts/remediation_benchmark.py",
+  "limitations": [
+    "No live provider, browser, device, or user data was used.",
+    "Timing values are local synthetic measurements, not field performance.",
+    "Workload suite values are deterministic orchestration-shape simulations."
+  ],
+  "mode": "offline-synthetic",
+  "phaseContext": {
+    "baseline": {
+      "bytes": 32244,
+      "description": "all public phase skills preloaded",
+      "words": 3929
+    },
+    "caveat": "Baseline is a same-revision full-preload proxy, not an unmodified archive measurement.",
+    "changed": {
+      "bytes": 21404,
+      "description": "director router plus workflow reference",
+      "words": 2900
+    }
+  },
+  "python": "3.12.3",
+  "schemaVersion": "1.0",
+  "scopedWorkflow": {
+    "baseline": {
+      "description": "legacy Cartesian state x viewport grid",
+      "requiredCases": 4
+    },
+    "changed": {
+      "description": "explicit applicable cases with one explained exclusion",
+      "requiredCases": 3
+    },
+    "fixture": "one surface, two states, two viewports"
+  },
+  "status": "PASS",
+  "validationHashReuse": {
+    "baseline": {
+      "maxMs": 0.5249,
+      "meanMs": 0.4697,
+      "minMs": 0.437,
+      "samples": 3,
+      "shaCalls": 6,
+      "stdevMs": 0.0392
+    },
+    "changed": {
+      "maxMs": 0.4713,
+      "meanMs": 0.3687,
+      "minMs": 0.3115,
+      "samples": 3,
+      "shaCalls": 2,
+      "stdevMs": 0.0727
+    },
+    "fixture": "one report and one shared bound input"
+  },
+  "workloadSuite": {
+    "fixtureRequirements": {
+      "offline": "required",
+      "platform": "web",
+      "quality": "WCAG-2.2-AA",
+      "states": [
+        "ready",
+        "error"
+      ],
+      "viewports": [
+        "mobile",
+        "desktop"
+      ]
+    },
+    "simulation": "Deterministic orchestration shape only; no provider or user run was executed.",
+    "workloads": [
+      {
+        "baseline": {
+          "description": "full workflow shape",
+          "orchestrationSteps": 9
+        },
+        "changed": {
+          "description": "scope-aware workflow shape",
+          "orchestrationSteps": 4
+        },
+        "expectedAcceptance": [
+          "affected state coverage",
+          "independent review",
+          "no unrelated concepts"
+        ],
+        "id": "tiny-component-fix",
+        "request": "Fix one existing component state.",
+        "scope": "fix"
+      },
+      {
+        "baseline": {
+          "description": "full workflow shape",
+          "orchestrationSteps": 9
+        },
+        "changed": {
+          "description": "scope-aware workflow shape",
+          "orchestrationSteps": 7
+        },
+        "expectedAcceptance": [
+          "page coverage",
+          "responsive states",
+          "independent review"
+        ],
+        "id": "new-page-established-system",
+        "request": "Add one page using the existing system.",
+        "scope": "component"
+      },
+      {
+        "baseline": {
+          "description": "full workflow shape",
+          "orchestrationSteps": 9
+        },
+        "changed": {
+          "description": "scope-aware workflow shape",
+          "orchestrationSteps": 7
+        },
+        "expectedAcceptance": [
+          "reference interpretation",
+          "flow recovery",
+          "accessibility checks"
+        ],
+        "id": "reference-inspired-flow",
+        "request": "Adapt one reference-driven flow.",
+        "scope": "reference-adaptation"
+      },
+      {
+        "baseline": {
+          "description": "full workflow shape",
+          "orchestrationSteps": 9
+        },
+        "changed": {
+          "description": "scope-aware workflow shape",
+          "orchestrationSteps": 7
+        },
+        "expectedAcceptance": [
+          "offline cold/WAN/warm checks",
+          "long-content handling",
+          "recovery state"
+        ],
+        "id": "dense-offline-appliance-screen",
+        "request": "Add a dense offline appliance screen.",
+        "scope": "single-flow"
+      },
+      {
+        "baseline": {
+          "description": "full workflow shape",
+          "orchestrationSteps": 9
+        },
+        "changed": {
+          "description": "scope-aware workflow shape",
+          "orchestrationSteps": 9
+        },
+        "expectedAcceptance": [
+          "two concepts",
+          "early host feasibility",
+          "full applicable coverage"
+        ],
+        "id": "full-multi-page-redesign",
+        "request": "Redesign multiple pages across the system.",
+        "scope": "full-redesign"
+      },
+      {
+        "baseline": {
+          "description": "full workflow shape",
+          "orchestrationSteps": 9
+        },
+        "changed": {
+          "description": "scope-aware workflow shape",
+          "orchestrationSteps": 4
+        },
+        "expectedAcceptance": [
+          "changed dependency stale",
+          "unrelated work retained",
+          "re-review required"
+        ],
+        "id": "resume-after-token-change",
+        "request": "Resume after a shared token changes.",
+        "scope": "component"
+      }
+    ]
+  }
+}

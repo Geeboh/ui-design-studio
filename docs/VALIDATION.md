@@ -182,6 +182,7 @@ python3 -m venv .venv-test
 .venv-test/bin/python -m unittest discover -s tests -v
 bash -n install.sh tools/ui-design
 .venv-test/bin/python scripts/package_release.py --check
+.venv-test/bin/python scripts/remediation_benchmark.py > docs/remediation/v1.4.0/benchmarks.json
 ```
 
 The original OMP-only helpers and their tests use Python's standard library. Adapter tests require the dependencies in `pyproject.toml` and the verification-only packages shown above. Use the project's own build, browser/native, accessibility and performance checks for its actual interface. See [Distribution](DISTRIBUTION.md) for release reproduction and [Installation](INSTALLATION.md) for installation/upgrade troubleshooting.

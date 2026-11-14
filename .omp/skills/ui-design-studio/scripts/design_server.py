@@ -692,22 +692,17 @@ def safe_svg(studio, root, source, content, files, prefix):
     return ET.tostring(document, encoding="utf-8", xml_declaration=True)
 
 
-def fresh_evidence(studio, root, entry):
-    if not isinstance(entry, dict) or entry.get("status") != "passed" or not all(isinstance(entry.get(key), str) and entry[key].strip() for key in ("id", "kind", "reviewer", "recordedAt")):
-        return False
+def fresh_evidence(studio, root, entry, digest_cache=None, offline_required=True):
     try:
-        if studio.sha_file(studio.safe_path(root, entry.get("path"))) != entry.get("sha256"):
-            return False
-        if "inputs" in entry:
-            return studio.file_digest(root, entry["inputs"]) == entry.get("inputsDigest")
-        return True
-    except (studio.StudioError, OSError, ValueError, TypeError):
+        return studio.validate_evidence_entry(
+            root, entry, digest_cache, offline_required=offline_required).get("valid", False)
+    except (studio.StudioError, OSError, ValueError, TypeError, KeyError):
         return False
 
 
-def coverage_counts(studio, root, coverage, evidence):
+def coverage_counts(studio, root, coverage, evidence, digest_cache=None, offline_required=True):
     required = mockups = verified = 0
-    valid = isinstance(coverage, dict) and coverage.get("schemaVersion") == "1.0" and isinstance(coverage.get("surfaces"), list)
+    valid = isinstance(coverage, dict) and coverage.get("schemaVersion") in ("1.0", "1.1") and isinstance(coverage.get("surfaces"), list)
     surfaces = coverage.get("surfaces", []) if valid else []
     valid = valid and bool(surfaces)
     seen = set()
@@ -722,22 +717,23 @@ def coverage_counts(studio, root, coverage, evidence):
         if not isinstance(surface, dict):
             valid = False
             continue
-        states, viewports = surface.get("states"), surface.get("viewports")
         sid = surface.get("id")
         shape = (isinstance(sid, str) and sid and sid not in seen and surface.get("kind") in ("page", "dialog")
-                 and isinstance(surface.get("route"), str) and bool(surface["route"].strip())
-                 and all(isinstance(items, list) and items and all(isinstance(x, str) and x for x in items)
-                         and len(items) == len(set(items)) for items in (states, viewports)))
+                 and isinstance(surface.get("route"), str) and bool(surface["route"].strip()))
         if not shape:
             valid = False
             continue
         seen.add(sid)
-        required += len(states) * len(viewports)
+        try:
+            expected, _ = studio.coverage_case_sets(surface)
+        except (studio.StudioError, OSError, ValueError, TypeError, KeyError):
+            valid = False
+            continue
+        required += len(expected)
         cases = surface.get("cases", [])
         if not isinstance(cases, list):
             valid = False
             continue
-        expected = {(state, viewport) for state in states for viewport in viewports}
         grouped = {}
         for case in cases:
             if not isinstance(case, dict) or not isinstance(case.get("state"), str) or not isinstance(case.get("viewport"), str):
@@ -759,7 +755,8 @@ def coverage_counts(studio, root, coverage, evidence):
                 mockups += 1
                 studio.safe_path(root, case.get("implementation"))
                 qa = case.get("qaEvidence")
-                if isinstance(qa, list) and qa and all(isinstance(eid, str) and fresh_evidence(studio, root, evidence_ids.get(eid)) for eid in qa):
+                if isinstance(qa, list) and qa and all(isinstance(eid, str) and fresh_evidence(
+                        studio, root, evidence_ids.get(eid), digest_cache, offline_required) for eid in qa):
                     verified += 1
             except (studio.StudioError, OSError, ValueError, TypeError):
                 continue
@@ -835,7 +832,7 @@ class DesignState:
                         "coverage": {"required": 0, "mockups": 0, "verified": 0, "inventoryComplete": False},
                         "nextAction": "Repair the run records before continuing.", "blockers": [message], "warnings": [message],
                         "workers": [], "tasks": [], "statistics": {"artworks": 0, "workers": 0, "tasks": 0, "evidence": 0, "passedEvidence": 0, "elapsedSeconds": 0},
-                        "history": list(self.history), "artworks": [], "approvals": [], "decisions": []}
+                        "history": list(self.history), "artworks": [], "evidence": [], "approvals": [], "decisions": []}
 
     def _snapshot(self):
         studio, root = self.studio, self.root
@@ -847,7 +844,13 @@ class DesignState:
         if not isinstance(evidence, list):
             evidence = []
             warnings.append("run.evidence is not a list")
-        counts, inventory_valid = coverage_counts(studio, root, coverage, evidence)
+        validation_cache = {}
+        try:
+            offline_required, unused = studio.check_project_context(root, run, [])
+        except (studio.StudioError, OSError, ValueError, TypeError, KeyError):
+            offline_required = True
+        counts, inventory_valid = coverage_counts(
+            studio, root, coverage, evidence, validation_cache, offline_required)
         artworks, art_warnings = self.library.discover()
         warnings.extend(art_warnings)
         published_art = []
@@ -855,6 +858,13 @@ class DesignState:
             item = {key: art[key] for key in ("id", "path", "title", "context", "kind", "createdAt", "version")}
             item["url"] = f"preview/{self.preview_capability}/{art['version']}/" + quote(art["path"], safe="/") if self.preview_capability else ""
             published_art.append(item)
+        published_evidence = []
+        for entry in evidence:
+            if isinstance(entry, dict):
+                item = {key: entry[key] for key in ("id", "kind", "status", "path", "sha256", "reviewer", "recordedAt", "inputs", "inputsDigest", "reason") if key in entry}
+                if isinstance(item.get("inputs"), list):
+                    item["inputs"] = list(item["inputs"])
+                published_evidence.append(item)
         progress = read_record(studio, root, "progress.json", {})
         need(studio, isinstance(progress, dict), "progress.json must be an object")
         workers = []
@@ -911,13 +921,12 @@ class DesignState:
         design_upstream = set(latest.get("plan", {}).get("inputs", [])).issubset(set(latest.get("design", {}).get("inputs", [])))
         design_ok = plan_ok and approval_current["design"] and design_upstream and counts["required"] > 0 and counts["mockups"] == counts["required"]
         gate("design", "Design", design_ok, approval_errors.get("design", "Current upstream-bound Design approval and all mockups required."), "design" in approval_errors or latest.get("design", {}).get("outcome") == "rejected" or (approval_current["design"] and not design_upstream))
-        fresh = [entry for entry in evidence if fresh_evidence(studio, root, entry)]
+        fresh = [entry for entry in evidence if fresh_evidence(
+            studio, root, entry, validation_cache, offline_required)]
         kinds = {entry.get("kind") for entry in fresh}
-        try:
-            offline_required, unused = studio.check_project_context(root, run, [])
-        except (studio.StudioError, OSError, ValueError, TypeError, KeyError):
-            offline_required = True
-        if not offline_required and any(isinstance(entry, dict) and entry.get("kind") == "offline" and entry.get("status") == "not-applicable" and all(isinstance(entry.get(key), str) and entry[key].strip() for key in ("reason", "reviewer", "recordedAt")) for entry in evidence):
+        if not offline_required and any(isinstance(entry, dict) and entry.get("kind") == "offline"
+                                        and entry.get("status") == "not-applicable"
+                                        for entry in evidence):
             kinds.add("offline")
         reviewers = {entry.get("reviewer") for entry in fresh if entry.get("kind") == "review"}
         implementer = run.get("implementer")
@@ -925,7 +934,9 @@ class DesignState:
                     and isinstance(implementer, str) and bool(implementer.strip()) and bool(reviewers) and implementer not in reviewers
                     and isinstance(run.get("themeDigest"), str) and HASH.fullmatch(run["themeDigest"]) is not None)
         evidence_failed = any(isinstance(entry, dict) and entry.get("status") == "failed" for entry in evidence)
-        evidence_stale = any(isinstance(entry, dict) and entry.get("status") == "passed" and not fresh_evidence(studio, root, entry) for entry in evidence)
+        evidence_stale = any(isinstance(entry, dict) and entry.get("status") == "passed"
+                             and not fresh_evidence(studio, root, entry, validation_cache, offline_required)
+                             for entry in evidence)
         gate("produce", "Produce", produced, "All implementations, fresh passed QA, required evidence, theme digest and independent review required.", evidence_failed or evidence_stale)
         check_error = ""
         try:
@@ -978,7 +989,7 @@ class DesignState:
                 "server": self.server_details(), "gates": gates, "coverage": counts,
                 "nextAction": next_action, "blockers": blockers, "warnings": warnings, "workers": workers, "tasks": tasks,
                 "statistics": {"artworks": len(published_art), "workers": len(workers), "tasks": len(tasks), "evidence": len(evidence), "passedEvidence": len(fresh), "elapsedSeconds": elapsed},
-                "artworks": published_art, "approvals": approvals,
+                "artworks": published_art, "evidence": published_evidence, "approvals": approvals,
                 "decisions": [{key: decision[key] for key in ("stage", "actor", "outcome", "rationale", "recordedAt", "optionId", "inputsDigest") if key in decision}
                               for decision in decisions["decisions"]]}
         stable = {key: value for key, value in snap.items() if key != "statistics"}
@@ -1013,6 +1024,59 @@ def status_lines(snapshot):
     else:
         lines.append("Design server is not running. Start design-serve for the browser dashboard.")
     return [re.sub(r"[\x00-\x1f\x7f-\x9f]", " ", line) for line in lines]
+
+def compact_status(snapshot, *, max_items=8, max_text=256):
+    """Return bounded status metadata without artwork, evidence, history, or decision bodies."""
+    def text(value):
+        return value[:max_text] if isinstance(value, str) else ""
+
+    return {
+        "schemaVersion": "1.1",
+        "revision": snapshot.get("revision", ""),
+        "observedAt": snapshot.get("observedAt", ""),
+        "run": dict(snapshot.get("run", {})),
+        "gates": [{"id": gate.get("id", ""), "status": gate.get("status", "")}
+                  for gate in snapshot.get("gates", [])[:max_items]],
+        "coverage": dict(snapshot.get("coverage", {})),
+        "statistics": dict(snapshot.get("statistics", {})),
+        "nextAction": text(snapshot.get("nextAction")),
+        "blockers": [text(value) for value in snapshot.get("blockers", [])[:max_items]],
+        "warnings": [text(value) for value in snapshot.get("warnings", [])[:max_items]],
+        "workers": [{"id": worker.get("id", ""), "status": worker.get("status", ""), "task": text(worker.get("task"))}
+                    for worker in snapshot.get("workers", [])[:max_items]],
+        "tasks": [{"id": task.get("id", ""), "status": task.get("status", ""), "title": text(task.get("title"))}
+                  for task in snapshot.get("tasks", [])[:max_items]],
+    }
+
+
+def status_page(snapshot, collection, page_size=50, cursor=None):
+    """Return a stable revision-bound page for artwork or evidence metadata."""
+    if collection not in ("artworks", "evidence"):
+        raise ValueError("Status collection must be artworks or evidence")
+    if not isinstance(page_size, int) or isinstance(page_size, bool) or not 1 <= page_size <= 100:
+        raise ValueError("Status page size must be between 1 and 100")
+    revision = snapshot.get("revision", "")
+    offset = 0
+    if cursor:
+        prefix, separator, suffix = str(cursor).rpartition(":")
+        if not separator or prefix != revision or not suffix.isdigit():
+            raise ValueError("Status cursor is stale or invalid")
+        offset = int(suffix)
+    items = sorted(snapshot.get(collection, []), key=lambda item: (
+        str(item.get("id", "")), str(item.get("path", ""))))
+    if offset > len(items):
+        raise ValueError("Status cursor is stale or invalid")
+    page = items[offset:offset + page_size]
+    next_offset = offset + len(page)
+    return {
+        "status": "PASS",
+        "schemaVersion": "1.0",
+        "revision": revision,
+        "collection": collection,
+        "items": page,
+        "nextCursor": f"{revision}:{next_offset}" if next_offset < len(items) else None,
+        "total": len(items),
+    }
 
 
 def yolo_ready(studio, root):
