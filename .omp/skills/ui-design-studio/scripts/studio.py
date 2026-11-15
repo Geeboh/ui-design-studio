@@ -79,7 +79,7 @@ def digest_bytes(value):
 
 def sha_file(path):
     path = Path(path)
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     descriptor = os.open(path, flags)
     try:
         with os.fdopen(descriptor, "rb") as handle:
@@ -101,8 +101,15 @@ def now():
 
 def read_json(path):
     try:
-        with Path(path).open(encoding="utf-8") as handle:
-            return json.load(handle)
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+        try:
+            require(stat.S_ISREG(os.fstat(descriptor).st_mode), f"Not a regular file: {path}")
+            with os.fdopen(descriptor, encoding="utf-8") as handle:
+                descriptor = None
+                return json.load(handle)
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise StudioError(f"Cannot read JSON {path}: {exc}") from exc
 
@@ -947,9 +954,9 @@ def coverage_case_sets(surface):
     require(required.isdisjoint(omitted), "A coverage case cannot be both applicable and excluded")
     require(required | omitted == domain, "Every omitted state/viewport case needs an explicit exclusion reason")
     critical = [state for state in states if any(marker in state.lower() for marker in CRITICAL_STATE_MARKERS)]
-    if critical:
-        require(any(state in {key[0] for key in required} for state in critical),
-                f"Critical state has no applicable case: {critical[0]}")
+    for state in critical:
+        require(any(case_state == state for case_state, _ in required),
+                f"Critical state has no applicable case: {state}")
     return required, omitted
 
 
@@ -968,6 +975,8 @@ def check_run(path):
     require(scope in SCOPE_VALUES, f"Run scope must be one of {', '.join(SCOPE_VALUES)}")
     validate_slug(run.get("themeId"))
     pending, errors = [], []
+    if scope != "full-redesign":
+        pending.append("Scoped completion cannot grant full-theme finalization or registration")
     offline_required, project_context = check_project_context(root, run, pending)
     model_routing = check_model_routing(root, run, pending)
     evidence = run.get("evidence", [])
@@ -1189,14 +1198,15 @@ def _resume_manifest(root, repo):
         relative = contract.relative_to(repo).as_posix()
         sources.append({"id": "remediation-contract", "path": relative, "sha256": sha_file(contract)})
     graph = [
-        {"id": "project-context", "dependsOn": []},
-        {"id": "model-routing", "dependsOn": []},
+        {"id": "project-context", "dependsOn": [source["id"] for source in sources]},
+        {"id": "model-routing", "dependsOn": [source["id"] for source in sources]},
         {"id": "run", "dependsOn": ["project-context", "model-routing"]},
         {"id": "coverage", "dependsOn": ["project-context", "run"]},
         {"id": "evidence", "dependsOn": ["project-context", "coverage", "run"]},
         {"id": "assessment", "dependsOn": ["project-context", "run"]},
         {"id": "approvals", "dependsOn": ["project-context", "model-routing", "coverage", "assessment", "run"]},
     ]
+    graph.extend({"id": source["id"], "dependsOn": []} for source in sources)
     graph.extend({"id": entry["id"], "dependsOn": [entry["kind"].split(":", 1)[0]]}
                  for entry in dependencies if entry["id"] not in {item["id"] for item in graph})
     return {"schemaVersion": "1.0", "runId": run["id"], "revision": 1,
@@ -1269,6 +1279,8 @@ def resume_check(path, current_environment=None):
                 and isinstance(node.get("dependsOn", []), list), "Resume manifest graph node is malformed")
         for parent in node["dependsOn"]:
             dependents.setdefault(parent, set()).add(node["id"])
+    if any(source["id"] == "remediation-contract" for source in manifest.get("sources", [])):
+        dependents.setdefault("remediation-contract", set()).update(("project-context", "model-routing"))
     stale = set(direct)
     queue = list(direct)
     while queue:
@@ -1286,7 +1298,7 @@ def resume_check(path, current_environment=None):
             else "Manifest dependencies are current; no dependent work is stale."}
 
 
-def worker_packet(path, role, objective, owned_files, instruction_files=None, artifacts=None, allowed_actions=None):
+def worker_packet(path, role, objective, owned_files, instruction_files=None, artifacts=None, allowed_actions=None, *, repo=None):
     root = Path(path).resolve()
     run = read_json(safe_path(root, "run.json"))
     require(role in SPECIALIST_AGENTS, f"Unknown specialist role: {role}")
@@ -1305,26 +1317,30 @@ def worker_packet(path, role, objective, owned_files, instruction_files=None, ar
     require(not selected or role in selected, f"Role is not selected for this run: {role}")
     required_instructions = [run.get("projectContext", {}).get("path", "project-context.md"),
                              routing.get("path", "model-routing.md")]
-    repo = _repo_root(root)
+    repo = Path(repo).resolve() if repo is not None else _repo_root(root)
+    require(root.is_relative_to(repo), "Worker run must be inside the specified repository")
     contract = repo / "UI-Design-Studio-v1.4.0-Cortex-Remediation.md"
     if contract.is_file():
         required_instructions.append(contract.relative_to(repo).as_posix())
     instructions = required_instructions if instruction_files is None else instruction_files
     require(isinstance(instructions, list) and instructions and len(instructions) == len(set(instructions)),
             "Worker original instruction paths are required")
-    require(set(required_instructions).issubset(set(instructions)),
-            "Worker packet must include original applicable instructions")
+    required_paths = {root / item for item in required_instructions[:2]}
+    if contract.is_file():
+        required_paths.add(contract)
     instruction_records = []
+    observed_paths = set()
     for item in instructions:
         candidate = root / item if (root / item).exists() else repo / item
-        if candidate.is_relative_to(root):
-            relative = candidate.relative_to(root).as_posix()
-            digest = sha_file(safe_path(root, relative))
-        else:
-            require(candidate.is_relative_to(repo), f"Worker instruction escapes repository: {item}")
-            relative = candidate.relative_to(repo).as_posix()
-            digest = sha_file(safe_path(repo, relative))
-        instruction_records.append({"path": relative, "sha256": digest})
+        require(candidate.is_relative_to(repo), f"Worker instruction escapes repository: {item}")
+        candidate = safe_path(repo, candidate.relative_to(repo).as_posix())
+        require(candidate not in observed_paths, "Worker instruction paths must be unique")
+        observed_paths.add(candidate)
+        instruction_root = root if candidate.is_relative_to(root) else repo
+        relative = candidate.relative_to(instruction_root).as_posix()
+        instruction_records.append({"path": relative, "sha256": sha_file(candidate)})
+    require(required_paths.issubset(observed_paths),
+            "Worker packet must include original applicable instructions")
     assignment = next((item for item in routing.get("assignments", []) if isinstance(item, dict) and item.get("agent") == role), None)
     return {"status": "PASS", "schemaVersion": "1.0", "runId": run.get("id"), "role": role,
             "objective": objective, "scope": run.get("scope", "full-redesign"),
@@ -1337,7 +1353,7 @@ def worker_packet(path, role, objective, owned_files, instruction_files=None, ar
             "acceptance": {"requiredEvidence": sorted(REQUIRED_EVIDENCE),
                            "fullThemeReleaseBlocked": run.get("scope", "full-redesign") != "full-redesign",
                            "reviewerMustDifferFromImplementer": True},
-            "allowedActions": allowed_actions or ["read", "write-owned", "publish-evidence"],
+            "allowedActions": allowed_actions if allowed_actions is not None else ["read", "write-owned", "publish-evidence"],
             "concurrencyCeiling": 3}
 
 

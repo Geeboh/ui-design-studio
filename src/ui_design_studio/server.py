@@ -271,12 +271,10 @@ def create_server(repo: Path | str, dashboard_host: str = "0.0.0.0", dashboard_p
                                 allow: list[str] | None = None) -> dict[str, Any]:
         """Generate a bounded role packet with original instructions and exact artifact hashes."""
         run_root = path_in(path, "run")
-        if instruction is not None:
-            for item in instruction:
-                if not (run_root / item).exists():
-                    engine.safe_path(root, item)
+        instructions = ([str(engine.safe_path(root, item)) for item in instruction]
+                        if instruction is not None else None)
         return engine.worker_packet(run_root, role, objective, run_files(run_root, owned),
-                                    instruction, run_files(run_root, artifact) if artifact else None, allow)
+                                    instructions, run_files(run_root, artifact) if artifact else None, allow, repo=root)
 
     @tool(read_only=True)
     def ui_design_context_digest(path: str) -> dict[str, Any]:
@@ -315,12 +313,12 @@ def create_server(repo: Path | str, dashboard_host: str = "0.0.0.0", dashboard_p
         """Read one status snapshot plus verified dashboard details. Never start a watch loop."""
         return status_result(run, interval)
 
-    @tool(read_only=True)
+    @tool()
     def ui_design_status_compact(run: str, interval: float = 1.0) -> dict[str, Any]:
         """Read bounded status metadata. Use status-page for artwork or evidence listings."""
         return compact_status_result(run, interval)
 
-    @tool(read_only=True)
+    @tool()
     def ui_design_status_page(run: str, collection: StatusCollection, page_size: int = 50,
                               cursor: str | None = None, interval: float = 1.0) -> dict[str, Any]:
         """Read one revision-bound page of artwork or evidence metadata."""

@@ -178,9 +178,9 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                             alternatives = field.get("anyOf", [field])
                             enum = next(item["enum"] for item in alternatives if "enum" in item)
                             self.assertEqual(set(enum), set(action.choices))
-            self.assertFalse(tools["ui_design_status"].annotations.readOnlyHint)
-            for name in ("doctor", "check_theme", "check_run", "decision_digest", "context_digest", "models_digest",
-                         "status_compact", "status_page"):
+            for name in ("status", "status_compact", "status_page"):
+                self.assertFalse(tools["ui_design_" + name].annotations.readOnlyHint)
+            for name in ("doctor", "check_theme", "check_run", "decision_digest", "context_digest", "models_digest"):
                 self.assertTrue(tools["ui_design_" + name].annotations.readOnlyHint)
             self.assertNotIn("ui_design_models_apply", tools)
             self.assertNotIn("ui_design_design_serve", tools)
@@ -310,8 +310,42 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(packet["concurrencyCeiling"], 3)
             missing = await self.fail(client, "ui_design_worker_packet", path=relative,
                                        role="ui-implementer", objective="Fix component state",
-                                       owned=[relative + "/component.md"], instruction=["project-context.md"])
+                                       owned=[relative + "/component.md"], instruction=[relative + "/project-context.md"])
             self.assertTrue("original applicable instructions" in missing.structuredContent["error"])
+
+    async def test_explicit_worker_instructions_use_repository_relative_paths(self):
+        async with self.connect() as (client, unused):
+            started = await self.start(client)
+            relative = started["run"]
+            root = self.repo / relative
+            (root / "component.md").write_text("Synthetic owned component\n", encoding="utf-8")
+            (self.repo / "requirements.md").write_text("Synthetic project requirements\n", encoding="utf-8")
+            packet = await self.call(client, "ui_design_worker_packet", path=relative,
+                role="ui-implementer", objective="Inspect component", owned=[relative + "/component.md"],
+                instruction=[relative + "/project-context.md", relative + "/model-routing.md", "requirements.md"],
+                allow=[])
+            self.assertEqual({entry["path"] for entry in packet["instructions"]},
+                             {"project-context.md", "model-routing.md", "requirements.md"})
+            self.assertEqual(packet["allowedActions"], [])
+
+    async def test_status_metadata_does_not_claim_read_only_artwork_publication(self):
+        root = Path(studio.init_run(self.repo, theme_id="fixture")["run"])
+        relative = root.relative_to(self.repo).as_posix()
+        (root / "board.html").write_text("<!doctype html><title>Synthetic board</title>", encoding="utf-8")
+        self.assertFalse((root / "artwork-library").exists())
+        async with self.connect() as (client, unused):
+            tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+            for name in ("ui_design_status_compact", "ui_design_status_page"):
+                with self.subTest(tool=name):
+                    self.assertFalse(tools[name].annotations.readOnlyHint)
+                    arguments = {"run": relative}
+                    if name.endswith("_page"):
+                        arguments["collection"] = "artworks"
+                    await self.call(client, name, **arguments)
+                    records = [json.loads(path.read_text(encoding="utf-8"))
+                               for path in (root / "artwork-library").glob("*/manifest.json")]
+                    record = next(record for record in records if record["path"] == "board.html")
+                    self.assertEqual(record["files"]["board.html"], studio.sha_file(root / "board.html"))
 
     async def test_stale_bound_input_never_passes_mcp_check_or_status(self):
         root = fixture_run(self.repo, self.theme)
