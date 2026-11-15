@@ -500,8 +500,7 @@ class ArtworkLibrary:
         version = digest(canonical({"path": relative, "files": hashes, "title": title, "context": context}))
         target = studio.safe_path(root, f"artwork-library/{version}", must_exist=False, allow_dir=True)
         if target.exists():
-            record = studio.read_json(studio.safe_path(target, "manifest.json"))
-            need(studio, record.get("files") == hashes and record.get("path") == relative and record.get("version") == version, "Existing immutable artwork manifest changed")
+            record = self._manifest(target)
             if strict:
                 for path in hashes:
                     self.file(version, path)
@@ -544,6 +543,16 @@ class ArtworkLibrary:
                     warnings.append(f"Artwork {relative}: {exc}")
         return self.records(), warnings
 
+    def _manifest(self, directory):
+        record = self.studio.read_json(self.studio.safe_path(directory, "manifest.json"))
+        need(self.studio, isinstance(record, dict) and record.get("version") == directory.name
+             and isinstance(record.get("files"), dict)
+             and isinstance(record.get("path"), str)
+             and record.get("id") == digest(record["path"].encode())[:16] + "-" + directory.name[:16]
+             and digest(canonical({key: record.get(key) for key in ("path", "files", "title", "context")})) == directory.name,
+             "Immutable artwork manifest changed")
+        return record
+
     def records(self):
         if not self.directory.exists():
             return []
@@ -552,9 +561,7 @@ class ArtworkLibrary:
             if path.is_symlink() or not path.is_dir() or not HASH.fullmatch(path.name):
                 continue
             try:
-                record = self.studio.read_json(self.studio.safe_path(path, "manifest.json"))
-                if record.get("version") == path.name and isinstance(record.get("files"), dict):
-                    records.append(record)
+                records.append(self._manifest(path))
             except (self.studio.StudioError, OSError, ValueError, TypeError):
                 continue
         order = {version: position for position, version in enumerate(self.publication_index()["versions"])}
@@ -563,7 +570,7 @@ class ArtworkLibrary:
     def file(self, version, relative):
         need(self.studio, isinstance(version, str) and HASH.fullmatch(version), "Invalid artwork version")
         directory = self.studio.safe_path(self.directory, version, allow_dir=True)
-        record = self.studio.read_json(self.studio.safe_path(directory, "manifest.json"))
+        record = self._manifest(directory)
         need(self.studio, relative in record.get("files", {}) and Path(relative).suffix.lower() in DEPENDENCIES, "File is not a published visual dependency")
         path = self.studio.safe_path(directory, "files/" + relative)
         content = path.read_bytes()
@@ -1684,7 +1691,7 @@ def cleanup_all(studio, repo):
     unused, unused_themes, runs = studio.config_paths(repo)
     cleaned, errors = [], []
     if runs.exists():
-        for path in sorted(runs.glob("*/.design-server.json")):
+        for path in sorted(runs.rglob(".design-server.json")):
             try:
                 relative = path.relative_to(runs).as_posix()
                 studio.safe_path(runs, relative)

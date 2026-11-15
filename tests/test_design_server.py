@@ -518,6 +518,49 @@ class DesignServerTests(unittest.TestCase):
         (self.root / "board.html").unlink()
         self.assertEqual(len([item for item in library.discover()[0] if item["path"] == "board.html"]), 2)
 
+    def test_retained_artwork_rejects_replacement_bytes_and_rehashed_manifest(self):
+        (self.root / "board.html").write_text("<h1>Approved synthetic board</h1>", encoding="utf-8")
+        retained = backend.publish_artwork(studio, self.root, "board.html", "Review this exact synthetic board.")["artwork"]
+        approval = backend.publish_request(studio, self.root, "board-review", "plan", "Review board",
+                                           "Approve the retained synthetic board.", ["board.html"])["request"]
+        backend.approve(studio, self.root, self.payload(approval))
+        server = self.start()
+        code, unused, snapshot = self.request(server)
+        self.assertEqual(code, 200)
+        artwork = next(item for item in snapshot["artworks"] if item["version"] == retained["version"])
+        self.assertEqual(self.request(server, artwork["url"], authenticated=False)[0], 200)
+        directory = server.state.library.directory / retained["version"]
+        replacement = b"<h1>Unapproved replacement board</h1>"
+        (directory / "files/board.html").write_bytes(replacement)
+        manifest = studio.read_json(directory / "manifest.json")
+        manifest["files"]["board.html"] = hashlib.sha256(replacement).hexdigest()
+        write_json(directory / "manifest.json", manifest)
+        with self.assertRaises(studio.StudioError):
+            server.state.library.file(retained["version"], "board.html")
+        with self.assertRaises(studio.StudioError):
+            server.state.library.retain("board.html", strict=False)
+        self.assertNotIn(retained["version"], [item["version"] for item in server.state.library.records()])
+        self.assertEqual(self.request(server, artwork["url"], authenticated=False)[0], 400)
+        code, unused, snapshot = self.request(server)
+        self.assertEqual(code, 200)
+        self.assertNotIn(retained["version"], [item["version"] for item in snapshot["artworks"]])
+        self.assertEqual((self.root / "board.html").read_bytes(), b"<h1>Approved synthetic board</h1>")
+
+    def test_retained_artwork_binds_manifest_metadata_to_version_directory(self):
+        (self.root / "board.html").write_text("<h1>Original synthetic board</h1>", encoding="utf-8")
+        library = backend.ArtworkLibrary(studio, self.root)
+        original, unused = library.retain("board.html")
+        manifest = library.directory / original["version"] / "manifest.json"
+        for key, value in (("path", "other.html"), ("title", "Replacement title"), ("id", "0" * 16 + "-" + "1" * 16),
+                           ("context", "Replacement review context."), ("version", "0" * 64)):
+            with self.subTest(field=key):
+                write_json(manifest, {**original, key: value})
+                with self.assertRaises(studio.StudioError):
+                    library.file(original["version"], "board.html")
+                with self.assertRaises(studio.StudioError):
+                    library.retain("board.html", strict=False)
+                self.assertEqual(library.records(), [])
+
     def test_explicit_context_is_retained_with_art_version(self):
         (self.root / "concept.png").write_bytes(PNG)
         backend.publish_artwork(studio, self.root, "concept.png", "Compare the fixture palette against the neutral concept.", "Fixture palette")
@@ -1030,6 +1073,51 @@ class DesignServerTests(unittest.TestCase):
         self.assertEqual(len(result["runs"]), 1)
         self.assertTrue((unrelated / ".design-server.json").exists())
         self.assertTrue(server.closed.wait(3))
+
+    def test_cleanup_all_stops_nested_servers_without_following_directory_symlinks(self):
+        runs = studio.config_paths(self.repo)[2]
+        nested = runs / "team/run"
+        nested.parent.mkdir()
+        self.root = self.root.rename(nested)
+        server = self.start()
+        unrelated = self.repo / "unrelated/run"
+        unrelated.parent.mkdir()
+        fresh = Path(studio.init_run(self.repo, theme_id="fixture")["run"])
+        fresh.rename(unrelated)
+        unrelated_server = self.start(unrelated)
+        (runs / "linked-unrelated").symlink_to(unrelated, target_is_directory=True)
+        (nested.parent / "linked-unrelated").symlink_to(unrelated.parent, target_is_directory=True)
+        result = backend.cleanup_all(studio, self.repo)
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["errors"], [])
+        self.assertEqual(result["runs"], [{"run": str(nested), "status": "PASS", "stopped": True, "alreadyStopped": False}])
+        self.assertTrue(server.closed.wait(3))
+        with self.assertRaises(OSError):
+            self.request(server)
+        self.assertFalse((nested / ".design-server.json").exists())
+        self.assertFalse(unrelated_server.closed.is_set())
+        self.assertEqual(self.request(unrelated_server)[0], 200)
+        self.assertTrue((unrelated / ".design-server.json").exists())
+        self.assertTrue((runs / "linked-unrelated").is_symlink())
+        self.assertTrue((nested.parent / "linked-unrelated").is_symlink())
+
+    def test_cleanup_all_rejects_nested_symlinked_locators_without_stopping_target(self):
+        runs = studio.config_paths(self.repo)[2]
+        unrelated = self.repo / "unrelated"
+        self.root = self.root.rename(unrelated)
+        server = self.start()
+        linked = runs / "team/linked-run"
+        linked.mkdir(parents=True)
+        locator = linked / ".design-server.json"
+        locator.symlink_to(unrelated / ".design-server.json")
+        result = backend.cleanup_all(studio, self.repo)
+        self.assertEqual(result["status"], "FAIL")
+        self.assertEqual(result["runs"], [])
+        self.assertEqual([item["run"] for item in result["errors"]], [str(linked)])
+        self.assertTrue(locator.is_symlink())
+        self.assertFalse(server.closed.is_set())
+        self.assertEqual(self.request(server)[0], 200)
+        self.assertTrue((unrelated / ".design-server.json").exists())
 
     def test_cleanup_never_uses_arbitrary_locator_hosts_or_claimed_pid(self):
         locator = {"instanceId": "fixture", "run": str(self.root), "pid": os.getpid(),
