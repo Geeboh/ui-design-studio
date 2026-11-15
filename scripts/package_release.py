@@ -38,6 +38,8 @@ def sources() -> list[Path]:
             relative = path.relative_to(ROOT)
             if any(part in SKIP or part.startswith(".venv") for part in relative.parts):
                 continue
+            if any(part.startswith(".env.") and part != ".env.example" for part in relative.parts):
+                continue
             if path.suffix in (".pyc", ".pyo"):
                 continue
             if path.is_symlink():
@@ -69,23 +71,34 @@ def build(output: Path, check: bool = False) -> dict:
         if not checksum_path.is_file() or checksum_path.read_text(encoding="utf-8") != expected:
             raise ValueError("MANIFEST.sha256 is missing or stale")
         return {"status": "PASS", "filesVerified": len(paths), "version": release["version"]}
+    output = output.absolute()
+    if output.suffix.lower() != ".zip":
+        raise ValueError("Release output must end in .zip")
+    sidecar = output.with_name(output.name + ".sha256")
+    source_trees = tuple((ROOT / name).resolve() for name in TREES)
+    for destination in (output, sidecar):
+        if destination.is_symlink() or (destination.exists() and not destination.is_file()):
+            raise ValueError(f"Release destination must be a plain file: {destination}")
+        resolved = destination.resolve()
+        if resolved in paths or resolved == checksum_path or any(resolved.is_relative_to(tree) for tree in source_trees):
+            raise ValueError("Release destination must be outside packaged sources")
+    for parent in output.parents:
+        if (parent.exists() or parent.is_symlink()) and not parent.is_dir():
+            raise ValueError(f"Release output parent must be a directory: {parent}")
     if checksum_path.is_symlink():
         raise ValueError("Refusing symlinked manifest")
+    output.parent.mkdir(parents=True, exist_ok=True)
     checksum_path.write_text(expected, encoding="utf-8")
     paths.append(checksum_path)
     paths.sort(key=lambda path: path.relative_to(ROOT).as_posix())
     prefix = f"ui-design-studio-v{release['version']}"
     release_day = dt.date.fromisoformat(release["releaseDate"])
     timestamp = (release_day.year, release_day.month, release_day.day, 0, 0, 0)
-    output = output.absolute()
-    if output.suffix.lower() != ".zip":
-        raise ValueError("Release output must end in .zip")
-    if output.is_symlink() or output in paths:
-        raise ValueError("Refusing to replace a source file or symlink")
-    output.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=".ui-release-", suffix=".zip", dir=output.parent)
     os.close(fd)
     temp_path = Path(temporary)
+    checksum_temp = None
+    archive_backup = None
     try:
         with zipfile.ZipFile(temp_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
             for path in paths:
@@ -104,14 +117,40 @@ def build(output: Path, check: bool = False) -> dict:
                 relative = path.relative_to(ROOT).as_posix()
                 if archive.read(f"{prefix}/{relative}") != path.read_bytes():
                     raise ValueError(f"ZIP content mismatch: {relative}")
-        os.replace(temp_path, output)
+        digest = sha(temp_path.read_bytes())
+        checksum_fd, temporary_checksum = tempfile.mkstemp(prefix=".ui-checksum-", dir=output.parent)
+        checksum_temp = Path(temporary_checksum)
+        with os.fdopen(checksum_fd, "w", encoding="utf-8") as handle:
+            handle.write(f"{digest}  {output.name}\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        if output.exists():
+            backup_fd, temporary_backup = tempfile.mkstemp(prefix=".ui-release-backup-", dir=output.parent)
+            os.close(backup_fd)
+            archive_backup = Path(temporary_backup)
+            archive_backup.unlink()
+            os.link(output, archive_backup, follow_symlinks=False)
+        published = False
+        try:
+            os.replace(temp_path, output)
+            published = True
+            os.replace(checksum_temp, sidecar)
+        except BaseException:
+            if published:
+                if archive_backup is not None:
+                    os.replace(archive_backup, output)
+                else:
+                    output.unlink()
+            if archive_backup is not None:
+                archive_backup.unlink(missing_ok=True)
+            raise
+        else:
+            if archive_backup is not None:
+                archive_backup.unlink()
     finally:
         temp_path.unlink(missing_ok=True)
-    digest = sha(output.read_bytes())
-    sidecar = output.with_name(output.name + ".sha256")
-    if sidecar.is_symlink():
-        raise ValueError("Refusing symlinked ZIP checksum")
-    sidecar.write_text(f"{digest}  {output.name}\n", encoding="utf-8")
+        if checksum_temp is not None:
+            checksum_temp.unlink(missing_ok=True)
     return {"status": "PASS", "version": release["version"], "files": len(paths),
             "bytes": output.stat().st_size, "sha256": digest, "archive": str(output),
             "checksum": str(sidecar)}

@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import sysconfig
+import tarfile
 import tempfile
 import unittest
 import zipfile
@@ -39,6 +40,8 @@ class WheelTests(unittest.TestCase):
         for name in ("ui_design_studio/mcp-guide.md", "ui_design_studio/payload/skills/ui-design-studio/scripts/studio.py", "ui_design_studio/payload/skills/ui-design-studio/dashboard/landing.html", "ui_design_studio/payload/skills/ui-design-studio/dashboard/landing.js", "ui_design_studio/payload/skills/ui-design-studio/dashboard/dashboard.css", "ui_design_studio/payload/agents/ui-art-director.md"):
             self.assertIn(name, self.names)
         self.assertFalse(any("__pycache__" in name or ".design-server.json" in name or ".ui-design-studio" in name or name.endswith((".pyc", ".pyo")) for name in self.names))
+        self.assertFalse(any(part == ".env" or (part.startswith(".env.") and part != ".env.example")
+                             for name in self.names for part in Path(name).parts))
         metadata = next(name for name in self.names if name.endswith(".dist-info/METADATA"))
         with zipfile.ZipFile(self.wheel) as archive:
             self.assertIn("Version: 1.4.1", archive.read(metadata).decode())
@@ -167,7 +170,7 @@ print(json.dumps({'status':'PASS'}))
         self.assertEqual(json.loads(result.stdout), {"status": "PASS"})
 
     def test_build_rejects_symlinked_payload_and_metadata(self):
-        for target in ("src/ui_design_studio/private-link", "README.md", "LICENSE.txt"):
+        for target in ("src/ui_design_studio/private-link", "src/ui_design_studio/.env.example", "README.md", "LICENSE.txt"):
             with self.subTest(target=target):
                 copied = self.base / ("unsafe-" + Path(target).name)
                 copied.mkdir(exist_ok=True)
@@ -181,6 +184,57 @@ print(json.dumps({'status':'PASS'}))
                 result = subprocess.run([sys.executable, "-m", "build", "--wheel", "--no-isolation", "--outdir", str(copied / "dist")], cwd=copied, capture_output=True, text=True, timeout=30)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("Symlink is not distributable", result.stdout + result.stderr)
+
+
+class PackagePrivacyTests(unittest.TestCase):
+    def test_wheel_and_sdist_exclude_private_environment_without_vcs_ignores(self):
+        with tempfile.TemporaryDirectory(prefix="ui-design-package-privacy-") as temporary:
+            base = Path(temporary)
+            copied = base / "source"
+            copied.mkdir()
+            for name in ("pyproject.toml", "hatch_build.py", "README.md", "LICENSE.txt"):
+                shutil.copyfile(ROOT / name, copied / name)
+            for name in ("src", ".omp/skills", ".omp/agents"):
+                shutil.copytree(ROOT / name, copied / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            locations = (
+                ("src/ui_design_studio", "ui_design_studio"),
+                (".omp/skills/ui-design-studio", "ui_design_studio/payload/skills/ui-design-studio"),
+                (".omp/agents", "ui_design_studio/payload/agents"),
+            )
+            for source, _ in locations:
+                directory = copied / source
+                for name in (".env", ".env.production", ".env.local"):
+                    (directory / name).write_text("PRIVATE_ENV=not-for-distribution\n", encoding="utf-8")
+                for name in (".env.private", "credentials", ".ui-design-studio"):
+                    private = directory / name
+                    private.mkdir(exist_ok=True)
+                    (private / "settings.txt").write_text("Private directory contents\n", encoding="utf-8")
+                    (private / ".env.example").write_text("PRIVATE_NESTED_ENV=not-for-distribution\n", encoding="utf-8")
+                (directory / ".env.example").write_text("PUBLIC_ENV=example\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, "-m", "build", "--wheel", "--sdist", "--no-isolation", "--outdir", str(base / "dist")],
+                cwd=copied, capture_output=True, text=True, timeout=60,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            wheel, = (base / "dist").glob("*.whl")
+            sdist, = (base / "dist").glob("*.tar.gz")
+            with zipfile.ZipFile(wheel) as archive:
+                wheel_names = archive.namelist()
+                for _, destination in locations:
+                    self.assertEqual(archive.read(f"{destination}/.env.example"), b"PUBLIC_ENV=example\n")
+            with tarfile.open(sdist, "r:gz") as archive:
+                sdist_names = archive.getnames()
+                for source, _ in locations:
+                    example, = (name for name in sdist_names if name.endswith(f"/{source}/.env.example"))
+                    self.assertEqual(archive.extractfile(example).read(), b"PUBLIC_ENV=example\n")
+            for names in (wheel_names, sdist_names):
+                private = [
+                    name for name in names
+                    if any(part in (".env", "credentials", ".ui-design-studio")
+                           or (part.startswith(".env.") and part != ".env.example") for part in Path(name).parts)
+                ]
+                self.assertEqual(private, [])
 
 
 if __name__ == "__main__":
