@@ -177,7 +177,7 @@ def create_server(repo: Path | str, dashboard_host: str = "0.0.0.0", dashboard_p
         run_root = path_in(run, "run")
         engine.require(interval > 0, "Status interval must be positive")
         result = design.command(design.studio, SimpleNamespace(
-            command="status", run=str(run_root), watch=False, interval=interval,
+            command="status", run=str(run_root), watch=False, interval=interval, repo=root,
         ))
         result.update(connection_details(run_root.relative_to(root).as_posix()))
         return result
@@ -271,12 +271,10 @@ def create_server(repo: Path | str, dashboard_host: str = "0.0.0.0", dashboard_p
                                 allow: list[str] | None = None) -> dict[str, Any]:
         """Generate a bounded role packet with original instructions and exact artifact hashes."""
         run_root = path_in(path, "run")
-        if instruction is not None:
-            for item in instruction:
-                if not (run_root / item).exists():
-                    engine.safe_path(root, item)
+        instructions = ([str(engine.safe_path(root, item)) for item in instruction]
+                        if instruction is not None else None)
         return engine.worker_packet(run_root, role, objective, run_files(run_root, owned),
-                                    instruction, run_files(run_root, artifact) if artifact else None, allow)
+                                    instructions, run_files(run_root, artifact) if artifact is not None else None, allow, repo=root)
 
     @tool(read_only=True)
     def ui_design_context_digest(path: str) -> dict[str, Any]:
@@ -315,12 +313,12 @@ def create_server(repo: Path | str, dashboard_host: str = "0.0.0.0", dashboard_p
         """Read one status snapshot plus verified dashboard details. Never start a watch loop."""
         return status_result(run, interval)
 
-    @tool(read_only=True)
+    @tool()
     def ui_design_status_compact(run: str, interval: float = 1.0) -> dict[str, Any]:
         """Read bounded status metadata. Use status-page for artwork or evidence listings."""
         return compact_status_result(run, interval)
 
-    @tool(read_only=True)
+    @tool()
     def ui_design_status_page(run: str, collection: StatusCollection, page_size: int = 50,
                               cursor: str | None = None, interval: float = 1.0) -> dict[str, Any]:
         """Read one revision-bound page of artwork or evidence metadata."""
@@ -346,15 +344,7 @@ def create_server(repo: Path | str, dashboard_host: str = "0.0.0.0", dashboard_p
     def ui_design_artwork(run: str, file: str, context: str, title: str | None = None) -> dict[str, Any]:
         """Retain artwork. file is repository-relative, inside the selected run or its active configured theme."""
         run_root = path_in(run, "run")
-        source = engine.safe_path(root, file)
-        if source.is_relative_to(run_root):
-            return design.publish_artwork(design.studio, run_root, source.relative_to(run_root).as_posix(), context, title)
-        document = engine.read_json(engine.safe_path(run_root, "run.json"))
-        engine.validate_slug(document["themeId"])
-        _, themes, _ = engine.config_paths(root)
-        active = engine.safe_path(root, (themes / document["themeId"]).relative_to(root).as_posix(), allow_dir=True)
-        engine.require(source.is_relative_to(active), "Explicit project publication is limited to the active theme directory")
-        return design.publish_artwork(design.studio, run_root, file, context, title, str(root))
+        return design.publish_artwork(design.studio, run_root, file, context, title, repo=root)
 
     @tool()
     def ui_design_approval_request(run: str, id: str, stage: ReviewStage, title: str, context: str,
@@ -363,7 +353,7 @@ def create_server(repo: Path | str, dashboard_host: str = "0.0.0.0", dashboard_p
         run_root = path_in(run, "run")
         inputs = run_files(run_root, files)
         options = engine.read_json(engine.safe_path(run_root, run_file(run_root, choices))) if choices is not None else None
-        return design.publish_request(design.studio, run_root, id, stage, title, context, inputs, options)
+        return design.publish_request(design.studio, run_root, id, stage, title, context, inputs, options, repo=root)
 
     @tool(destructive=True, idempotent=True)
     def ui_design_design_cleanup(run: str | None = None, all: bool = False) -> dict[str, Any]:

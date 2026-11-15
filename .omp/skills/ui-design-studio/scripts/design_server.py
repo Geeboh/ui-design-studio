@@ -265,7 +265,7 @@ def project_theme(studio, root, repo=None):
     root = Path(root).resolve()
     run = studio.read_json(studio.safe_path(root, "run.json"))
     studio.validate_slug(run.get("themeId"))
-    candidates = [Path(repo).resolve()] if repo else root.parents
+    candidates = [Path(repo).resolve()] if repo is not None else root.parents
     for candidate in candidates:
         try:
             unused, themes, runs = studio.config_paths(candidate)
@@ -273,7 +273,7 @@ def project_theme(studio, root, repo=None):
                 theme = studio.safe_path(themes, run["themeId"], must_exist=False, allow_dir=True)
                 return candidate, theme, run["themeId"]
         except (studio.StudioError, OSError, ValueError):
-            if repo:
+            if repo is not None:
                 raise
     need(studio, repo is None, "Run must belong to the selected project's configured runs directory")
     return None
@@ -323,11 +323,14 @@ def publish_artwork(studio, root, relative, context, title=None, repo=None):
     root = checked_root(studio, root)
     with records_lock(studio, root):
         import_theme_art(studio, root, repo)
-        if repo:
+        if repo is not None:
             repository, theme, theme_id = project_theme(studio, root, repo)
             original = studio.safe_path(repository, relative)
-            need(studio, original.is_relative_to(theme), "Explicit project publication is limited to the active theme directory")
-            relative = f"theme-artwork/{theme_id}/" + original.relative_to(theme).as_posix()
+            if original.is_relative_to(root):
+                relative = original.relative_to(root).as_posix()
+            else:
+                need(studio, original.is_relative_to(theme), "Explicit project publication is limited to the active theme directory")
+                relative = f"theme-artwork/{theme_id}/" + original.relative_to(theme).as_posix()
         path = studio.safe_path(root, relative)
         relative = path.relative_to(root).as_posix()
         need(studio, path.suffix.lower() in VISUAL and context.strip(), "Artwork needs a supported visual file and nonempty context")
@@ -367,12 +370,12 @@ def current_decision(studio, root, run, decision):
     return decision.get("inputsDigest") == studio.file_digest(root, decision.get("inputs"))
 
 
-def publish_request(studio, root, request_id, stage, title, context, files, choices=None):
+def publish_request(studio, root, request_id, stage, title, context, files, choices=None, repo=None):
     root = checked_root(studio, root)
     need(studio, isinstance(request_id, str) and SLUG.fullmatch(request_id) and len(request_id) <= 64, "Approval ID must be a portable lowercase slug")
     need(studio, stage in ("plan", "design") and title.strip() and context.strip(), "Approval needs a stage, title and review context")
     with records_lock(studio, root):
-        source_record = import_theme_art(studio, root)
+        source_record = import_theme_art(studio, root, repo)
         run = studio.read_json(root / "run.json")
         decisions, latest = latest_decisions(studio, root)
         inputs = list(files)
@@ -385,7 +388,7 @@ def publish_request(studio, root, request_id, stage, title, context, files, choi
             inputs.extend(plan["inputs"])
         inputs = expanded_inputs(studio, root, inputs)
         inputs = bind_theme_sources(studio, root, inputs, source_record)
-        library = ArtworkLibrary(studio, root)
+        library = ArtworkLibrary(studio, root, repo)
         available, unused_warnings = library.discover()
         current_art = library.publication_index()["current"]
         owned_art = {}
@@ -423,12 +426,12 @@ class ApprovalConflict(Exception):
     pass
 
 
-def approve(studio, root, payload):
+def approve(studio, root, payload, repo=None):
     need(studio, isinstance(payload, dict), "Approval body must be an object")
     request_id = payload.get("id")
     need(studio, isinstance(request_id, str) and SLUG.fullmatch(request_id), "Invalid approval ID")
     with records_lock(studio, root):
-        source_record = import_theme_art(studio, root)
+        source_record = import_theme_art(studio, root, repo)
         run = studio.read_json(root / "run.json")
         need(studio, run.get("mode") == "guided", "Yolo mode does not accept human approval forms")
         request = studio.read_json(studio.safe_path(root, f"approval-requests/{request_id}.json"))
@@ -500,8 +503,7 @@ class ArtworkLibrary:
         version = digest(canonical({"path": relative, "files": hashes, "title": title, "context": context}))
         target = studio.safe_path(root, f"artwork-library/{version}", must_exist=False, allow_dir=True)
         if target.exists():
-            record = studio.read_json(studio.safe_path(target, "manifest.json"))
-            need(studio, record.get("files") == hashes and record.get("path") == relative and record.get("version") == version, "Existing immutable artwork manifest changed")
+            record = self._manifest(target)
             if strict:
                 for path in hashes:
                     self.file(version, path)
@@ -544,6 +546,16 @@ class ArtworkLibrary:
                     warnings.append(f"Artwork {relative}: {exc}")
         return self.records(), warnings
 
+    def _manifest(self, directory):
+        record = self.studio.read_json(self.studio.safe_path(directory, "manifest.json"))
+        need(self.studio, isinstance(record, dict) and record.get("version") == directory.name
+             and isinstance(record.get("files"), dict)
+             and isinstance(record.get("path"), str)
+             and record.get("id") == digest(record["path"].encode())[:16] + "-" + directory.name[:16]
+             and digest(canonical({key: record.get(key) for key in ("path", "files", "title", "context")})) == directory.name,
+             "Immutable artwork manifest changed")
+        return record
+
     def records(self):
         if not self.directory.exists():
             return []
@@ -552,9 +564,7 @@ class ArtworkLibrary:
             if path.is_symlink() or not path.is_dir() or not HASH.fullmatch(path.name):
                 continue
             try:
-                record = self.studio.read_json(self.studio.safe_path(path, "manifest.json"))
-                if record.get("version") == path.name and isinstance(record.get("files"), dict):
-                    records.append(record)
+                records.append(self._manifest(path))
             except (self.studio.StudioError, OSError, ValueError, TypeError):
                 continue
         order = {version: position for position, version in enumerate(self.publication_index()["versions"])}
@@ -563,7 +573,7 @@ class ArtworkLibrary:
     def file(self, version, relative):
         need(self.studio, isinstance(version, str) and HASH.fullmatch(version), "Invalid artwork version")
         directory = self.studio.safe_path(self.directory, version, allow_dir=True)
-        record = self.studio.read_json(self.studio.safe_path(directory, "manifest.json"))
+        record = self._manifest(directory)
         need(self.studio, relative in record.get("files", {}) and Path(relative).suffix.lower() in DEPENDENCIES, "File is not a published visual dependency")
         path = self.studio.safe_path(directory, "files/" + relative)
         content = path.read_bytes()
@@ -928,10 +938,10 @@ class DesignState:
                                         and entry.get("status") == "not-applicable"
                                         for entry in evidence):
             kinds.add("offline")
-        reviewers = {entry.get("reviewer") for entry in fresh if entry.get("kind") == "review"}
+        reviewers = {entry["reviewer"].strip() for entry in fresh if entry.get("kind") == "review"}
         implementer = run.get("implementer")
         produced = (design_ok and counts["verified"] == counts["required"] and studio.REQUIRED_EVIDENCE.issubset(kinds)
-                    and isinstance(implementer, str) and bool(implementer.strip()) and bool(reviewers) and implementer not in reviewers
+                    and isinstance(implementer, str) and bool(implementer.strip()) and bool(reviewers) and implementer.strip() not in reviewers
                     and isinstance(run.get("themeDigest"), str) and HASH.fullmatch(run["themeDigest"]) is not None)
         evidence_failed = any(isinstance(entry, dict) and entry.get("status") == "failed" for entry in evidence)
         evidence_stale = any(isinstance(entry, dict) and entry.get("status") == "passed"
@@ -1079,13 +1089,13 @@ def status_page(snapshot, collection, page_size=50, cursor=None):
     }
 
 
-def yolo_ready(studio, root):
+def yolo_ready(studio, root, repo=None):
     try:
         with records_lock(studio, root):
             run = studio.read_json(studio.safe_path(root, "run.json"))
             if run.get("mode") != "yolo" or run.get("status") != "passed" or run.get("phase") != "finalize":
                 return False
-            import_theme_art(studio, root)
+            import_theme_art(studio, root, repo)
             unused, latest = latest_decisions(studio, root)
             if latest.get("finalize", {}).get("outcome") != "approved":
                 return False
@@ -1360,7 +1370,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(200, {"status": "PASS", "instanceId": owner.instance_id})
                 owner.stop.set()
             else:
-                self.respond(200, approve(owner.studio, owner.root, payload))
+                self.respond(200, approve(owner.studio, owner.root, payload, owner.repo))
         except ApprovalConflict as exc:
             self.respond(409, {"error": str(exc)})
         except (owner.studio.StudioError, OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
@@ -1514,7 +1524,7 @@ class DesignServer:
             try:
                 if self.publish_status() is None:
                     break
-                if yolo_ready(self.studio, self.root):
+                if yolo_ready(self.studio, self.root, self.repo):
                     self.stop.set()
             except (self.studio.StudioError, OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
                 with self.state.lock:
@@ -1684,7 +1694,7 @@ def cleanup_all(studio, repo):
     unused, unused_themes, runs = studio.config_paths(repo)
     cleaned, errors = [], []
     if runs.exists():
-        for path in sorted(runs.glob("*/.design-server.json")):
+        for path in sorted(runs.rglob(".design-server.json")):
             try:
                 relative = path.relative_to(runs).as_posix()
                 studio.safe_path(runs, relative)
@@ -1694,8 +1704,8 @@ def cleanup_all(studio, repo):
     return {"status": "FAIL" if errors else "PASS", "runs": cleaned, "errors": errors}
 
 
-def cleanup_registered_yolo(studio, root):
-    if not yolo_ready(studio, root):
+def cleanup_registered_yolo(studio, root, repo=None):
+    if not yolo_ready(studio, root, repo):
         return None
     try:
         return cleanup(studio, root)
@@ -1763,11 +1773,11 @@ def command(studio, args):
         return publish_artwork(studio, args.run, args.file, args.context, args.title, args.repo)
     if args.command == "approval-request":
         choices = studio.read_json(studio.safe_path(args.run, args.choices)) if args.choices else None
-        return publish_request(studio, args.run, args.id, args.stage, args.title, args.context, args.files, choices)
+        return publish_request(studio, args.run, args.id, args.stage, args.title, args.context, args.files, choices, getattr(args, "repo", None))
     need(studio, args.interval > 0, "Status interval must be positive")
     root = checked_root(studio, args.run)
     locator = read_record(studio, root, ".design-server.json", {})
-    state = DesignState(studio, root, preview_capability=locator.get("previewCapability", ""),
+    state = DesignState(studio, root, preview_capability=locator.get("previewCapability", ""), repo=getattr(args, "repo", None),
                         addresses=ServerAddresses(locator.get("url", ""), locator.get("localUrl"), tuple(locator.get("lanUrls", ()))))
     state.started_at = locator.get("startedAt", state.started_at)
     if not args.watch:

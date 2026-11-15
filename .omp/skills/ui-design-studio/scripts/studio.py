@@ -79,7 +79,7 @@ def digest_bytes(value):
 
 def sha_file(path):
     path = Path(path)
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     descriptor = os.open(path, flags)
     try:
         with os.fdopen(descriptor, "rb") as handle:
@@ -101,8 +101,15 @@ def now():
 
 def read_json(path):
     try:
-        with Path(path).open(encoding="utf-8") as handle:
-            return json.load(handle)
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+        try:
+            require(stat.S_ISREG(os.fstat(descriptor).st_mode), f"Not a regular file: {path}")
+            with os.fdopen(descriptor, encoding="utf-8") as handle:
+                descriptor = None
+                return json.load(handle)
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise StudioError(f"Cannot read JSON {path}: {exc}") from exc
 
@@ -299,13 +306,50 @@ def check_svg(path):
 
 def check_css(path, theme_id, root):
     content = path.read_text(encoding="utf-8")
-    clean = re.sub(r"/\*.*?\*/", "", content, flags=re.S)
+    url_pattern = r'''\burl\s*\(\s*(?:"[^"\r\n\f]*"|'[^'\r\n\f]*'|[^"'()]*)\s*\)'''
+    chunks, position = [], 0
+    lexical_pattern = (r"(?P<url>" + url_pattern + r''')|(?P<comment>/\*.*?(?:\*/|$))|(?P<string>"[^"\r\n\f]*"|'[^'\r\n\f]*')|(?P<bad>["'])''')
+    for token in re.finditer(lexical_pattern, content, re.S | re.I):
+        chunks.append(content[position:token.start()])
+        value = token.group()
+        if token.lastgroup == "comment":
+            require(value.endswith("*/"), f"Unterminated CSS comment: {path.name}")
+            chunks.append(" ")
+        else:
+            require(token.lastgroup != "bad", f"Invalid or unterminated CSS string: {path.name}")
+            chunks.append(value)
+        position = token.end()
+    chunks.append(content[position:])
+    clean = "".join(chunks)
     require(not re.search(r"@import\b|@font-face\b|expression\s*\(|(?:^|[;{])\s*(?:-moz-binding|behavior)\s*:|javascript:", clean, re.I),
             f"CSS imports, embedded font rules, or active CSS are forbidden: {path.name}")
     require("\\" not in clean, f"CSS backslash escapes are outside the supported audited subset: {path.name}")
-    for match in re.finditer(r"url\s*\(([^)]*)\)", clean, re.I):
-        target = match.group(1).strip().strip("\"'")
-        css_asset_relative(root, path, target)
+    assets = []
+    functions = []
+    image_functions = ("image-set", "-webkit-image-set", "image")
+    static_image_functions = {
+        *image_functions, "type", "linear-gradient", "radial-gradient", "conic-gradient",
+        "repeating-linear-gradient", "repeating-radial-gradient", "repeating-conic-gradient",
+        "cross-fade", "-webkit-cross-fade", "light-dark",
+    }
+    tokens = re.finditer(
+        r"(?P<url>" + url_pattern + r''')|(?P<string>"[^"]*"|'[^']*')|(?P<function>[-\w]+)\s*\(|(?P<open>\()|(?P<close>\))''',
+        clean, re.I)
+    for token in tokens:
+        if token.lastgroup == "url":
+            target = token.group()[token.group().index("(") + 1:-1].strip().strip("\"'")
+            assets.append(css_asset_relative(root, path, target))
+        elif token.lastgroup == "string":
+            if functions and functions[-1] in image_functions:
+                assets.append(css_asset_relative(root, path, token.group()[1:-1]))
+        elif token.lastgroup in ("function", "open"):
+            function = (token.group("function") or "").lower()
+            require(not (functions and functions[-1] in image_functions and function not in static_image_functions),
+                    f"Dynamic or unsupported image source function outside the audited CSS subset: {path.name}")
+            functions.append(function)
+        elif functions:
+            functions.pop()
+    require(not functions, f"Unfinished CSS function outside the audited subset: {path.name}")
     scope = re.compile(r'\[data-ui-theme\s*=\s*[\"\']' + re.escape(theme_id) + r'[\"\']\]')
     # A deliberately restricted static subset; runtime component behavior still needs review.
     for head in re.findall(r"([^{}]+)\{", clean):
@@ -317,9 +361,11 @@ def check_css(path, theme_id, root):
             require(scope.match(selector.strip()), f"Selector must start with the theme root in {path.name}: {selector.strip()[:120]}")
             require(not re.search(r"[+~]", selector), f"Sibling combinators are outside the isolated CSS subset: {path.name}")
             require(not re.search(r":root\b|(?<![\w.-])(?:html|body)(?![\w-])", selector), f"Global root selector in {path.name}")
+    return assets
 
 
 def css_asset_relative(root, stylesheet, target):
+    require(target == target.strip(), "CSS resource URLs cannot have surrounding whitespace")
     if target.startswith("#"):
         return None
     require(not re.match(r"(?:[a-z][a-z0-9+.-]*:|//|/)", target, re.I), f"CSS runtime URLs must be relative local files: {target}")
@@ -380,21 +426,17 @@ def check_theme(path):
     expected = token_css(manifest["id"], tokens)
     require(safe_path(root, "tokens.css").read_text(encoding="utf-8") == expected,
             "tokens.css is stale or edited; run build-theme")
+    runtime, source, package = theme_files(manifest)
+    known = set(runtime)
     for style in manifest["styles"]:
-        check_css(safe_path(root, style), manifest["id"], root)
+        for relative in check_css(safe_path(root, style), manifest["id"], root):
+            require(relative is None or relative in known, f"CSS asset must appear in manifest assets: {relative}")
     check_svg(safe_path(root, manifest["icons"]))
     for asset in manifest.get("assets", []):
         require(Path(asset).suffix.lower() in (".svg", ".woff2", ".png", ".webp", ".avif", ".jpg", ".jpeg"),
                 f"Unsupported runtime asset type: {asset}")
         if Path(asset).suffix.lower() == ".svg":
             check_svg(safe_path(root, asset))
-    runtime, source, package = theme_files(manifest)
-    known = set(runtime)
-    for style in manifest["styles"]:
-        for target in re.findall(r"url\s*\(([^)]*)\)", safe_path(root, style).read_text(encoding="utf-8"), flags=re.I):
-            target = target.strip().strip("\"'")
-            relative = css_asset_relative(root, safe_path(root, style), target)
-            require(relative is None or relative in known, f"CSS asset must appear in manifest assets: {relative}")
     pairs = manifest.get("contrastPairs")
     require(isinstance(pairs, list), "contrastPairs must be a list")
     declarations = {}
@@ -947,9 +989,9 @@ def coverage_case_sets(surface):
     require(required.isdisjoint(omitted), "A coverage case cannot be both applicable and excluded")
     require(required | omitted == domain, "Every omitted state/viewport case needs an explicit exclusion reason")
     critical = [state for state in states if any(marker in state.lower() for marker in CRITICAL_STATE_MARKERS)]
-    if critical:
-        require(any(state in {key[0] for key in required} for state in critical),
-                f"Critical state has no applicable case: {critical[0]}")
+    for state in critical:
+        require(any(case_state == state for case_state, _ in required),
+                f"Critical state has no applicable case: {state}")
     return required, omitted
 
 
@@ -968,6 +1010,8 @@ def check_run(path):
     require(scope in SCOPE_VALUES, f"Run scope must be one of {', '.join(SCOPE_VALUES)}")
     validate_slug(run.get("themeId"))
     pending, errors = [], []
+    if scope != "full-redesign":
+        pending.append("Scoped completion cannot grant full-theme finalization or registration")
     offline_required, project_context = check_project_context(root, run, pending)
     model_routing = check_model_routing(root, run, pending)
     evidence = run.get("evidence", [])
@@ -1032,6 +1076,7 @@ def check_run(path):
     if not isinstance(theme_digest, str) or not SHA.fullmatch(theme_digest):
         pending.append("Final themeDigest has not been recorded")
     review_inputs = {"themeDigest": theme_digest, "coverage": coverage, "evidence": hashes,
+        "reportSha256": sha_file(safe_path(root, "report.md")),
         "context": {field: run.get(field) for field in ("themeId", "themeAction", "mode", "profile", "implementer")}}
     if run["schemaVersion"] == "1.1":
         review_inputs["context"].pop("profile")
@@ -1075,11 +1120,11 @@ def check_run(path):
         pending.append("run.status is not passed")
     if run.get("phase") != "finalize":
         pending.append("run.phase is not finalize")
-    reviewers = {entry["reviewer"] for entry in evidence if entry.get("kind") == "review" and entry.get("status") == "passed"}
+    reviewers = {entry["reviewer"].strip() for entry in evidence if entry.get("kind") == "review" and entry.get("status") == "passed"}
     implementer = run.get("implementer")
     if not isinstance(implementer, str) or not implementer.strip():
         pending.append("run.implementer is missing")
-    elif not reviewers or implementer in reviewers:
+    elif not reviewers or implementer.strip() in reviewers:
         pending.append("Independent review must name a reviewer distinct from the implementer")
     return {"status": "FAIL" if errors else "BLOCKED" if pending else "PASS", "runId": run.get("id"),
             "themeId": run["themeId"], "scope": run.get("scope", "full-redesign"),
@@ -1147,20 +1192,32 @@ def _manifest_file(root, relative, kind, node):
     return {"id": node, "kind": kind, "path": relative, "sha256": sha_file(path)}
 
 
+RESUME_CONSUMERS = {
+    "run-record": "run", "project-context": "project-context", "model-routing": "model-routing",
+    "coverage": "coverage", "approvals": "approvals", "assessment": "assessment",
+    "evidence": "evidence", "evidence-input": "evidence",
+    "coverage-artifact": "coverage", "approval-input": "approvals",
+}
+
+
 def _resume_manifest(root, repo):
     run = read_json(safe_path(root, "run.json"))
     dependencies = []
-    seen = set()
+    by_path = {}
 
     def add(relative, kind, node):
-        if relative in seen:
-            return
-        seen.add(relative)
-        dependencies.append(_manifest_file(root, relative, kind, node))
+        if relative not in by_path:
+            entry = _manifest_file(root, relative, kind, node)
+            entry["consumers"] = []
+            by_path[relative] = entry
+            dependencies.append(entry)
+        consumer = RESUME_CONSUMERS[kind]
+        if consumer not in by_path[relative]["consumers"]:
+            by_path[relative]["consumers"].append(consumer)
 
     add("run.json", "run-record", "run")
-    add("project-context.md", "project-context", "project-context")
-    add("model-routing.md", "model-routing", "model-routing")
+    add(run.get("projectContext", {}).get("path", "project-context.md"), "project-context", "project-context")
+    add(run.get("modelRouting", {}).get("path", "model-routing.md"), "model-routing", "model-routing")
     add("coverage.json", "coverage", "coverage")
     add("decisions.json", "approvals", "approvals")
     add("report.md", "assessment", "assessment")
@@ -1189,16 +1246,24 @@ def _resume_manifest(root, repo):
         relative = contract.relative_to(repo).as_posix()
         sources.append({"id": "remediation-contract", "path": relative, "sha256": sha_file(contract)})
     graph = [
-        {"id": "project-context", "dependsOn": []},
-        {"id": "model-routing", "dependsOn": []},
+        {"id": "project-context", "dependsOn": [source["id"] for source in sources]},
+        {"id": "model-routing", "dependsOn": [source["id"] for source in sources]},
         {"id": "run", "dependsOn": ["project-context", "model-routing"]},
         {"id": "coverage", "dependsOn": ["project-context", "run"]},
         {"id": "evidence", "dependsOn": ["project-context", "coverage", "run"]},
         {"id": "assessment", "dependsOn": ["project-context", "run"]},
-        {"id": "approvals", "dependsOn": ["project-context", "model-routing", "coverage", "assessment", "run"]},
+        {"id": "approvals", "dependsOn": ["project-context", "model-routing", "coverage", "evidence", "assessment", "run"]},
     ]
-    graph.extend({"id": entry["id"], "dependsOn": [entry["kind"].split(":", 1)[0]]}
-                 for entry in dependencies if entry["id"] not in {item["id"] for item in graph})
+    graph.extend({"id": source["id"], "dependsOn": []} for source in sources)
+    nodes = {item["id"]: item for item in graph}
+    for entry in dependencies:
+        if entry["id"] not in nodes:
+            node = {"id": entry["id"], "dependsOn": []}
+            nodes[entry["id"]] = node
+            graph.append(node)
+        for consumer in entry["consumers"]:
+            if consumer != entry["id"] and entry["id"] not in nodes[consumer]["dependsOn"]:
+                nodes[consumer]["dependsOn"].append(entry["id"])
     return {"schemaVersion": "1.0", "runId": run["id"], "revision": 1,
             "dependencies": dependencies, "sources": sources, "graph": graph,
             "environment": _environment_facts(repo)}
@@ -1227,7 +1292,7 @@ def resume_check(path, current_environment=None):
         return {"status": "BLOCKED", "conservative": True, "staleNodes": ["run"],
                 "changedDependencies": [], "message": "Missing resume manifest; verify legacy run conservatively."}
     manifest = read_json(safe_path(root, "manifest.json"))
-    require(manifest.get("schemaVersion") == "1.0", "Unsupported resume manifest schemaVersion")
+    require(isinstance(manifest, dict) and manifest.get("schemaVersion") == "1.0", "Unsupported resume manifest schemaVersion")
     dependencies, changed = manifest.get("dependencies"), []
     require(isinstance(dependencies, list), "Resume manifest dependencies must be a list")
     for entry in dependencies:
@@ -1263,12 +1328,30 @@ def resume_check(path, current_environment=None):
     direct = {entry["id"] for entry in changed}
     graph = manifest.get("graph", [])
     require(isinstance(graph, list), "Resume manifest graph must be a list")
-    dependents = {}
+    categories = set(RESUME_CONSUMERS.values())
+    conservative = False
+    dependents = {"evidence": {"approvals"}}
+    for entry in dependencies:
+        consumers = entry.get("consumers")
+        if consumers is None:
+            conservative = True
+            consumer = RESUME_CONSUMERS.get(entry.get("kind"))
+            consumers = [consumer] if consumer else []
+        else:
+            require(isinstance(consumers, list) and bool(consumers)
+                    and all(isinstance(consumer, str) and consumer in categories for consumer in consumers),
+                    "Resume manifest consumers are malformed")
+        dependents.setdefault(entry["id"], set()).update(consumer for consumer in consumers if consumer != entry["id"])
     for node in graph:
         require(isinstance(node, dict) and isinstance(node.get("id"), str)
-                and isinstance(node.get("dependsOn", []), list), "Resume manifest graph node is malformed")
+                and isinstance(node.get("dependsOn"), list)
+                and all(isinstance(parent, str) for parent in node["dependsOn"]), "Resume manifest graph node is malformed")
+        if conservative and node["id"] not in categories:
+            continue
         for parent in node["dependsOn"]:
             dependents.setdefault(parent, set()).add(node["id"])
+    if any(source["id"] == "remediation-contract" for source in manifest.get("sources", [])):
+        dependents.setdefault("remediation-contract", set()).update(("project-context", "model-routing"))
     stale = set(direct)
     queue = list(direct)
     while queue:
@@ -1278,15 +1361,16 @@ def resume_check(path, current_environment=None):
                 stale.add(child)
                 queue.append(child)
     dirty = expected_environment.get("git", {}).get("dirty") != observed_environment.get("git", {}).get("dirty")
-    return {"status": "BLOCKED" if changed else "PASS", "conservative": False,
+    return {"status": "BLOCKED" if changed or conservative else "PASS", "conservative": conservative,
             "manifestRevision": manifest.get("revision"), "changedDependencies": changed,
             "staleNodes": sorted(stale), "unrelatedChangesIgnored": True,
             "gitDirtyChanged": dirty,
-            "message": "Only changed dependencies and transitive dependents are stale." if changed
+            "message": "Legacy manifest consumer membership is incomplete; review dependent work and refresh the manifest." if conservative
+            else "Only changed dependencies and transitive dependents are stale." if changed
             else "Manifest dependencies are current; no dependent work is stale."}
 
 
-def worker_packet(path, role, objective, owned_files, instruction_files=None, artifacts=None, allowed_actions=None):
+def worker_packet(path, role, objective, owned_files, instruction_files=None, artifacts=None, allowed_actions=None, *, repo=None):
     root = Path(path).resolve()
     run = read_json(safe_path(root, "run.json"))
     require(role in SPECIALIST_AGENTS, f"Unknown specialist role: {role}")
@@ -1305,26 +1389,30 @@ def worker_packet(path, role, objective, owned_files, instruction_files=None, ar
     require(not selected or role in selected, f"Role is not selected for this run: {role}")
     required_instructions = [run.get("projectContext", {}).get("path", "project-context.md"),
                              routing.get("path", "model-routing.md")]
-    repo = _repo_root(root)
+    repo = Path(repo).resolve() if repo is not None else _repo_root(root)
+    require(root.is_relative_to(repo), "Worker run must be inside the specified repository")
     contract = repo / "UI-Design-Studio-v1.4.0-Cortex-Remediation.md"
     if contract.is_file():
         required_instructions.append(contract.relative_to(repo).as_posix())
     instructions = required_instructions if instruction_files is None else instruction_files
     require(isinstance(instructions, list) and instructions and len(instructions) == len(set(instructions)),
             "Worker original instruction paths are required")
-    require(set(required_instructions).issubset(set(instructions)),
-            "Worker packet must include original applicable instructions")
+    required_paths = {root / item for item in required_instructions[:2]}
+    if contract.is_file():
+        required_paths.add(contract)
     instruction_records = []
+    observed_paths = set()
     for item in instructions:
         candidate = root / item if (root / item).exists() else repo / item
-        if candidate.is_relative_to(root):
-            relative = candidate.relative_to(root).as_posix()
-            digest = sha_file(safe_path(root, relative))
-        else:
-            require(candidate.is_relative_to(repo), f"Worker instruction escapes repository: {item}")
-            relative = candidate.relative_to(repo).as_posix()
-            digest = sha_file(safe_path(repo, relative))
-        instruction_records.append({"path": relative, "sha256": digest})
+        require(candidate.is_relative_to(repo), f"Worker instruction escapes repository: {item}")
+        candidate = safe_path(repo, candidate.relative_to(repo).as_posix())
+        require(candidate not in observed_paths, "Worker instruction paths must be unique")
+        observed_paths.add(candidate)
+        instruction_root = root if candidate.is_relative_to(root) else repo
+        relative = candidate.relative_to(instruction_root).as_posix()
+        instruction_records.append({"path": relative, "sha256": sha_file(candidate)})
+    require(required_paths.issubset(observed_paths),
+            "Worker packet must include original applicable instructions")
     assignment = next((item for item in routing.get("assignments", []) if isinstance(item, dict) and item.get("agent") == role), None)
     return {"status": "PASS", "schemaVersion": "1.0", "runId": run.get("id"), "role": role,
             "objective": objective, "scope": run.get("scope", "full-redesign"),
@@ -1337,7 +1425,7 @@ def worker_packet(path, role, objective, owned_files, instruction_files=None, ar
             "acceptance": {"requiredEvidence": sorted(REQUIRED_EVIDENCE),
                            "fullThemeReleaseBlocked": run.get("scope", "full-redesign") != "full-redesign",
                            "reviewerMustDifferFromImplementer": True},
-            "allowedActions": allowed_actions or ["read", "write-owned", "publish-evidence"],
+            "allowedActions": allowed_actions if allowed_actions is not None else ["read", "write-owned", "publish-evidence"],
             "concurrencyCeiling": 3}
 
 
@@ -1463,12 +1551,12 @@ def _design_backend():
     return _design_backend.module
 
 
-def _registered_result(result, run_path):
+def _registered_result(result, run_path, repo):
     try:
         run = read_json(Path(run_path) / "run.json")
         if run.get("mode") == "yolo":
             backend = _design_backend()
-            cleanup = backend.cleanup_registered_yolo(backend.studio, run_path)
+            cleanup = backend.cleanup_registered_yolo(backend.studio, run_path, repo)
             if cleanup is not None:
                 result["cleanup"] = cleanup
     except (StudioError, OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
@@ -1482,6 +1570,9 @@ def _registered_result(result, run_path):
 def register_theme(repo, theme_id, run_path, make_default=False):
     validate_slug(theme_id)
     repo = Path(repo).resolve()
+    run_path = Path(run_path).resolve()
+    require(run_path != repo and run_path.is_relative_to(repo), "Registration run must belong to the selected repository")
+    run_path = safe_path(repo, run_path.relative_to(repo).as_posix(), allow_dir=True)
     cfg, themes, _ = config_paths(repo)
     verification = check_theme(themes / theme_id)
     require(verification["themeId"] == theme_id, "Registered theme directory ID must match theme.json id and its CSS scope")
@@ -1510,7 +1601,7 @@ def register_theme(repo, theme_id, run_path, make_default=False):
                 ("version", verification["version"]), ("themeDigest", verification["themeDigest"]), ("runId", run_result["runId"]))):
             return _registered_result({"status": "PASS", "registry": str(themes / "registry.json"), "defaultTheme": registry["defaultTheme"],
                     "alreadyRegistered": True, "backup": None,
-                    "message": "Identical run/version/digest is already registered; no registry or default change was made."}, run_path)
+                    "message": "Identical run/version/digest is already registered; no registry or default change was made."}, run_path, repo)
         if run_document["themeAction"] == "new":
             require(existing is None, "New theme ID is already registered; choose a new ID or explicitly start a modify-default run")
         if run_document["themeAction"] == "modify-default":
@@ -1538,7 +1629,7 @@ def register_theme(repo, theme_id, run_path, make_default=False):
         lock.unlink(missing_ok=True)
     return _registered_result({"status": "PASS", "registry": str(path), "defaultTheme": registry["defaultTheme"],
             "backup": str(backup) if backup else None,
-            "message": "Registry updated atomically. The app's reviewed adapter must consume this registry; this command does not deploy or activate a running application."}, run_path)
+            "message": "Registry updated atomically. The app's reviewed adapter must consume this registry; this command does not deploy or activate a running application."}, run_path, repo)
 
 
 def semver_newer(candidate, previous):

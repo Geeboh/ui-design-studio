@@ -17,7 +17,7 @@ ui-design-mcp = "ui_design_studio.cli:mcp_main"
 ui-design = "ui_design_studio.cli:main"
 
 [tool.hatch.build]
-exclude = ["__pycache__", "*.pyc", "*.pyo", ".env", "credentials", ".ui-design-studio", ".design-server.json", ".design-status.json", ".design-owner.json", ".design-server.lock", ".design-records.lock", "node_modules", ".cache"]
+exclude = ["__pycache__", "*.pyc", "*.pyo", ".env", ".env.*", "credentials", ".ui-design-studio", ".design-server.json", ".design-status.json", ".design-owner.json", ".design-server.lock", ".design-records.lock", "node_modules", ".cache"]
 
 [tool.hatch.build.targets.wheel]
 only-include = ["src/ui_design_studio", ".omp/skills", ".omp/agents"]

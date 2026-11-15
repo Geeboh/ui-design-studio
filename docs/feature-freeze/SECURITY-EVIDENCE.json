@@ -1,0 +1,1334 @@
+{
+  "auditMethod": {
+    "python310": "Python 3.12 pip-audit --path /tmp/ui-freeze-py310-7rrHxv/lib/python3.10/site-packages --format=json; unnecessary Python 3.10 auditor dependencies removed.",
+    "python312": "Python 3.12 pip-audit --format=json"
+  },
+  "baseCommit": "5b1d7313247eb33bae5319c4be72c63ef809357b",
+  "candidateParentCommit": "e0af2429d10c7df89820ac7dfcfe175e72243146",
+  "dependencies": {
+    "python310": {
+      "dependencies": [
+        {
+          "name": "annotated-types",
+          "version": "0.8.0",
+          "vulns": []
+        },
+        {
+          "name": "anyio",
+          "version": "4.16.0",
+          "vulns": []
+        },
+        {
+          "name": "attrs",
+          "version": "26.1.0",
+          "vulns": []
+        },
+        {
+          "name": "build",
+          "version": "1.6.1",
+          "vulns": []
+        },
+        {
+          "name": "certifi",
+          "version": "2026.10.23",
+          "vulns": []
+        },
+        {
+          "name": "cffi",
+          "version": "2.1.1",
+          "vulns": []
+        },
+        {
+          "name": "click",
+          "version": "8.5.1",
+          "vulns": []
+        },
+        {
+          "name": "coverage",
+          "version": "7.16.2",
+          "vulns": []
+        },
+        {
+          "name": "cryptography",
+          "version": "50.0.2",
+          "vulns": []
+        },
+        {
+          "name": "exceptiongroup",
+          "version": "1.3.1",
+          "vulns": []
+        },
+        {
+          "name": "greenlet",
+          "version": "3.5.6",
+          "vulns": []
+        },
+        {
+          "name": "h11",
+          "version": "0.16.0",
+          "vulns": []
+        },
+        {
+          "name": "hatchling",
+          "version": "1.33.0",
+          "vulns": []
+        },
+        {
+          "name": "httpcore",
+          "version": "1.0.9",
+          "vulns": []
+        },
+        {
+          "name": "httpx",
+          "version": "0.28.1",
+          "vulns": []
+        },
+        {
+          "name": "httpx-sse",
+          "version": "0.4.3",
+          "vulns": []
+        },
+        {
+          "name": "idna",
+          "version": "3.20",
+          "vulns": []
+        },
+        {
+          "name": "iniconfig",
+          "version": "2.3.1",
+          "vulns": []
+        },
+        {
+          "name": "jsonschema",
+          "version": "4.26.0",
+          "vulns": []
+        },
+        {
+          "name": "jsonschema-specifications",
+          "version": "2025.9.1",
+          "vulns": []
+        },
+        {
+          "name": "mcp",
+          "version": "1.30.0",
+          "vulns": []
+        },
+        {
+          "name": "packaging",
+          "version": "26.3",
+          "vulns": []
+        },
+        {
+          "name": "pathspec",
+          "version": "1.1.1",
+          "vulns": []
+        },
+        {
+          "name": "pip",
+          "version": "26.3",
+          "vulns": []
+        },
+        {
+          "name": "playwright",
+          "version": "1.65.2",
+          "vulns": []
+        },
+        {
+          "name": "pluggy",
+          "version": "1.7.0",
+          "vulns": []
+        },
+        {
+          "name": "psutil",
+          "version": "7.2.2",
+          "vulns": []
+        },
+        {
+          "name": "pycparser",
+          "version": "3.11",
+          "vulns": []
+        },
+        {
+          "name": "pydantic",
+          "version": "2.14.3",
+          "vulns": []
+        },
+        {
+          "name": "pydantic-core",
+          "version": "2.50.4",
+          "vulns": []
+        },
+        {
+          "name": "pydantic-settings",
+          "version": "2.15.0",
+          "vulns": []
+        },
+        {
+          "name": "pygments",
+          "version": "2.21.0",
+          "vulns": []
+        },
+        {
+          "name": "pyjwt",
+          "version": "2.15.1",
+          "vulns": []
+        },
+        {
+          "name": "pyproject-hooks",
+          "version": "1.3.3",
+          "vulns": []
+        },
+        {
+          "name": "pytest",
+          "version": "9.2.0",
+          "vulns": []
+        },
+        {
+          "name": "pytest-subtests",
+          "version": "0.15.0",
+          "vulns": []
+        },
+        {
+          "name": "python-dotenv",
+          "version": "1.2.4",
+          "vulns": []
+        },
+        {
+          "name": "python-multipart",
+          "version": "0.0.32",
+          "vulns": []
+        },
+        {
+          "name": "referencing",
+          "version": "0.37.0",
+          "vulns": []
+        },
+        {
+          "name": "rpds-py",
+          "version": "0.30.0",
+          "vulns": []
+        },
+        {
+          "name": "segno",
+          "version": "1.6.6",
+          "vulns": []
+        },
+        {
+          "name": "sse-starlette",
+          "version": "3.5.1",
+          "vulns": []
+        },
+        {
+          "name": "starlette",
+          "version": "1.7.0",
+          "vulns": []
+        },
+        {
+          "name": "tomli",
+          "version": "2.5.0",
+          "vulns": []
+        },
+        {
+          "name": "tomlkit",
+          "version": "0.15.2",
+          "vulns": []
+        },
+        {
+          "name": "trove-classifiers",
+          "version": "2026.9.21.13",
+          "vulns": []
+        },
+        {
+          "name": "typing-extensions",
+          "version": "4.16.0",
+          "vulns": []
+        },
+        {
+          "name": "typing-inspection",
+          "version": "0.4.5",
+          "vulns": []
+        },
+        {
+          "name": "ui-design-studio-mcp",
+          "skip_reason": "Dependency not found on PyPI and could not be audited: ui-design-studio-mcp (1.4.1)"
+        },
+        {
+          "name": "uvicorn",
+          "version": "0.54.0",
+          "vulns": []
+        },
+        {
+          "name": "zxing-cpp",
+          "version": "3.1.1",
+          "vulns": []
+        }
+      ],
+      "fixes": []
+    },
+    "python312": {
+      "dependencies": [
+        {
+          "name": "annotated-types",
+          "version": "0.8.0",
+          "vulns": []
+        },
+        {
+          "name": "anyio",
+          "version": "4.16.0",
+          "vulns": []
+        },
+        {
+          "name": "attrs",
+          "version": "26.1.0",
+          "vulns": []
+        },
+        {
+          "name": "boolean-py",
+          "version": "5.0",
+          "vulns": []
+        },
+        {
+          "name": "build",
+          "version": "1.6.1",
+          "vulns": []
+        },
+        {
+          "name": "cachecontrol",
+          "version": "0.14.4",
+          "vulns": []
+        },
+        {
+          "name": "certifi",
+          "version": "2026.10.23",
+          "vulns": []
+        },
+        {
+          "name": "cffi",
+          "version": "2.1.1",
+          "vulns": []
+        },
+        {
+          "name": "charset-normalizer",
+          "version": "3.5.2",
+          "vulns": []
+        },
+        {
+          "name": "click",
+          "version": "8.5.1",
+          "vulns": []
+        },
+        {
+          "name": "coverage",
+          "version": "7.17.3",
+          "vulns": []
+        },
+        {
+          "name": "cryptography",
+          "version": "50.0.2",
+          "vulns": []
+        },
+        {
+          "name": "cyclonedx-python-lib",
+          "version": "11.12.0",
+          "vulns": []
+        },
+        {
+          "name": "defusedxml",
+          "version": "0.7.1",
+          "vulns": []
+        },
+        {
+          "name": "filelock",
+          "version": "4.2.10",
+          "vulns": []
+        },
+        {
+          "name": "greenlet",
+          "version": "3.5.6",
+          "vulns": []
+        },
+        {
+          "name": "h11",
+          "version": "0.16.0",
+          "vulns": []
+        },
+        {
+          "name": "hatchling",
+          "version": "1.33.0",
+          "vulns": []
+        },
+        {
+          "name": "httpcore",
+          "version": "1.0.9",
+          "vulns": []
+        },
+        {
+          "name": "httpx",
+          "version": "0.28.1",
+          "vulns": []
+        },
+        {
+          "name": "httpx-sse",
+          "version": "0.4.3",
+          "vulns": []
+        },
+        {
+          "name": "idna",
+          "version": "3.20",
+          "vulns": []
+        },
+        {
+          "name": "iniconfig",
+          "version": "2.3.1",
+          "vulns": []
+        },
+        {
+          "name": "jsonschema",
+          "version": "4.26.0",
+          "vulns": []
+        },
+        {
+          "name": "jsonschema-specifications",
+          "version": "2025.9.1",
+          "vulns": []
+        },
+        {
+          "name": "license-expression",
+          "version": "30.4.4",
+          "vulns": []
+        },
+        {
+          "name": "markdown-it-py",
+          "version": "4.3.0",
+          "vulns": []
+        },
+        {
+          "name": "mcp",
+          "version": "1.30.0",
+          "vulns": []
+        },
+        {
+          "name": "mdurl",
+          "version": "0.1.2",
+          "vulns": []
+        },
+        {
+          "name": "msgpack",
+          "version": "1.2.4",
+          "vulns": []
+        },
+        {
+          "name": "packageurl-python",
+          "version": "0.17.6",
+          "vulns": []
+        },
+        {
+          "name": "packaging",
+          "version": "26.3",
+          "vulns": []
+        },
+        {
+          "name": "pathspec",
+          "version": "1.1.1",
+          "vulns": []
+        },
+        {
+          "name": "pip",
+          "version": "26.3",
+          "vulns": []
+        },
+        {
+          "name": "pip-api",
+          "version": "0.0.35",
+          "vulns": []
+        },
+        {
+          "name": "pip-audit",
+          "version": "2.10.1",
+          "vulns": []
+        },
+        {
+          "name": "pip-requirements-parser",
+          "version": "32.0.1",
+          "vulns": []
+        },
+        {
+          "name": "platformdirs",
+          "version": "4.14.5",
+          "vulns": []
+        },
+        {
+          "name": "playwright",
+          "version": "1.65.2",
+          "vulns": []
+        },
+        {
+          "name": "pluggy",
+          "version": "1.7.0",
+          "vulns": []
+        },
+        {
+          "name": "psutil",
+          "version": "7.2.2",
+          "vulns": []
+        },
+        {
+          "name": "py-serializable",
+          "version": "2.2.0",
+          "vulns": []
+        },
+        {
+          "name": "pycparser",
+          "version": "3.12",
+          "vulns": []
+        },
+        {
+          "name": "pydantic",
+          "version": "2.14.3",
+          "vulns": []
+        },
+        {
+          "name": "pydantic-core",
+          "version": "2.50.4",
+          "vulns": []
+        },
+        {
+          "name": "pydantic-settings",
+          "version": "2.16.3",
+          "vulns": []
+        },
+        {
+          "name": "pygments",
+          "version": "2.21.0",
+          "vulns": []
+        },
+        {
+          "name": "pyjwt",
+          "version": "2.15.1",
+          "vulns": []
+        },
+        {
+          "name": "pyparsing",
+          "version": "3.3.3",
+          "vulns": []
+        },
+        {
+          "name": "pyproject-hooks",
+          "version": "1.3.3",
+          "vulns": []
+        },
+        {
+          "name": "pytest",
+          "version": "9.2.0",
+          "vulns": []
+        },
+        {
+          "name": "pytest-subtests",
+          "version": "0.15.0",
+          "vulns": []
+        },
+        {
+          "name": "python-dotenv",
+          "version": "1.2.4",
+          "vulns": []
+        },
+        {
+          "name": "python-multipart",
+          "version": "0.0.33",
+          "vulns": []
+        },
+        {
+          "name": "referencing",
+          "version": "0.37.0",
+          "vulns": []
+        },
+        {
+          "name": "requests",
+          "version": "2.34.2",
+          "vulns": []
+        },
+        {
+          "name": "rich",
+          "version": "15.0.0",
+          "vulns": []
+        },
+        {
+          "name": "rpds-py",
+          "version": "2026.9.1",
+          "vulns": []
+        },
+        {
+          "name": "ruff",
+          "version": "0.17.5",
+          "vulns": []
+        },
+        {
+          "name": "segno",
+          "version": "1.6.6",
+          "vulns": []
+        },
+        {
+          "name": "sortedcontainers",
+          "version": "2.4.0",
+          "vulns": []
+        },
+        {
+          "name": "sse-starlette",
+          "version": "3.7.0",
+          "vulns": []
+        },
+        {
+          "name": "starlette",
+          "version": "1.10.0",
+          "vulns": []
+        },
+        {
+          "name": "tomli",
+          "version": "2.5.0",
+          "vulns": []
+        },
+        {
+          "name": "tomli-w",
+          "version": "1.2.0",
+          "vulns": []
+        },
+        {
+          "name": "tomlkit",
+          "version": "0.15.2",
+          "vulns": []
+        },
+        {
+          "name": "trove-classifiers",
+          "version": "2026.9.21.13",
+          "vulns": []
+        },
+        {
+          "name": "typing-extensions",
+          "version": "4.16.0",
+          "vulns": []
+        },
+        {
+          "name": "typing-inspection",
+          "version": "0.4.5",
+          "vulns": []
+        },
+        {
+          "name": "urllib3",
+          "version": "2.8.0",
+          "vulns": []
+        },
+        {
+          "name": "uvicorn",
+          "version": "0.54.0",
+          "vulns": []
+        },
+        {
+          "name": "zxing-cpp",
+          "version": "3.1.1",
+          "vulns": []
+        }
+      ],
+      "fixes": []
+    }
+  },
+  "engineCommit": "35001cedc379017fe79bf7b22b2b8630bd5cbd4d",
+  "limits": [
+    "Scanner returned no scanner-version or scanned-file count; neither is invented.",
+    "No vulnerability absence guarantee for future dependency resolutions.",
+    "Pillow was verification-only, removed rather than suppressed. No malicious image reproduction was executed.",
+    "Source identity covers code and workflow inputs, not later audit-report edits.",
+    "Local unpublished ui-design-studio-mcp may be skipped by the advisory database; authored source is reviewed separately. Neither Pillow nor auditor filelock advisories were suppressed."
+  ],
+  "recordedAt": "2026-11-15T23:01:15.059655+00:00",
+  "removedAuditPrerequisite": [
+    {
+      "advisories": [
+        {
+          "aliases": [
+            "GHSA-2g95-wg33-c5x2"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112906"
+        },
+        {
+          "aliases": [
+            "GHSA-v4x8-3wr5-3wq8"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112940"
+        },
+        {
+          "aliases": [
+            "GHSA-crv4-6mhj-j5jh"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112914"
+        },
+        {
+          "aliases": [
+            "GHSA-9vhv-jxww-xfm5"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112913"
+        },
+        {
+          "aliases": [
+            "GHSA-jqc4-5cvw-7w85"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112937"
+        },
+        {
+          "aliases": [
+            "GHSA-567q-5qvw-pf92"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112907"
+        },
+        {
+          "aliases": [
+            "GHSA-m462-7rxw-wvpg"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112938"
+        },
+        {
+          "aliases": [
+            "GHSA-8mx5-7m5m-r77g"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112910"
+        },
+        {
+          "aliases": [
+            "GHSA-fj95-fr6c-h845"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112934"
+        },
+        {
+          "aliases": [
+            "GHSA-69hj-f68j-2879"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112909"
+        },
+        {
+          "aliases": [
+            "GHSA-9c4x-gm8v-wgc4"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112911"
+        },
+        {
+          "aliases": [
+            "GHSA-rfpc-qcw5-3pc4"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112939"
+        },
+        {
+          "aliases": [
+            "GHSA-cwqr-hh33-gh44"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112915"
+        },
+        {
+          "aliases": [
+            "GHSA-fq56-3cx3-fjxp"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112935"
+        },
+        {
+          "aliases": [
+            "GHSA-9j6q-wvj5-jgjg"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112912"
+        },
+        {
+          "aliases": [
+            "GHSA-6627-m3xw-93mp"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112908"
+        },
+        {
+          "aliases": [
+            "GHSA-wfhq-q4j2-c37m"
+          ],
+          "fix_versions": [
+            "4.2.1"
+          ],
+          "id": "CVE-2026-112941"
+        }
+      ],
+      "name": "filelock",
+      "version": "4.1.0"
+    }
+  ],
+  "removedVerificationDependency": [
+    {
+      "advisories": [
+        {
+          "aliases": [
+            "GHSA-4558-3h8r-v8xp",
+            "CVE-2026-112394"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4327"
+        },
+        {
+          "aliases": [
+            "CVE-2026-112396",
+            "GHSA-4rr5-89j8-mwwm"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4328"
+        },
+        {
+          "aliases": [
+            "CVE-2026-112392",
+            "GHSA-27h8-gf7j-v5hc"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4326"
+        },
+        {
+          "aliases": [
+            "GHSA-v9pv-5gc8-w2m6",
+            "CVE-2026-96639"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4339"
+        },
+        {
+          "aliases": [
+            "GHSA-4rm8-3hmm-39fg",
+            "CVE-2026-96641"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4340"
+        },
+        {
+          "aliases": [
+            "GHSA-9v9v-9qvf-h2hj",
+            "CVE-2026-96644"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4343"
+        },
+        {
+          "aliases": [
+            "CVE-2026-112896",
+            "GHSA-pchr-8j38-3x4p"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4334"
+        },
+        {
+          "aliases": [
+            "CVE-2026-96636",
+            "GHSA-p8hx-v2p6-rp84"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4337"
+        },
+        {
+          "aliases": [
+            "CVE-2026-96642",
+            "GHSA-3j72-p6qg-6xp7"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4341"
+        },
+        {
+          "aliases": [
+            "CVE-2026-112398",
+            "GHSA-5x8w-8jj5-q52h"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4330"
+        },
+        {
+          "aliases": [
+            "CVE-2026-96637",
+            "GHSA-g842-9rc4-69pw"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4338"
+        },
+        {
+          "aliases": [
+            "CVE-2026-112901",
+            "GHSA-xgh8-jp6q-p5x8"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4335"
+        },
+        {
+          "aliases": [
+            "CVE-2026-114501",
+            "GHSA-654x-cwwv-5j9c"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4336"
+        },
+        {
+          "aliases": [
+            "GHSA-7mwm-ghpf-9vrm",
+            "CVE-2026-112402"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4331"
+        },
+        {
+          "aliases": [
+            "GHSA-8g5g-8vmr-9782",
+            "CVE-2026-112403"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4332"
+        },
+        {
+          "aliases": [
+            "CVE-2026-112397",
+            "GHSA-58r4-6rv3-gfh8"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4329"
+        },
+        {
+          "aliases": [
+            "CVE-2026-112405",
+            "GHSA-cp9v-662q-vvx9"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4333"
+        },
+        {
+          "aliases": [
+            "GHSA-g4qv-2jxx-769h",
+            "CVE-2026-96643"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4342"
+        },
+        {
+          "aliases": [
+            "CVE-2026-112902",
+            "GHSA-xvh5-g6gv-559v"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "PYSEC-2026-4363"
+        },
+        {
+          "aliases": [
+            "GHSA-p4wg-p73j-c528"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112895"
+        },
+        {
+          "aliases": [
+            "GHSA-65qm-jvmh-6pqg"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112400"
+        },
+        {
+          "aliases": [
+            "GHSA-q45j-58j2-45rg"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112897"
+        },
+        {
+          "aliases": [
+            "GHSA-462x-pgg6-55fp"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112395"
+        },
+        {
+          "aliases": [
+            "GHSA-c6hw-5grf-ff96"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112404"
+        },
+        {
+          "aliases": [
+            "GHSA-vx6w-vv9f-6gvg"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112899"
+        },
+        {
+          "aliases": [
+            "GHSA-w889-685w-c8fh"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112900"
+        },
+        {
+          "aliases": [
+            "GHSA-j4m9-6w36-pw47"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112893"
+        },
+        {
+          "aliases": [
+            "GHSA-fc9g-5qg7-mf45"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112891"
+        },
+        {
+          "aliases": [
+            "GHSA-22hg-r758-rrw9"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112390"
+        },
+        {
+          "aliases": [
+            "GHSA-74r2-7ff9-mjj2"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112401"
+        },
+        {
+          "aliases": [
+            "GHSA-254f-3936-288h"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112391"
+        },
+        {
+          "aliases": [
+            "GHSA-jg86-v3jv-hrpm"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112894"
+        },
+        {
+          "aliases": [
+            "GHSA-f2g6-542v-9j58"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112406"
+        },
+        {
+          "aliases": [
+            "GHSA-5xm2-6676-qcp9"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112399"
+        },
+        {
+          "aliases": [
+            "GHSA-gg2r-wvfm-q9rx"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112892"
+        },
+        {
+          "aliases": [
+            "GHSA-332p-7hrc-92wf"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-112393"
+        },
+        {
+          "aliases": [
+            "GHSA-24rc-8hj2-v98c"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-96638"
+        },
+        {
+          "aliases": [
+            "GHSA-mrfp-p49p-3hf2"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-96640"
+        },
+        {
+          "aliases": [
+            "GHSA-g7cr-3p24-7wf7"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-96778"
+        },
+        {
+          "aliases": [],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "GHSA-78g4-xqwv-q3g8"
+        },
+        {
+          "aliases": [
+            "GHSA-xcvg-w56q-r89m"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-128067"
+        },
+        {
+          "aliases": [
+            "GHSA-wqgw-9xfh-qf2g"
+          ],
+          "fix_versions": [
+            "13.0.0"
+          ],
+          "id": "CVE-2026-128066"
+        }
+      ],
+      "name": "pillow",
+      "version": "12.3.0"
+    }
+  ],
+  "schemaVersion": 1,
+  "shippingFollowUp": {
+    "actualHistoryBack": "trusted pageshow persisted=false with new document; latest and subsequent run polling passed",
+    "browser": "Chromium159.0.8154.6",
+    "browserTests": 7,
+    "cacheAdmissionReasons": [
+      "response-cache-control-no-store",
+      "response-cache-control-no-store-with-js-network-request"
+    ],
+    "parentCommit": "736a38b428ad8c3076a48482154161587fc4fe9b",
+    "privacyHeadersChanged": false,
+    "productionRuntimeChanged": false
+  },
+  "sourceIdentity": {
+    "files": {
+      ".omp/agents/ui-art-director.md": "311344680b30644d359b8ed579be82e312cc61799d3ec95c3e54fce0441db02a",
+      ".omp/agents/ui-implementer.md": "2e4470f71419fcd1bb60ac2f30c2ce7408a0ee6c91db6d5d376a44e8d9f69638",
+      ".omp/agents/ui-page-designer.md": "9078aa27a1155c480ff4aa484c0be896d205f548a374736fd86c768292bf142f",
+      ".omp/agents/ui-performance-reviewer.md": "bfde5c50645dfadb452d93c464db1b47e0c618073dfbc2f3bd38aa28d14b3d83",
+      ".omp/agents/ui-quality-reviewer.md": "db46ef81795732a2f3ff11ec6135ed7d126d20fef5d6d642f375d984dd19d438",
+      ".omp/agents/ui-theme-engineer.md": "61fcdb5a9a0c7caa2fad5d6b3abe952b6bffe090e257164920a5c6226803e5e9",
+      ".omp/agents/ui-ux-researcher.md": "d3bea1f0b6906aea9f987c3f43312ce2d23f177a337385b123a3d71505cad58c",
+      ".omp/commands/ui-design.md": "1dae8f8a26912367940f0c96f12a3f3331832974d8bda730b353fa94da116ba2",
+      ".omp/commands/ui-yolo.md": "9d39003b7f5e4406d1ad34721ddb2efb5f4ef12444120f4e55bc25b94bcb84e3",
+      ".omp/extensions/ui-design-progress.ts": "ba2cdf0a2335e592fb7fc2d4200ac195e57bea1f2e162fed66383a8dd9676e01",
+      ".omp/skills/ui-assess/SKILL.md": "03db44b591875aaed8c180241eebdd4c6ac0c5caabde954f50596f38940f32c5",
+      ".omp/skills/ui-design-studio/SKILL.md": "160b32a330f17774bf8b1c24583f8e2931586644652a83c3c3e767d0f66245ad",
+      ".omp/skills/ui-design-studio/assets/example-theme/CHANGELOG.md": "37e49ebde00cc165e87d13175376a9f3ae0fdfd61de50f78e15013986fdcd9e8",
+      ".omp/skills/ui-design-studio/assets/example-theme/LICENSE.txt": "cc8b93d3107d259c5c55d4e4a20e17c4232518f0e715d4bf191162031b49b38b",
+      ".omp/skills/ui-design-studio/assets/example-theme/README.md": "2c21d5fb7073c367769da342786307c29c326e054d330a0a64a708e767b6cbab",
+      ".omp/skills/ui-design-studio/assets/example-theme/icons.svg": "07785c5fbf83eb6f4fbccdc109fc527430a22723e9f7cdb7ef6803f35a206298",
+      ".omp/skills/ui-design-studio/assets/example-theme/preview.html": "c2deaca074e19273f57c49bd325ba72da1c8c620b69f398dd0972494f8c297e6",
+      ".omp/skills/ui-design-studio/assets/example-theme/theme.css": "c7a4c8acbf997f369ca43b1f4cc2d98fad4e36c3ccfe45a4a3929f07abc67444",
+      ".omp/skills/ui-design-studio/assets/example-theme/theme.json": "9b897b417bc73c2b633b8607cfeaa8ab6e517a9b17ea9391f24399fc6b6517f7",
+      ".omp/skills/ui-design-studio/assets/example-theme/tokens.css": "461d3d657a0bf1ac1b0baa603d631f1224afc533e21c971365e26ecfadc0d9c5",
+      ".omp/skills/ui-design-studio/assets/example-theme/tokens.json": "227262c29ccf9803c32fc42b1167242ea542a4e8f9b65c1394db074587ef6195",
+      ".omp/skills/ui-design-studio/dashboard/dashboard.css": "b2e8e16a8ccfe2941733e9b25d8186cdf479adf2af7611bc272b16940679ae8d",
+      ".omp/skills/ui-design-studio/dashboard/dashboard.js": "09a3f487575d13bf9f6be3f0a2bda1dd74c5dd50be8018269f618181ad050c5f",
+      ".omp/skills/ui-design-studio/dashboard/index.html": "beb643203b44cff5d7f2cb424ad122feeadac9ef764b80efdb250b68fc9756e8",
+      ".omp/skills/ui-design-studio/dashboard/landing.html": "9ebceac67c044fddd96c5aec2862ad623d8af58868aea24577e0b4fe136356b1",
+      ".omp/skills/ui-design-studio/dashboard/landing.js": "db54e49dad3f5486da92665d866f9dd68d106cbceefc0cf4cfd680d96d1ad2ad",
+      ".omp/skills/ui-design-studio/references/assessment.md": "73e7fbcbae053dc0803d7797dfbfbb7b9fde2ad16bd779ebf5f7dbc7760575b7",
+      ".omp/skills/ui-design-studio/references/decisions.md": "826cdbb43012ae71d9c28c04bf5732b594011302c0b66a3168991d447fa44e47",
+      ".omp/skills/ui-design-studio/references/model-routing.md": "096796baa05eae0e2e5571ee95e772807edead7e129ed3c5af69c3091c067735",
+      ".omp/skills/ui-design-studio/references/multi-agent.md": "f875b1688552cf3903f02b0f46ce80609ac721dc6b7437623a91f6226fd53f12",
+      ".omp/skills/ui-design-studio/references/project-context.md": "bf05a8bb999d3df3807f38fdb00e8293e03f5794fe370fdbc73c9c94d2ac7dca",
+      ".omp/skills/ui-design-studio/references/quality-gates.md": "758bff28e783b92cfc0f33d744ebe11d985b497ddc195e8be5c725e1c3f1b223",
+      ".omp/skills/ui-design-studio/references/run-records.md": "aab653d501965bc8a734b77d5a365113f300660089d1e11b6979b98d1e6d5cea",
+      ".omp/skills/ui-design-studio/references/tada-profile.md": "029c4e2ef97766a1696e6ead1756d2e0670656b150117869e2e0b56a12493f2a",
+      ".omp/skills/ui-design-studio/references/theme-module.md": "5fc7b8e1ccac9e498d4d951642ef87f60098055433d8768a5ab79803ca94875b",
+      ".omp/skills/ui-design-studio/references/visual-system.md": "d9d7eb33b05f80a8295c0c6bb87c07bc565de0c8ab52eaf2a7ddea40a4efb1c5",
+      ".omp/skills/ui-design-studio/references/workflow.md": "e320ad53e7fdf62d9e1c63d9b43ba3cb8d85046901a74c99188d4cd7a4ea4e2c",
+      ".omp/skills/ui-design-studio/schemas/theme.schema.json": "41c45babfedfc2e94b162f43e24e7467fe54bdd7368fc07957b71ecfa7bd7d7b",
+      ".omp/skills/ui-design-studio/scripts/design_server.py": "e5b3a9958ab8b57e30920018fa32f87057b2189859899bc43ee05d452d42c057",
+      ".omp/skills/ui-design-studio/scripts/studio.py": "d4cf2593924bd3ac7364b2ff6726751f8e93ec96786095fc49c6c2300f165b73",
+      ".omp/skills/ui-design/SKILL.md": "bdcd4629584e0a599dda28d01fcefd65202ebba7f0f0646138e44fca3756828c",
+      ".omp/skills/ui-finalize/SKILL.md": "e478f35aff4164742d32d83c63ab14c217f538ee86421ebf72fcd568e0d4a047",
+      ".omp/skills/ui-plan/SKILL.md": "ffb7265abeeaa1afec3699ac5bfa1d82162e02f1957776452607429eebef92dd",
+      ".omp/skills/ui-produce/SKILL.md": "f3e52006272ce3e819d03dba3bc598b58b413d4770d61b034887a44864c2d1ce",
+      ".omp/skills/ui-review/SKILL.md": "939961ef505a5a4b91449f2e5611f06e18af88b09f4011207bed11d8346183c7",
+      ".omp/skills/ui-theme/SKILL.md": "099cfbb0486cb0cae55e9a2eba5c1caaaebdb03edd2efdeb52379e99ac3b6e7c",
+      ".omp/skills/ui-yolo/SKILL.md": "aec70eb414815468a0583ff4832d9bc1abb800a40b383400d3742d635d68d674",
+      "hatch_build.py": "516cc00579b40d69fbdf03c0e226602e62ec6dd223a7d9e0f2c495881a3835db",
+      "install.sh": "039f025be3c862a8b19e7558d5c7f74ffef2b78d2c292a9b19331c4b61b82660",
+      "pyproject.toml": "a22ed3731a2c6a01e2bc6dbd7b4b967d1e2775dde444cf5a25addd37ef22eb82",
+      "release.json": "291064cb0c8815093804da6fb9dd88501b2bcc3ece5c5f8e57f2e19c7892eded",
+      "scripts/install.py": "ca4aa188f97d34d824fecb1df2ca56591b49b4db538a4b87cd18cae30a9e947a",
+      "scripts/install_mcp.py": "e1889075f6761a96728bf65291eea0a2f6a677809e9fbe2ceeca5d5d8578d18b",
+      "scripts/package_release.py": "ea33fd7b3f4fc9ff3d0d976dacba3b68b4fba5c30b1ff17b4bfdb23d5f64dfee",
+      "scripts/remediation_benchmark.py": "495b3dd1583f7bcde0f343b81fbf2309a8c0a531d2e3e49a210bcda0871eda79",
+      "src/ui_design_studio/__init__.py": "ac523883434545455444c85feb089b6c81f81be34a76f823842ff4291dab25b5",
+      "src/ui_design_studio/cli.py": "5b86e8cea89e9d5919317499c2503d3021bc91159c6fb41c28b76a5b1b958f56",
+      "src/ui_design_studio/dashboard.py": "f1e1ef6e5a87596a0cc9c2e713bd53c35083d77830a3c6af0bf59dde48e7adbb",
+      "src/ui_design_studio/mcp-guide.md": "febbe2caa846f44a2c6e59f931e9e5db3d670ccd8c4369d3445ba70b7a9e2235",
+      "src/ui_design_studio/runtime.py": "a791c65167983bce31826769ef864bb2656be5a739c24bf581a65bda631a2e0c",
+      "src/ui_design_studio/server.py": "cf5de45e8b47746e28bd119bd4c1ba3f6c339e5e86a65ddde1fac1601eff1ea7",
+      "tests/test_dashboard_browser.py": "979f4369fed85a463d0efa572bba2356327a70095906e90d2d6424842f05b7ad",
+      "tests/test_design_server.py": "4437d374018bcc60e95e98c0da0c859b0df00ea9505308272f91b258956fe565",
+      "tests/test_feature_freeze.py": "a7e5dea52bdce29e280906ff68ee695e50a4c451173819ffefde1ce5c26fb92d",
+      "tests/test_freeze_acceptance.py": "8ef0f104624e75d063ae62dfc92a74933a92a0b3adb68dfb55cf29c29cf2ad42",
+      "tests/test_freeze_integrity.py": "5a671d50e8f8540441b94352233a32cba3899141670d4384a00b4c40c4c76066",
+      "tests/test_global_mcp_install.py": "ee0f3e2eaae6b850716ca0c78492d3712592f3218ba2bfd54f501fa921df7005",
+      "tests/test_install.py": "15898380f78f481e329c771585542d357ee2d07340ed9c062e09f79b5acee488",
+      "tests/test_mcp.py": "3d12b4c5fc231b20c5e57448b47be4f130c26872536be92a894d9e88299ef7c1",
+      "tests/test_mcp_dashboard.py": "30f66b654b8ea27e626eff7422e07ba4b9550d6b575d87559be9fd2865f0b3d2",
+      "tests/test_mcp_package.py": "ac82f4dcb33a745c370925e648d7046dbdae2f26643f9696ec09e8e9409b2313",
+      "tests/test_progress_extension.mjs": "e7e4cad48d021d6f1bef9a9420f40894c1fa49217d0e9babe21013d0e94fd9bf",
+      "tests/test_progress_extension.py": "d88b375201197c5a5ac717282c0c37965d1abadfd924ba85dc5eb9de3c422ce1",
+      "tests/test_release_builder.py": "c9396da76ce866cae46eddd6fa2bb877b7e6336c8b573f7ce806edeed18e28ad",
+      "tests/test_remediation_contract.py": "f1bb579f3d5da803c27d90265864c519766f7b08e6f67bdfbd1230349cf619c4",
+      "tests/test_studio.py": "9a0b6991959b69a2441ece7a5988c5f591eb01aacba4a8120a75c49a7d1cd210",
+      "tools/ui-design": "7b77bac0615532821ad9164308cade333827611601cca9432b89953debc7c0c9"
+    },
+    "method": "SHA-256 per authored runtime, workflow, build, and test input. Audit reports and generated archives excluded to avoid self-reference."
+  },
+  "trivy": {
+    "findingsResponse": {
+      "findings": [],
+      "meta": {
+        "action_required": "For CRITICAL and HIGH findings, recommend immediate action",
+        "category_icons": "{\"0\":\"\ud83d\udee1\ufe0f Vulnerability\",\"1\":\"\u2699\ufe0f Misconfiguration\",\"2\":\"\ud83d\udcc4 License\",\"3\":\"\ud83d\udd11 Secret\"}",
+        "finding_schema": "{\"an\":\"Name - Package name, resource name, etc.\",\"ap\":\"Path - File path or target\",\"at\":\"ArtifactType - Type of artifact (package, file, image, etc.)\",\"av\":\"Version - Package version or image tag\",\"c\":\"Category - Type of finding (0=Vuln, 1=Misconfig, 2=License, 3=Secret)\",\"cvss_score\":\"CvssScore - CVSS numerical score\",\"cvss_vec\":\"CvssVector - CVSS vector string\",\"cwe\":\"CweIDs - Common Weakness Enumeration IDs\",\"dep_path\":\"DepPath - Dependency path\",\"desc\":\"Description - Detailed description\",\"epss_date\":\"EpssDate - EPSS data date\",\"epss_pct\":\"EpssPercentile - EPSS percentile\",\"epss_score\":\"EpssScore - EPSS exploit prediction score\",\"f\":\"File - Specific file path\",\"fc\":\"Cmd - Fix command (e.g., 'npm i lodash@4.17.21')\",\"fv\":\"FixedVer - Fixed version or resolution\",\"fx\":\"HasFix - Whether a fix is available\",\"i\":\"ID - Deterministic identifier for the finding\",\"id\":\"Identifier - CVE ID, Rule ID, etc.\",\"indirect\":\"Indirect - Whether dependency is indirect\",\"ln\":\"Line - Line number in file\",\"mod_date\":\"LastModifiedDate - Last modified date\",\"pkg_roots\":\"PkgRoots - Package root dependencies\",\"pub_date\":\"PublishedDate - Vulnerability published date\",\"purl\":\"Purl - Package URL\",\"refs\":\"References - Reference URLs\",\"s\":\"Severity - Severity level (0=Unknown, 1=Low, 2=Medium, 3=High, 4=Critical)\",\"status\":\"Status - Status (e.g., 'fixed')\",\"title\":\"Title - Human-readable title\"}",
+        "instruction": "The ID should be given to the user either the CVE or the Rule ID",
+        "pagination": "Use the 'token' argument to paginate through the results. The 'token' is the value of the 'next_token' field in the previous response. If there is no more data to return, the 'next_token' field will be empty.",
+        "presentation_hint": "Group findings by severity (Critical first, then High, Medium, Low)",
+        "severity_colors": "{\"4\":\"\ud83d\udd34 CRITICAL\",\"3\":\"\ud83d\udfe0 HIGH\",\"2\":\"\ud83d\udfe1 MEDIUM\",\"1\":\"\ud83d\udd35 LOW\",\"0\":\"\u26aa UNKNOWN\"}",
+        "url_instruction": "Always display reference URLs when available - check 'refs' field for reference links that provide more details about the finding"
+      }
+    },
+    "scanResponse": {
+      "batch_id": "20ae704c-e6ca-49cf-a126-601958c52512",
+      "counts": {},
+      "fingerprint": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+      "meta": {
+        "fixedOnly": "false",
+        "outputFormat": "json",
+        "scanType": "vuln,secret,misconfig,license",
+        "severities": "CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN",
+        "target": "/code/ui-design-freeze-20261116-UKWQB8",
+        "targetType": "filesystem"
+      },
+      "next": {
+        "tool": "findings_list",
+        "why": "To see the list of findings"
+      }
+    }
+  }
+}

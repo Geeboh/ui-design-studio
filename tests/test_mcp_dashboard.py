@@ -28,19 +28,18 @@ from ui_design_studio.runtime import backend, studio
 
 
 def decode_terminal_qr(text):
-    from PIL import Image
     import zxingcpp
 
     lines = text.splitlines()
     width = max(map(len, lines))
-    image = Image.new("L", (width, len(lines) * 2), 0)
+    pixels = bytearray(width * len(lines) * 2)
     glyphs = {" ": (0, 0), "▀": (255, 0), "▄": (0, 255), "█": (255, 255)}
     for row, line in enumerate(lines):
         for column, character in enumerate(line.ljust(width)):
             top, bottom = glyphs[character]
-            image.putpixel((column, row * 2), top)
-            image.putpixel((column, row * 2 + 1), bottom)
-    decoded = zxingcpp.read_barcode(image.resize((width * 8, len(lines) * 16), Image.Resampling.NEAREST))
+            pixels[row * 2 * width + column] = top
+            pixels[(row * 2 + 1) * width + column] = bottom
+    decoded = zxingcpp.read_barcode(memoryview(pixels).cast("B", shape=(len(lines) * 2, width)))
     return None if decoded is None else decoded.text
 
 
@@ -840,8 +839,39 @@ class DashboardTests(unittest.TestCase):
         for run in (first_run, second_run):
             self.assertEqual(urlsplit(session.info(run)["lanUrls"][0]).hostname, "192.0.2.8")
         self.assertEqual(urlsplit(self.engine.read_json(first_root / ".design-server.json")["url"]).hostname, "192.0.2.8")
+    def test_verified_live_observation_survives_concurrent_selection_of_same_owner(self):
+        owner = self.session()
+        root, relative = self.new_run()
+        expected = owner.open_run(relative)
+        session = self.session()
+        observed = threading.Event()
+        release = threading.Event()
+        self.addCleanup(release.set)
+        inspect = session._live_details
 
-    def test_unresponsive_foreign_runs_do_not_hide_a_healthy_landing_or_owned_run(self):
+        def pause_observation(*args, **kwargs):
+            details = inspect(*args, **kwargs)
+            if kwargs.get("handles") is not None:
+                observed.set()
+                if not release.wait(5):
+                    raise AssertionError("Selection did not release the captured live observation")
+            return details
+
+        with mock.patch.object(session, "_live_details", side_effect=pause_observation):
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pending = pool.submit(session.session_data)
+                try:
+                    self.assertTrue(observed.wait(5), "The liveness probe did not complete")
+                    session.open_run(relative)
+                finally:
+                    release.set()
+                data = pending.result(timeout=5)
+        selected, = [run for run in data["runs"] if run["selected"]]
+        self.assertTrue(selected["live"])
+        self.assertEqual(selected["dashboard"]["instanceId"], expected["instanceId"])
+        self.assertEqual(data["selectedRun"]["instanceId"], expected["instanceId"])
+
+    def test_concurrent_landing_polls_finish_within_browser_deadline_despite_stalled_owner(self):
         release = threading.Event()
 
         class StalledOwner(BaseHTTPRequestHandler):
@@ -849,6 +879,57 @@ class DashboardTests(unittest.TestCase):
                 pass
 
             def do_GET(self):
+                release.wait(10)
+
+        listener = ThreadingHTTPServer(("127.0.0.1", 0), StalledOwner)
+        listener.daemon_threads = True
+        thread = threading.Thread(target=listener.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+        thread.start()
+        self.addCleanup(listener.server_close)
+        self.addCleanup(listener.shutdown)
+        self.addCleanup(release.set)
+        session = self.session()
+        root, foreign_run = self.new_run()
+        url = f"http://127.0.0.1:{listener.server_port}/#token=" + "t" * 43
+        self.write_private(root / ".design-server.json", {
+            "schemaVersion": "1.0", "instanceId": "f" * 48, "run": str(root),
+            "url": url, "localUrl": url, "lanUrls": [],
+            "probeUrl": f"http://127.0.0.1:{listener.server_port}/api/identity",
+        })
+        unused_root, healthy_run = self.new_run()
+        healthy = session.open_run(healthy_run)
+        barrier = threading.Barrier(4)
+
+        def poll():
+            barrier.wait(timeout=5)
+            return self.request(session.local_url)
+
+        try:
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                responses = list(pool.map(lambda unused: poll(), range(4)))
+        finally:
+            release.set()
+        for code, unused_headers, data in responses:
+            self.assertEqual(code, 200)
+            foreign, = [run for run in data["runs"] if run["run"] == foreign_run]
+            self.assertFalse(foreign["live"])
+            self.assertIsNone(foreign["dashboard"])
+            live = [run for run in data["runs"] if run["live"]]
+            self.assertEqual([run["run"] for run in live], [healthy_run])
+            self.assertEqual(live[0]["dashboard"]["instanceId"], healthy["instanceId"])
+            self.assertEqual(data["selectedRun"]["run"], healthy_run)
+
+
+    def test_unresponsive_foreign_runs_do_not_hide_a_healthy_landing_or_owned_run(self):
+        release = threading.Event()
+        requests = []
+
+        class StalledOwner(BaseHTTPRequestHandler):
+            def log_message(self, *unused):
+                pass
+
+            def do_GET(self):
+                requests.append(self.path)
                 release.wait(5)
 
         listener = ThreadingHTTPServer(("127.0.0.1", 0), StalledOwner)
@@ -859,8 +940,10 @@ class DashboardTests(unittest.TestCase):
         self.addCleanup(listener.shutdown)
         self.addCleanup(release.set)
         session = self.session()
-        for index in range(3):
-            root, unused_run = self.new_run()
+        foreign_runs = []
+        for index in range(4):
+            root, foreign_run = self.new_run()
+            foreign_runs.append(foreign_run)
             url = f"http://127.0.0.1:{listener.server_port}/#token=" + "t" * 43
             self.write_private(root / ".design-server.json", {
                 "schemaVersion": "1.0", "instanceId": str(index) * 48, "run": str(root),
@@ -869,12 +952,23 @@ class DashboardTests(unittest.TestCase):
             })
         unused_root, healthy_run = self.new_run()
         healthy = session.open_run(healthy_run)
+        owner = self.session()
+        unused_root, selected_run = self.new_run()
+        selected = owner.open_run(selected_run)
+        session.open_run(selected_run)
+        started = time.monotonic()
         code, unused_headers, data = self.request(session.local_url)
+        elapsed = time.monotonic() - started
         self.assertEqual(code, 200)
-        self.assertEqual(len(data["runs"]), 4)
+        self.assertLess(elapsed, dashboard.PROBE_TIMEOUT + 1)
+        self.assertEqual(requests, ["/api/identity"] * 4)
+        self.assertEqual([run["run"] for run in data["runs"]], foreign_runs + [healthy_run, selected_run])
         live = [run for run in data["runs"] if run["live"]]
-        self.assertEqual([run["run"] for run in live], [healthy_run])
-        self.assertEqual(data["selectedRun"]["instanceId"], healthy["instanceId"])
+        self.assertEqual([run["run"] for run in live], [healthy_run, selected_run])
+        self.assertEqual(live[0]["dashboard"]["instanceId"], healthy["instanceId"])
+        self.assertEqual(data["selectedRun"]["run"], selected_run)
+        self.assertEqual(data["selectedRun"]["instanceId"], selected["instanceId"])
+        self.assertEqual([run["run"] for run in data["runs"] if run["selected"]], [selected_run])
 
 
 class ForegroundDashboardTests(unittest.IsolatedAsyncioTestCase):

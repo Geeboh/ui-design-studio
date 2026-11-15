@@ -1114,8 +1114,16 @@
     viewer?.node?.removeAttribute("src");
     byId("viewer-content").replaceChildren();
     state.viewer = null;
-    const replacement = viewer ? byId(`${state.view}-panel`).querySelector(`[data-artwork-id="${CSS.escape(viewer.artwork.id)}"] .artwork-open`) : null;
-    const target = viewer?.returnFocus?.isConnected ? viewer.returnFocus : replacement || byId(`nav-${state.view}`);
+    const replacements = viewer
+      ? byId(`${state.view}-panel`).querySelectorAll(`button[data-artwork-id="${CSS.escape(viewer.artwork.id)}"], [data-artwork-id="${CSS.escape(viewer.artwork.id)}"] .artwork-open`)
+      : [];
+    const target = [
+      viewer?.returnFocus,
+      ...replacements,
+      viewer?.returnFocus?.closest(".approval-card")?.querySelector("h3"),
+      byId(`nav-${state.view}`),
+    ].find((node) => node?.isConnected && !node.matches(":disabled") && node.getClientRects().length
+      && getComputedStyle(node).visibility === "visible");
     target?.focus({ preventScroll: true });
   });
   byId("artwork-dialog").addEventListener("click", (event) => {

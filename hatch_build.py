@@ -17,3 +17,8 @@ class CustomBuildHook(BuildHookInterface):
             for path in (root, *root.rglob("*")):
                 if path.is_symlink():
                     raise ValueError(f"Symlink is not distributable: {path.relative_to(self.root)}")
+                if path.name == ".env.example" and path.is_file():
+                    relative_path = path.relative_to(self.root)
+                    if not any(self.build_config.path_is_excluded(parent.as_posix() + "/")
+                               for parent in relative_path.parents):
+                        build_data.setdefault("force_include", {})[str(path)] = relative_path.as_posix()

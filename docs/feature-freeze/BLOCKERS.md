@@ -1,0 +1,22 @@
+# Blockers and remaining acceptance
+
+No confirmed product finding remains open after the available Linux engineering gates. The following limits prevent an unconditional, all-platform release claim. Keep feature freeze until the release owner accepts these conditions and completes required external acceptance.
+
+| Limit | Impact | Required action |
+| --- | --- | --- |
+| Native Windows/macOS unavailable | POSIX and simulated platform tests do not certify native installation, filesystem or lifecycle behavior | Run the documented install, update, restore and full applicable suite on each supported native platform |
+| Human and physical-device acceptance absent | Automated browser checks cannot approve target-application usability or device integration | Complete project-specific UAT and device checks before claiming them |
+| Persisted BFCache restore and other engines | Real Chromium Back navigation reloads successfully, but cache admission is rejected by existing no-store responses and JavaScript network requests | Preserve privacy headers; retain simulated persisted-handler coverage and verify actual cache restores only where the browser admits them |
+| Original user edits not integrated | Their combined behavior is outside this branch's evidence | Review and test the combination without overwriting the original checkout |
+| Alternate-family review override unavailable | Host rejected per-call model selection | Available-model fresh-context reviews were used; do not advertise cross-family certification |
+| Setup recovery limitation | Two accidental copies in another pre-existing worktree were restored to committed bytes, but its unobserved earlier uncommitted state is unknown | Review [BASELINE.md](BASELINE.md) before relying on that separate worktree; the original checkout's user edits remain intact |
+
+The final CSS reviewer reported concrete defects, which the parent reproduced and corrected with affected and full-suite verification. There is no later zero-finding independent CSS verdict. Original reports and dispositions are retained rather than presenting that review as unconditional approval.
+
+## Operational recovery
+
+Archive and checksum publication cannot be crash-atomic across two filesystem replacements. Normal checksum replacement failures restore the prior archive; tests cover that path. If rollback itself fails, the builder retains its backup for recovery. After a crash, do not distribute either file until the checksum matches. Rebuild from the reviewed source into a safe destination, or restore the retained archive backup with its matching prior checksum. Preserve recovery files until verification succeeds.
+
+Dashboard capabilities grant access to their run. Use only trusted hosts/networks; plain LAN HTTP does not provide transport confidentiality. Do not publish capability URLs, private runtime records or credentials.
+
+No credentials, deployment access or irreversible action is needed to review this local delivery. Merge, publication and deployment remain deliberately unperformed, not passing acceptance checks.

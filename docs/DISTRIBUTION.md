@@ -26,12 +26,15 @@ From the extracted package directory:
 
 ```bash
 python3 -m venv .venv-release
-.venv-release/bin/python -m unittest discover -s tests -v
+.venv-release/bin/python -m pip install . build hatchling zxing-cpp pytest playwright
+.venv-release/bin/python -m playwright install chromium
+.venv-release/bin/python -m pytest -q
+node --test tests/test_progress_extension.mjs
 bash -n install.sh tools/ui-design
 .venv-release/bin/python scripts/package_release.py --check
 ```
 
-The only use of system Python is creating the virtual environment. The OMP helpers and release builder use the standard library. Adapter tests require the dependencies declared in `pyproject.toml`; install the package before running `test_mcp*.py`. OMP/provider execution and the target application's actual build/browser/native checks remain separate from these package tests.
+The only use of system Python is creating the virtual environment. The OMP helpers and release builder use the standard library. The full verification environment also needs the package, build backend, QR decoder, pytest, and Playwright shown above. Playwright and its browser are verification-only dependencies, not runtime dependencies. Without Playwright, browser regressions are skipped and the full browser gate has not passed. Set `UI_DESIGN_TEST_BROWSER` to an existing Chromium executable instead of downloading one when appropriate. OMP/provider execution and the target application's native checks remain separate from these package tests.
 
 ## Build a distribution
 

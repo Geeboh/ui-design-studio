@@ -120,7 +120,7 @@ type Session = {
 	children: Set<DashboardChild>;
 	banners: number;
 	resumeRun: Run | undefined;
-	openedRuns: Set<string>;
+	discoveredRuns: Set<string>;
 	opening: Promise<void> | undefined;
 	tasks: PiTasks | undefined;
 	exported: PiTasks | undefined;
@@ -805,24 +805,23 @@ export default function designProgress(value: unknown): void {
 		if (session.opening) return session.opening.then(() => explicit ? synchronizeRun(session, explicit) : undefined);
 		const state = session.dashboard;
 		const generation = session.dashboardGeneration;
-		let run: Run | undefined = explicit;
 		try {
+			const candidates = resumableRuns(configuredRuns(session.project)).filter(item => !session.discoveredRuns.has(item.root));
+			for (const candidate of candidates) session.discoveredRuns.add(candidate.root);
+			let run: Run | undefined = explicit;
 			if (!run && !state.connection.selectedRun && session.resumeRun && unfinished(session.resumeRun)) run = session.resumeRun;
-			if (!run) {
-				const candidates = resumableRuns(configuredRuns(session.project)).filter(item => !session.openedRuns.has(item.root));
-				if (candidates.length === 1) run = candidates[0];
-			}
-			if (!run || (!explicit && session.openedRuns.has(run.root) && !session.resumeRun)) return Promise.resolve();
+			if (!run && candidates.length === 1) run = candidates[0];
+			if (!run) return Promise.resolve();
 			if (!explicit && state.connection.selectedRun?.run === relative(session.project, run.root).split(sep).join("/")) return Promise.resolve();
 			const selected = run;
 			session.resumeRun = selected;
 			session.opening = openConnectionRun(state.connection, relative(session.project, selected.root).split(sep).join("/"))
 				.then(() => {
 					if (!current(session, generation) || session.dashboard !== state) return;
-					session.openedRuns.add(selected.root);
 					session.resumeRun = selected;
 					refresh();
 				}).catch(error => {
+					session.discoveredRuns.delete(selected.root);
 					if (current(session, generation)) session.context.ui.notify(diagnostic(error instanceof Error ? error.message : error), "warning");
 				}).finally(() => { session.opening = undefined; });
 			return session.opening;
@@ -878,7 +877,6 @@ export default function designProgress(value: unknown): void {
 				const selected = readRun(root);
 				if (unfinished(selected)) {
 					session.resumeRun = selected;
-					session.openedRuns.add(selected.root);
 				}
 			}
 		}
@@ -1035,7 +1033,7 @@ export default function designProgress(value: unknown): void {
 		const tasks = lifecycle.kind === "waiting" ? lifecycle.tasks : undefined;
 		if (lifecycle.kind === "active") clear(lifecycle.session);
 		const session: Session = { context, id, project, runs: undefined, run: undefined, dashboardId: undefined, dashboardGeneration: 0,
-			dashboard: { kind: "idle" }, children: new Set(), banners: 0, resumeRun: undefined, openedRuns: new Set(), opening: undefined,
+			dashboard: { kind: "idle" }, children: new Set(), banners: 0, resumeRun: undefined, discoveredRuns: new Set(), opening: undefined,
 			discoveryProof: { kind: "none" },
 			tasks, exported: undefined, lastLines: "", lastReport: 0, stopTimer: () => {} };
 		lifecycle = { kind: "active", session };

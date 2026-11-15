@@ -1,0 +1,141 @@
+path	classification	review_owner	inspection
+.gitattributes	build/config/test	AuditDistribution/Main	reviewed
+.gitignore	build/config/test	AuditDistribution/Main	reviewed
+.omp/agents/ui-art-director.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/agents/ui-implementer.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/agents/ui-page-designer.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/agents/ui-performance-reviewer.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/agents/ui-quality-reviewer.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/agents/ui-theme-engineer.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/agents/ui-ux-researcher.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/commands/ui-design.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/commands/ui-yolo.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/extensions/ui-design-progress.ts	source/test	AuditUiWholeSource	reviewed; corrections verified
+.omp/skills/ui-assess/SKILL.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/SKILL.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/assets/example-theme/CHANGELOG.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/assets/example-theme/LICENSE.txt	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/assets/example-theme/README.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/assets/example-theme/icons.svg	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/assets/example-theme/preview.html	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/assets/example-theme/theme.css	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/assets/example-theme/theme.json	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/assets/example-theme/tokens.css	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/assets/example-theme/tokens.json	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/dashboard/dashboard.css	source/test	AuditUiWholeSource	reviewed; corrections verified
+.omp/skills/ui-design-studio/dashboard/dashboard.js	source/test	AuditUiWholeSource	reviewed; corrections verified
+.omp/skills/ui-design-studio/dashboard/index.html	source/test	AuditUiWholeSource	reviewed; corrections verified
+.omp/skills/ui-design-studio/dashboard/landing.html	source/test	AuditUiWholeSource	reviewed; corrections verified
+.omp/skills/ui-design-studio/dashboard/landing.js	source/test	AuditUiWholeSource	reviewed; corrections verified
+.omp/skills/ui-design-studio/references/assessment.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/references/decisions.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/references/model-routing.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/references/multi-agent.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/references/project-context.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/references/quality-gates.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/references/run-records.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/references/tada-profile.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/references/theme-module.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/references/visual-system.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/references/workflow.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/schemas/theme.schema.json	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-design-studio/scripts/design_server.py	source/test	AuditHttpMcp	reviewed
+.omp/skills/ui-design-studio/scripts/studio.py	source/test	Main	reviewed
+.omp/skills/ui-design/SKILL.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-finalize/SKILL.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-plan/SKILL.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-produce/SKILL.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-review/SKILL.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-theme/SKILL.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+.omp/skills/ui-yolo/SKILL.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+LICENSE.txt	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+MANIFEST.sha256	build/config/test	AuditDistribution/Main	reviewed
+README.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+UI-Design-Studio-v1.4.0-Cortex-Remediation.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+dist/RELEASE-NOTES-v1.2.0.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+dist/RELEASE-NOTES-v1.3.0.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+dist/RELEASE-NOTES-v1.4.0.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+dist/UI-Design-Studio-OMP-v1.2.0.zip	generated historical artifact	AuditDistribution/AuditGuidesAssets	integration reviewed; authored-byte rewrite excluded
+dist/UI-Design-Studio-OMP-v1.2.0.zip.sha256	generated historical artifact	AuditDistribution/AuditGuidesAssets	integration reviewed; authored-byte rewrite excluded
+dist/UI-Design-Studio-OMP-v1.3.0.zip	generated historical artifact	AuditDistribution/AuditGuidesAssets	integration reviewed; authored-byte rewrite excluded
+dist/UI-Design-Studio-OMP-v1.3.0.zip.sha256	generated historical artifact	AuditDistribution/AuditGuidesAssets	integration reviewed; authored-byte rewrite excluded
+dist/UI-Design-Studio-OMP-v1.4.0.zip	generated historical artifact	AuditDistribution/AuditGuidesAssets	integration reviewed; authored-byte rewrite excluded
+dist/UI-Design-Studio-OMP-v1.4.0.zip.sha256	generated historical artifact	AuditDistribution/AuditGuidesAssets	integration reviewed; authored-byte rewrite excluded
+docs/CHANGELOG.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/DISTRIBUTION.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/INSTALLATION.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/MCP.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/RELEASE-v1.3.0.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/RELEASE-v1.4.0.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/RELEASE-v1.4.1.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/RUN-TYPES.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/SOURCES.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/VALIDATION.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/remediation/v1.4.0/BENCHMARKS.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/remediation/v1.4.0/COMPATIBILITY.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/remediation/v1.4.0/HANDOFF.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/remediation/v1.4.0/LEDGER.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/remediation/v1.4.0/TEST-REPORT.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/remediation/v1.4.0/UAT-DEFERRED.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/remediation/v1.4.0/benchmarks.json	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+docs/screenshots/mcp-connection.png	generated historical artifact	AuditDistribution/AuditGuidesAssets	integration reviewed; authored-byte rewrite excluded
+docs/screenshots/pending-run-progress.png	generated historical artifact	AuditDistribution/AuditGuidesAssets	integration reviewed; authored-byte rewrite excluded
+docs/screenshots/retained-artwork-preview.png	generated historical artifact	AuditDistribution/AuditGuidesAssets	integration reviewed; authored-byte rewrite excluded
+examples/studio-showcase.html	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+hatch_build.py	build/config/test	AuditDistribution/Main	reviewed
+install.sh	build/config/test	AuditDistribution/Main	reviewed
+prompts/ASSESS-ONLY.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+prompts/DESIGN-ONLY.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+prompts/README.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+prompts/RESUME-GOAL.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+prompts/RESUME.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+prompts/START-GOAL-YOLO.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+prompts/START-GUIDED.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+prompts/START-YOLO.md	guide/schema/asset	AuditGuidesAssets/Main	reviewed
+pyproject.toml	build/config/test	AuditDistribution/Main	reviewed
+release.json	build/config/test	AuditDistribution/Main	reviewed
+scripts/install.py	build/config/test	AuditDistribution/Main	reviewed
+scripts/install_mcp.py	build/config/test	AuditDistribution/Main	reviewed
+scripts/package_release.py	build/config/test	AuditDistribution/Main	reviewed
+scripts/remediation_benchmark.py	build/config/test	AuditDistribution/Main	reviewed
+src/ui_design_studio/__init__.py	source/test	AuditHttpMcp	reviewed
+src/ui_design_studio/cli.py	source/test	AuditHttpMcp	reviewed
+src/ui_design_studio/dashboard.py	source/test	AuditHttpMcp	reviewed
+src/ui_design_studio/mcp-guide.md	source/test	AuditHttpMcp	reviewed
+src/ui_design_studio/runtime.py	source/test	AuditHttpMcp	reviewed
+src/ui_design_studio/server.py	source/test	AuditHttpMcp	reviewed
+tests/test_design_server.py	source/test	AuditHttpMcp	reviewed
+tests/test_global_mcp_install.py	build/config/test	AuditDistribution/Main	reviewed
+tests/test_install.py	build/config/test	AuditDistribution/Main	reviewed
+tests/test_mcp.py	source/test	AuditHttpMcp	reviewed
+tests/test_mcp_dashboard.py	source/test	AuditHttpMcp	reviewed
+tests/test_mcp_package.py	build/config/test	AuditDistribution/Main	reviewed
+tests/test_progress_extension.mjs	source/test	AuditUiWholeSource	reviewed; corrections verified
+tests/test_progress_extension.py	source/test	AuditUiWholeSource	reviewed; corrections verified
+tests/test_remediation_contract.py	build/config/test	AuditDistribution/Main	reviewed
+tests/test_studio.py	source/test	Main	reviewed
+tools/ui-design	build/config/test	AuditDistribution/Main	reviewed
+docs/feature-freeze/ARCHITECTURE-REVIEW.md	audit record	Main	reviewed; current evidence reconciliation
+docs/feature-freeze/AUDIT.md	audit record	Main	reviewed; current evidence reconciliation
+docs/feature-freeze/BASELINE.md	audit record	Main	reviewed; preserved user delta and setup recovery limitation
+docs/feature-freeze/BLOCKERS.md	audit record	Main	reviewed; external and recovery limits explicit
+docs/feature-freeze/CHANGELOG.md	audit record	Main	reviewed; inherited commits distinguished from revalidation
+docs/feature-freeze/DEFECT-REGISTER.md	audit record	Main	reviewed; current findings and traceability
+docs/feature-freeze/INVENTORY.md	audit record	Main	reviewed; expanded current-path accounting
+docs/feature-freeze/PERFORMANCE.md	audit record	Main	reviewed; synthetic observations and inconclusive timings
+docs/feature-freeze/README.md	audit record	Main	reviewed; current branch and status
+docs/feature-freeze/RELEASE-READINESS.md	audit record	Main	reviewed; current evidence reconciliation
+docs/feature-freeze/REMEDIATION-PLAN.md	audit record	Main	reviewed; current work reconciliation
+docs/feature-freeze/REVIEWS.md	audit record	Main	reviewed; historical reviews separated from current audits
+docs/feature-freeze/SECURITY-REVIEW.md	audit record	Main	reviewed; current scan evidence
+docs/feature-freeze/TEST-MATRIX.md	audit record	Main	reviewed; current full-suite and runtime evidence
+docs/feature-freeze/WORKFLOW-REVIEW.md	audit record	Main	reviewed; shared acceptance boundaries retained
+docs/feature-freeze/decisions.tsv	audit record	Main	reviewed; append-only current decision trail
+docs/feature-freeze/inspection.tsv	audit record	Main	reviewed; current ledger includes itself
+tests/test_dashboard_browser.py	source/test	Main	reviewed; actual form persistence regression verified
+tests/test_feature_freeze.py	source/test	Main	reviewed; acceptance filesystem and resume behavioral cases
+tests/test_release_builder.py	source/test	Main	reviewed; privacy destination rollback and determinism cases
+docs/feature-freeze/SECURITY-EVIDENCE.json	audit evidence	Main/WorkflowAudit	reviewed; retained scanner dependency and source identity records
+docs/feature-freeze/REVIEW-EVIDENCE.json	audit evidence	Main/ReviewAuditTrail	reviewed; original outputs target provenance dispositions and limits
+tests/test_freeze_acceptance.py	source/test	EngineAcceptanceTests/Main	reviewed; cross-project report and independent-review regressions
+tests/test_freeze_integrity.py	source/test	EngineIntegrityTests/Main	reviewed; static resources and modern legacy resume consumers

@@ -1,5 +1,29 @@
 # Release notes
 
+## Unreleased feature-freeze hardening
+
+- Blocked full-theme finalization and registration for bounded workflow scopes.
+- Required an applicable viewport for every declared critical coverage state.
+- Preserved explicitly empty worker-action allowlists.
+- Corrected selected-role routing documentation.
+- Rejected nonregular JSON/hash inputs without blocking and corrected source-dependent resume invalidation.
+- Bound retained artwork metadata and IDs to their content-addressed versions, and cleaned nested owned run listeners.
+- Fixed repository-relative MCP instruction paths and corrected status-tool mutation annotations.
+- Preserved existing browser run selection, restored landing polling, and returned dialog focus to visible controls.
+- Excluded private environment inputs from archives, wheels, and sdists, including nested example-file overrides.
+- Preflighted release destinations and preserved existing archives when checksum publication fails.
+- Recorded the feature-freeze baseline, findings, verification, and release assessment under `docs/feature-freeze/`.
+- Added a real-browser guided approval submission test covering the durable user decision, reviewed digest, rationale, and reload state.
+- Revalidated inherited hardening on Python 3.10 and 3.12 and expanded the inspection ledger to every current tracked path.
+- Preserved explicit repository provenance through nested-run MCP, browser approval, and cleanup paths.
+- Removed serialized landing-probe lock holds and preserved matching authenticated listener identity during concurrent selection.
+- Preserved explicit empty MCP artifact selections and restored unittest assertion diagnostics.
+- Restricted environment-template packaging exceptions to leaf files and removed the unnecessary Pillow verification dependency.
+- Confined registration approvals to the selected repository and bound final acceptance to current assessment report bytes.
+- Rejected whitespace self-review and unchecked quoted or variable CSS image sources.
+- Corrected shared-file resume consumers and transitive invalidation; legacy incomplete manifests require reviewed refresh.
+- Exercised real Chromium Back navigation and continued run polling while preserving authenticated no-store responses; recorded actual BFCache exclusion rather than claiming a persisted restore.
+
 ## 1.4.1 · 14 November 2026
 
 - Hardened evidence, status, coverage, resume, worker-packet, and host-feasibility validation.

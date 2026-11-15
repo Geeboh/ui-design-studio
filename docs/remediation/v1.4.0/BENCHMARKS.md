@@ -4,7 +4,9 @@ Status: PASS for the offline synthetic benchmark. No real-provider or invented h
 
 ## Method
 
-`scripts/remediation_benchmark.py` uses one fixed synthetic fixture, Python 3.12.3, the current engine and five samples for timing fields. Baseline is the same-revision legacy/full-preload proxy. Changed is the bounded compact projection, validation cache and lazy hot-path proxy. Values are local lab measurements, not field performance or token billing.
+`scripts/remediation_benchmark.py` uses one fixed synthetic fixture and Python 3.12.3. Compact-status timings use five samples; validation-hash timings use three. Baseline is the same-revision legacy/full-preload proxy. Changed is the bounded compact projection, validation cache and lazy hot-path proxy. Values are local lab measurements, not field performance or token billing.
+
+The compact baseline times JSON serialization, while the changed timing measures object projection without serialization. Those durations are not equivalent work and do not establish an end-to-end speedup. Hash timings use three non-interleaved samples and do not assert returned validity inside the timed call. Treat timing comparisons as inconclusive. The byte, word, hash-call and workload-shape counts remain narrower structural observations, not performance acceptance.
 
 ## Results
 

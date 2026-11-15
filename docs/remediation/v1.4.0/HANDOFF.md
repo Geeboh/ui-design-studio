@@ -1,5 +1,13 @@
 # v1.4.0 Cortex remediation handoff
 
+## Retrospective correction, 15 November 2026
+
+The text below is the original session's handoff, including its then-current branch refusal and uncommitted working tree. Repository history subsequently records that remediation in commit `c7660d911347d00abe7ab6ca0741f3e4586e1815` and the 1.4.1 release in `95cfb11786f6aae8c15f308787b614520ca5718d`. The original statement that no commit was created does not describe the current checkout.
+
+The original R15 completion claim lacked its required commit evidence at the time. The later commit supplies that provenance without inventing an isolated branch for the original session. Current readiness and later defects belong to [the feature-freeze assessment](../../feature-freeze/RELEASE-READINESS.md), not this historical snapshot.
+
+## Original handoff
+
 Status: `ENGINEERING_READY_UAT_PENDING`
 Version: `1.4.0`
 Baseline: `0f25a1e85cca1b7d61602f08f7b4a4c79f9746a3`
