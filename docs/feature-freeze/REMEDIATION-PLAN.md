@@ -1,13 +1,13 @@
 # Remediation plan
 
-1. Preserve baseline and user changes. Completed in an isolated worktree.
-2. Inventory all 116 tracked paths and obtain independent risk-slice reviews. In progress.
-3. Execute central baseline gates. Python and Node passed; additional pytest-only contracts remain to run.
-4. Fix confirmed release-acceptance and coverage defects with failing regressions before corrections.
-5. Resolve remaining confirmed security, correctness, lifecycle, installation and documentation findings by severity.
-6. Verify each logical unit and commit using selective ownership-aware commits.
-7. Run full practical release checks, inspect actual dashboard behavior, and obtain fresh remediation review.
-8. Reconcile every finding and all requested documents against final evidence.
+1. Preserve baseline and user changes. Complete in the isolated remediation worktree.
+2. Inventory and review all 116 baseline tracked paths. Complete, with generated-artifact exclusions documented.
+3. Establish baseline gates. Complete: 232 unittest cases, five additional pytest contracts, and 49 Node cases passed.
+4. Repair confirmed defects with behavioral evidence. All 20 findings have corrections or explicit documentation dispositions.
+5. Resolve independent review findings. Complete. Artwork-ID, private-ancestor template, checksum-ordering and failed-open retry gaps received reproduced regressions and corrections.
+6. Commit verified units selectively. Complete for workflow, retained artwork, dashboard probes, packaging, UI and contract documentation. Final reports and source manifest form separate documentation/artifact commits.
+7. Execute practical release gates. Complete. Both full Python versions, Node, browser, native OMP smoke, wheel/sdist, release ZIP, scans and source integrity checks passed.
+8. Reconcile reports and issue release assessment. Complete. CONDITIONALLY READY reflects explicit native-platform and human acceptance gaps, not unresolved confirmed code findings.
 
 Throughput checkpoint: four independent read-only review slices run while the parent owns workflow fixes and central validation. Source writes remain single-owner until bounded independent fixes are assigned. Tool results wake this run; no polling watcher is needed for local finite checks.
 

@@ -1,10 +1,15 @@
 # Feature-freeze change history
 
-## Baseline and discovery
+The original dirty checkout remains untouched. All remediation commits are on `feature-freeze/2026-11-15-hardening`; nothing was merged, pushed or published.
 
-- Created isolated remediation branch from release 1.4.1.
-- Preserved both original dirty files without importing them into the branch.
-- Recorded passing baseline Python, Node, shell and dependency checks.
-- Reproduced scope acceptance, critical-state omission, and empty-allowlist defects.
+| Commit | Verified logical unit | Findings |
+| --- | --- | --- |
+| `747d3eed029` | Protected baseline, rollback and audit gates | Baseline |
+| `5fef92d097` | Shared workflow, filesystem and MCP boundaries | FF-001–005, FF-007, FF-010 |
+| `1e137f6658` | Retained artwork identity and nested cleanup | FF-006, FF-009, FF-017 |
+| `7ebd26664d` | Selected and owned probe scheduling | FF-008 |
+| `3d47815bc3` | Private package inputs and recoverable output publication | FF-014–016 |
+| `700cc01362` | Selection, browser polling and keyboard focus | FF-018–020 |
+| `d1f6923ee4` | Routing contracts, provenance and benchmark method | FF-011–013 |
 
-No production correction has been committed yet.
+Final report reconciliation and regenerated source manifest follow these units. The defect register identifies each finding's correction commit. No unrelated product feature or speculative refactor was added.

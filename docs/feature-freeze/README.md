@@ -1,6 +1,6 @@
 # Feature freeze
 
-Status: audit and remediation active. Release readiness is NOT READY while review and final gates remain incomplete.
+Status: automated engineering remediation complete. Release readiness is CONDITIONALLY READY, with native-platform and human acceptance limits in [BLOCKERS.md](BLOCKERS.md). All 116 baseline paths were reviewed. All 20 confirmed findings were addressed, including four High findings.
 
 The remediation branch is `feature-freeze/2026-11-15-hardening` in `/code/ui-design-studio-freeze`. Existing user edits remain in the original checkout.
 
