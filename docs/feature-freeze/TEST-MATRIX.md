@@ -97,7 +97,7 @@ The starting baseline and inherited candidate are distinguished below.
 | Current scanner | Batch `9c9ef4d6-5ff9-4040-bb22-e9599a20b502`, empty findings across vulnerability, secret, configuration and license scans | Original response retained in `SECURITY-EVIDENCE.json` |
 | Resolved dependency audits | No known vulnerabilities in final Python 3.10 and 3.12 environments | Raw JSON and removed-dependency advisories in `SECURITY-EVIDENCE.json` |
 | Complete packaged-source identity | All 50 wheel members and 55 sdist source members matched final authored bytes | `audited-package-identity.log` |
-| Source manifest and ZIP | 127 source hashes verified; 128 ZIP members, original bytes and CRCs verified by builder | `source-archive.log`; final reports require regeneration before artifact commit |
+| Source manifest and ZIP | 127 source hashes verified; 128 ZIP members, original bytes and CRCs verified by builder; sidecar matches archive | `final-source-integrity.log`, regenerated after final report/traceability changes |
 
 The initial errors were four missing Pillow errors and missing Hatchling for a no-isolation wheel build.
 Verification dependencies were installed before candidate checks.

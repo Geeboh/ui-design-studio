@@ -14,5 +14,6 @@ The original dirty checkout remains untouched. Inherited remediation through `5b
 | `6f5c08bb1c` | Restrict public environment templates to leaf files | FF-027 |
 | `e0af2429d1` | Repository provenance, concurrent listener identity, explicit selections, browser regressions and QR verifier dependency removal | FF-021, FF-023–026, FF-030–031 |
 | `35001cedc3` | Required acceptance inputs, reviewer identity, static CSS resources and complete resume dependencies | FF-032–043 |
+| `82268c984c` | Complete inspection ledger, original review/scanner retention, final gate reconciliation and conditional readiness | FF-022, FF-028–029; final reports |
 
 Final report reconciliation retains original reviewer/scanner evidence and all 140 inspection dispositions. A separate final artifact unit regenerates the source manifest after report changes. The defect register identifies each correction commit. No unrelated product feature or speculative refactor was added.

@@ -26,14 +26,14 @@ Verification status describes observed checks, not proof that no other defects e
 | FF-019 | Medium | Browser lifecycle | Dashboard `landing.js` | Fixed, real-browser regressions passed | `700cc01362` |
 | FF-020 | Medium | Keyboard accessibility | Dashboard `dashboard.js` | Fixed, real-browser regressions passed | `700cc01362` |
 | FF-021 | Low | Testing coverage | `tests/test_dashboard_browser.py` | Fixed, six Chromium tests passed | `e0af2429d1` |
-| FF-022 | Low | Audit completeness | `docs/feature-freeze/inspection.tsv` | Corrected, 140 unique existing paths reconciled | Current audit documentation commit |
+| FF-022 | Low | Audit completeness | `docs/feature-freeze/inspection.tsv` | Corrected, 140 unique existing paths reconciled | `82268c984c` |
 | FF-023 | Medium | Repository provenance | MCP status, artwork, requests, approval and cleanup | Fixed, real stdio, HTTP and browser regressions passed | `e0af2429d1` |
 | FF-024 | Medium | Concurrent liveness | Landing `session_data` probe lock | Fixed, concurrent authenticated HTTP regression passed | `e0af2429d1` |
 | FF-025 | Low | API contract | MCP empty artifact selection | Fixed, real-stdio regression passed | `e0af2429d1` |
 | FF-026 | Low | Test diagnostics | MCP protocol failure helper | Fixed, full protocol suite passed | `e0af2429d1` |
 | FF-027 | Medium | Package privacy | Source ZIP `.env.example` directory exception | Fixed, 14 builder tests and 15 subtests passed | `6f5c08bb1c` |
-| FF-028 | Medium | Security evidence | Historical scanner batch without retained output | Corrected, final scan and 77 current source hashes retained and verified | Current audit documentation commit |
-| FF-029 | Low | Review evidence | Historical summaries without original review records | Corrected, 14 original review records retained with dispositions | Current audit documentation commit |
+| FF-028 | Medium | Security evidence | Historical scanner batch without retained output | Corrected, final scan and 77 current source hashes retained and verified | `82268c984c` |
+| FF-029 | Low | Review evidence | Historical summaries without original review records | Corrected, 14 original review records retained with dispositions | `82268c984c` |
 | FF-030 | Medium | Verification supply chain | Unnecessary Pillow dependency on Python 3.10 | Removed, dashboard tests and clean audits without Pillow | `e0af2429d1` |
 | FF-031 | Low | Concurrent liveness | Landing selected-owner handle replacement | Fixed, deterministic authenticated owner race regression passed | `e0af2429d1` |
 | FF-032 | Medium | Acceptance boundary | `studio.py` cross-project registration | Fixed, affected and full Python gates passed | `35001cedc3` |
