@@ -783,6 +783,30 @@ class DesignServerTests(unittest.TestCase):
         (root / "implementation.md").unlink()
         self.assertEqual(state.snapshot()["coverage"]["verified"], 0)
 
+    def test_http_produce_gate_rejects_whitespace_self_review(self):
+        root = fixture_run(self.repo, self.theme)
+        server = self.start(root)
+        self.assertTrue(all(gate["status"] == "passed" for gate in self.request(server)[2]["gates"]))
+        run = studio.read_json(root / "run.json")
+        run["implementer"] = " alice "
+        for entry in run["evidence"]:
+            if entry["kind"] == "review":
+                entry["reviewer"] = "\talice"
+        write_json(root / "run.json", run)
+        decisions = studio.read_json(root / "decisions.json")
+        decisions["decisions"] = [entry for entry in decisions["decisions"] if entry["stage"] != "finalize"]
+        write_json(root / "decisions.json", decisions)
+        review = studio.check_run(root)
+        decisions["decisions"].append({"stage": "finalize", "actor": "director", "outcome": "approved",
+                                      "rationale": "Synthetic current approval", "inputsDigest": review["reviewDigest"]})
+        write_json(root / "decisions.json", decisions)
+        code, _, snapshot = self.request(server)
+        self.assertEqual(code, 200)
+        gates = {gate["id"]: gate["status"] for gate in snapshot["gates"]}
+        self.assertEqual(gates["design"], "passed")
+        self.assertEqual(gates["produce"], "pending")
+        self.assertEqual(gates["finalize"], "pending")
+
     def test_sparse_applicability_changes_dashboard_required_count(self):
         root = fixture_run(self.repo, self.theme)
         coverage = studio.read_json(root / "coverage.json")

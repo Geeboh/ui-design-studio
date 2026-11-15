@@ -938,10 +938,10 @@ class DesignState:
                                         and entry.get("status") == "not-applicable"
                                         for entry in evidence):
             kinds.add("offline")
-        reviewers = {entry.get("reviewer") for entry in fresh if entry.get("kind") == "review"}
+        reviewers = {entry["reviewer"].strip() for entry in fresh if entry.get("kind") == "review"}
         implementer = run.get("implementer")
         produced = (design_ok and counts["verified"] == counts["required"] and studio.REQUIRED_EVIDENCE.issubset(kinds)
-                    and isinstance(implementer, str) and bool(implementer.strip()) and bool(reviewers) and implementer not in reviewers
+                    and isinstance(implementer, str) and bool(implementer.strip()) and bool(reviewers) and implementer.strip() not in reviewers
                     and isinstance(run.get("themeDigest"), str) and HASH.fullmatch(run["themeDigest"]) is not None)
         evidence_failed = any(isinstance(entry, dict) and entry.get("status") == "failed" for entry in evidence)
         evidence_stale = any(isinstance(entry, dict) and entry.get("status") == "passed"

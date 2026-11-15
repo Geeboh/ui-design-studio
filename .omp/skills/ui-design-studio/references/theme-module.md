@@ -67,6 +67,8 @@ The fragment above illustrates syntax; a complete theme must include all require
 
 Scope every `theme.css` selector with the same attribute. Avoid global resets, `:root`, body/html selectors, remote imports, embedded data URLs, executable SVG, unsafe references, and selectors that depend on incidental route markup. The conservative validator supports simple CSS plus media/supports/layer blocks; it deliberately rejects some legal CSS features. Extend the contract with tests when a real need justifies it, rather than weakening checks to pass an artifact.
 
+Image resources in `url()`, `image-set()` and `-webkit-image-set()` must be existing declared local runtime files, including quoted image-set candidates. Nested MIME-type strings are not resources. Direct dynamic source substitution, including `var()` and `env()`, is outside the audited subset; use explicit declared candidates. Nested static gradients, image sets, cross-fades and light/dark image choices remain subject to resource checks. Ordinary token variables and generated gradients remain supported. Bad strings, comments, unfinished functions and surrounding resource-URL whitespace are rejected rather than relying on browser error recovery.
+
 Colour mode, density and motion are independent preferences. v1's supplied starter has one light palette. When implementing dark or alternate modes, either create separately validated modules or extend the declared token/mode compiler and its validation; do not promise the starter has dark-mode coverage. Density variants may use scoped host attributes; preserve required target sizes. Respect reduced motion and forced colours in the actual application.
 
 ## 3. Manifest and validation

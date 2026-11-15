@@ -306,13 +306,50 @@ def check_svg(path):
 
 def check_css(path, theme_id, root):
     content = path.read_text(encoding="utf-8")
-    clean = re.sub(r"/\*.*?\*/", "", content, flags=re.S)
+    url_pattern = r'''\burl\s*\(\s*(?:"[^"\r\n\f]*"|'[^'\r\n\f]*'|[^"'()]*)\s*\)'''
+    chunks, position = [], 0
+    lexical_pattern = (r"(?P<url>" + url_pattern + r''')|(?P<comment>/\*.*?(?:\*/|$))|(?P<string>"[^"\r\n\f]*"|'[^'\r\n\f]*')|(?P<bad>["'])''')
+    for token in re.finditer(lexical_pattern, content, re.S | re.I):
+        chunks.append(content[position:token.start()])
+        value = token.group()
+        if token.lastgroup == "comment":
+            require(value.endswith("*/"), f"Unterminated CSS comment: {path.name}")
+            chunks.append(" ")
+        else:
+            require(token.lastgroup != "bad", f"Invalid or unterminated CSS string: {path.name}")
+            chunks.append(value)
+        position = token.end()
+    chunks.append(content[position:])
+    clean = "".join(chunks)
     require(not re.search(r"@import\b|@font-face\b|expression\s*\(|(?:^|[;{])\s*(?:-moz-binding|behavior)\s*:|javascript:", clean, re.I),
             f"CSS imports, embedded font rules, or active CSS are forbidden: {path.name}")
     require("\\" not in clean, f"CSS backslash escapes are outside the supported audited subset: {path.name}")
-    for match in re.finditer(r"url\s*\(([^)]*)\)", clean, re.I):
-        target = match.group(1).strip().strip("\"'")
-        css_asset_relative(root, path, target)
+    assets = []
+    functions = []
+    image_functions = ("image-set", "-webkit-image-set", "image")
+    static_image_functions = {
+        *image_functions, "type", "linear-gradient", "radial-gradient", "conic-gradient",
+        "repeating-linear-gradient", "repeating-radial-gradient", "repeating-conic-gradient",
+        "cross-fade", "-webkit-cross-fade", "light-dark",
+    }
+    tokens = re.finditer(
+        r"(?P<url>" + url_pattern + r''')|(?P<string>"[^"]*"|'[^']*')|(?P<function>[-\w]+)\s*\(|(?P<open>\()|(?P<close>\))''',
+        clean, re.I)
+    for token in tokens:
+        if token.lastgroup == "url":
+            target = token.group()[token.group().index("(") + 1:-1].strip().strip("\"'")
+            assets.append(css_asset_relative(root, path, target))
+        elif token.lastgroup == "string":
+            if functions and functions[-1] in image_functions:
+                assets.append(css_asset_relative(root, path, token.group()[1:-1]))
+        elif token.lastgroup in ("function", "open"):
+            function = (token.group("function") or "").lower()
+            require(not (functions and functions[-1] in image_functions and function not in static_image_functions),
+                    f"Dynamic or unsupported image source function outside the audited CSS subset: {path.name}")
+            functions.append(function)
+        elif functions:
+            functions.pop()
+    require(not functions, f"Unfinished CSS function outside the audited subset: {path.name}")
     scope = re.compile(r'\[data-ui-theme\s*=\s*[\"\']' + re.escape(theme_id) + r'[\"\']\]')
     # A deliberately restricted static subset; runtime component behavior still needs review.
     for head in re.findall(r"([^{}]+)\{", clean):
@@ -324,9 +361,11 @@ def check_css(path, theme_id, root):
             require(scope.match(selector.strip()), f"Selector must start with the theme root in {path.name}: {selector.strip()[:120]}")
             require(not re.search(r"[+~]", selector), f"Sibling combinators are outside the isolated CSS subset: {path.name}")
             require(not re.search(r":root\b|(?<![\w.-])(?:html|body)(?![\w-])", selector), f"Global root selector in {path.name}")
+    return assets
 
 
 def css_asset_relative(root, stylesheet, target):
+    require(target == target.strip(), "CSS resource URLs cannot have surrounding whitespace")
     if target.startswith("#"):
         return None
     require(not re.match(r"(?:[a-z][a-z0-9+.-]*:|//|/)", target, re.I), f"CSS runtime URLs must be relative local files: {target}")
@@ -387,21 +426,17 @@ def check_theme(path):
     expected = token_css(manifest["id"], tokens)
     require(safe_path(root, "tokens.css").read_text(encoding="utf-8") == expected,
             "tokens.css is stale or edited; run build-theme")
+    runtime, source, package = theme_files(manifest)
+    known = set(runtime)
     for style in manifest["styles"]:
-        check_css(safe_path(root, style), manifest["id"], root)
+        for relative in check_css(safe_path(root, style), manifest["id"], root):
+            require(relative is None or relative in known, f"CSS asset must appear in manifest assets: {relative}")
     check_svg(safe_path(root, manifest["icons"]))
     for asset in manifest.get("assets", []):
         require(Path(asset).suffix.lower() in (".svg", ".woff2", ".png", ".webp", ".avif", ".jpg", ".jpeg"),
                 f"Unsupported runtime asset type: {asset}")
         if Path(asset).suffix.lower() == ".svg":
             check_svg(safe_path(root, asset))
-    runtime, source, package = theme_files(manifest)
-    known = set(runtime)
-    for style in manifest["styles"]:
-        for target in re.findall(r"url\s*\(([^)]*)\)", safe_path(root, style).read_text(encoding="utf-8"), flags=re.I):
-            target = target.strip().strip("\"'")
-            relative = css_asset_relative(root, safe_path(root, style), target)
-            require(relative is None or relative in known, f"CSS asset must appear in manifest assets: {relative}")
     pairs = manifest.get("contrastPairs")
     require(isinstance(pairs, list), "contrastPairs must be a list")
     declarations = {}
@@ -1041,6 +1076,7 @@ def check_run(path):
     if not isinstance(theme_digest, str) or not SHA.fullmatch(theme_digest):
         pending.append("Final themeDigest has not been recorded")
     review_inputs = {"themeDigest": theme_digest, "coverage": coverage, "evidence": hashes,
+        "reportSha256": sha_file(safe_path(root, "report.md")),
         "context": {field: run.get(field) for field in ("themeId", "themeAction", "mode", "profile", "implementer")}}
     if run["schemaVersion"] == "1.1":
         review_inputs["context"].pop("profile")
@@ -1084,11 +1120,11 @@ def check_run(path):
         pending.append("run.status is not passed")
     if run.get("phase") != "finalize":
         pending.append("run.phase is not finalize")
-    reviewers = {entry["reviewer"] for entry in evidence if entry.get("kind") == "review" and entry.get("status") == "passed"}
+    reviewers = {entry["reviewer"].strip() for entry in evidence if entry.get("kind") == "review" and entry.get("status") == "passed"}
     implementer = run.get("implementer")
     if not isinstance(implementer, str) or not implementer.strip():
         pending.append("run.implementer is missing")
-    elif not reviewers or implementer in reviewers:
+    elif not reviewers or implementer.strip() in reviewers:
         pending.append("Independent review must name a reviewer distinct from the implementer")
     return {"status": "FAIL" if errors else "BLOCKED" if pending else "PASS", "runId": run.get("id"),
             "themeId": run["themeId"], "scope": run.get("scope", "full-redesign"),
@@ -1156,20 +1192,32 @@ def _manifest_file(root, relative, kind, node):
     return {"id": node, "kind": kind, "path": relative, "sha256": sha_file(path)}
 
 
+RESUME_CONSUMERS = {
+    "run-record": "run", "project-context": "project-context", "model-routing": "model-routing",
+    "coverage": "coverage", "approvals": "approvals", "assessment": "assessment",
+    "evidence": "evidence", "evidence-input": "evidence",
+    "coverage-artifact": "coverage", "approval-input": "approvals",
+}
+
+
 def _resume_manifest(root, repo):
     run = read_json(safe_path(root, "run.json"))
     dependencies = []
-    seen = set()
+    by_path = {}
 
     def add(relative, kind, node):
-        if relative in seen:
-            return
-        seen.add(relative)
-        dependencies.append(_manifest_file(root, relative, kind, node))
+        if relative not in by_path:
+            entry = _manifest_file(root, relative, kind, node)
+            entry["consumers"] = []
+            by_path[relative] = entry
+            dependencies.append(entry)
+        consumer = RESUME_CONSUMERS[kind]
+        if consumer not in by_path[relative]["consumers"]:
+            by_path[relative]["consumers"].append(consumer)
 
     add("run.json", "run-record", "run")
-    add("project-context.md", "project-context", "project-context")
-    add("model-routing.md", "model-routing", "model-routing")
+    add(run.get("projectContext", {}).get("path", "project-context.md"), "project-context", "project-context")
+    add(run.get("modelRouting", {}).get("path", "model-routing.md"), "model-routing", "model-routing")
     add("coverage.json", "coverage", "coverage")
     add("decisions.json", "approvals", "approvals")
     add("report.md", "assessment", "assessment")
@@ -1204,11 +1252,18 @@ def _resume_manifest(root, repo):
         {"id": "coverage", "dependsOn": ["project-context", "run"]},
         {"id": "evidence", "dependsOn": ["project-context", "coverage", "run"]},
         {"id": "assessment", "dependsOn": ["project-context", "run"]},
-        {"id": "approvals", "dependsOn": ["project-context", "model-routing", "coverage", "assessment", "run"]},
+        {"id": "approvals", "dependsOn": ["project-context", "model-routing", "coverage", "evidence", "assessment", "run"]},
     ]
     graph.extend({"id": source["id"], "dependsOn": []} for source in sources)
-    graph.extend({"id": entry["id"], "dependsOn": [entry["kind"].split(":", 1)[0]]}
-                 for entry in dependencies if entry["id"] not in {item["id"] for item in graph})
+    nodes = {item["id"]: item for item in graph}
+    for entry in dependencies:
+        if entry["id"] not in nodes:
+            node = {"id": entry["id"], "dependsOn": []}
+            nodes[entry["id"]] = node
+            graph.append(node)
+        for consumer in entry["consumers"]:
+            if consumer != entry["id"] and entry["id"] not in nodes[consumer]["dependsOn"]:
+                nodes[consumer]["dependsOn"].append(entry["id"])
     return {"schemaVersion": "1.0", "runId": run["id"], "revision": 1,
             "dependencies": dependencies, "sources": sources, "graph": graph,
             "environment": _environment_facts(repo)}
@@ -1237,7 +1292,7 @@ def resume_check(path, current_environment=None):
         return {"status": "BLOCKED", "conservative": True, "staleNodes": ["run"],
                 "changedDependencies": [], "message": "Missing resume manifest; verify legacy run conservatively."}
     manifest = read_json(safe_path(root, "manifest.json"))
-    require(manifest.get("schemaVersion") == "1.0", "Unsupported resume manifest schemaVersion")
+    require(isinstance(manifest, dict) and manifest.get("schemaVersion") == "1.0", "Unsupported resume manifest schemaVersion")
     dependencies, changed = manifest.get("dependencies"), []
     require(isinstance(dependencies, list), "Resume manifest dependencies must be a list")
     for entry in dependencies:
@@ -1273,10 +1328,26 @@ def resume_check(path, current_environment=None):
     direct = {entry["id"] for entry in changed}
     graph = manifest.get("graph", [])
     require(isinstance(graph, list), "Resume manifest graph must be a list")
-    dependents = {}
+    categories = set(RESUME_CONSUMERS.values())
+    conservative = False
+    dependents = {"evidence": {"approvals"}}
+    for entry in dependencies:
+        consumers = entry.get("consumers")
+        if consumers is None:
+            conservative = True
+            consumer = RESUME_CONSUMERS.get(entry.get("kind"))
+            consumers = [consumer] if consumer else []
+        else:
+            require(isinstance(consumers, list) and bool(consumers)
+                    and all(isinstance(consumer, str) and consumer in categories for consumer in consumers),
+                    "Resume manifest consumers are malformed")
+        dependents.setdefault(entry["id"], set()).update(consumer for consumer in consumers if consumer != entry["id"])
     for node in graph:
         require(isinstance(node, dict) and isinstance(node.get("id"), str)
-                and isinstance(node.get("dependsOn", []), list), "Resume manifest graph node is malformed")
+                and isinstance(node.get("dependsOn"), list)
+                and all(isinstance(parent, str) for parent in node["dependsOn"]), "Resume manifest graph node is malformed")
+        if conservative and node["id"] not in categories:
+            continue
         for parent in node["dependsOn"]:
             dependents.setdefault(parent, set()).add(node["id"])
     if any(source["id"] == "remediation-contract" for source in manifest.get("sources", [])):
@@ -1290,11 +1361,12 @@ def resume_check(path, current_environment=None):
                 stale.add(child)
                 queue.append(child)
     dirty = expected_environment.get("git", {}).get("dirty") != observed_environment.get("git", {}).get("dirty")
-    return {"status": "BLOCKED" if changed else "PASS", "conservative": False,
+    return {"status": "BLOCKED" if changed or conservative else "PASS", "conservative": conservative,
             "manifestRevision": manifest.get("revision"), "changedDependencies": changed,
             "staleNodes": sorted(stale), "unrelatedChangesIgnored": True,
             "gitDirtyChanged": dirty,
-            "message": "Only changed dependencies and transitive dependents are stale." if changed
+            "message": "Legacy manifest consumer membership is incomplete; review dependent work and refresh the manifest." if conservative
+            else "Only changed dependencies and transitive dependents are stale." if changed
             else "Manifest dependencies are current; no dependent work is stale."}
 
 
@@ -1498,6 +1570,9 @@ def _registered_result(result, run_path, repo):
 def register_theme(repo, theme_id, run_path, make_default=False):
     validate_slug(theme_id)
     repo = Path(repo).resolve()
+    run_path = Path(run_path).resolve()
+    require(run_path != repo and run_path.is_relative_to(repo), "Registration run must belong to the selected repository")
+    run_path = safe_path(repo, run_path.relative_to(repo).as_posix(), allow_dir=True)
     cfg, themes, _ = config_paths(repo)
     verification = check_theme(themes / theme_id)
     require(verification["themeId"] == theme_id, "Registered theme directory ID must match theme.json id and its CSS scope")
