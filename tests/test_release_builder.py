@@ -66,6 +66,17 @@ class ReleaseBuilderTests(unittest.TestCase):
         for name in (".env.production", ".env.local", ".env.private"):
             self.assertNotIn(name, manifest)
 
+    def test_environment_example_directory_does_not_publish_private_descendants(self):
+        directory = self.skill / ".env.example"
+        directory.mkdir()
+        (directory / "private-config").write_text("PRIVATE_SECRET=not-for-distribution\n", encoding="utf-8")
+        (directory / ".env.example").write_text("PRIVATE_NESTED_TEMPLATE=not-for-distribution\n", encoding="utf-8")
+        builder.build(self.output)
+        with zipfile.ZipFile(self.output) as archive:
+            self.assertFalse(any("/.env.example/" in name for name in archive.namelist()))
+            self.assertNotIn(b"PRIVATE_SECRET", b"".join(archive.read(name) for name in archive.namelist()))
+        self.assertNotIn(".env.example/", self.manifest.read_text(encoding="utf-8"))
+
     def test_env_and_credentials_remain_rejected(self):
         for name in (".env", "credentials/token"):
             with self.subTest(name=name):

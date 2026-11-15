@@ -38,7 +38,8 @@ def sources() -> list[Path]:
             relative = path.relative_to(ROOT)
             if any(part in SKIP or part.startswith(".venv") for part in relative.parts):
                 continue
-            if any(part.startswith(".env.") and part != ".env.example" for part in relative.parts):
+            if (any(part.startswith(".env.") for part in relative.parts[:-1])
+                    or (path.name.startswith(".env.") and path.name != ".env.example")):
                 continue
             if path.suffix in (".pyc", ".pyo"):
                 continue
