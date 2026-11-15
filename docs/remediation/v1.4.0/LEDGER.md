@@ -1,5 +1,13 @@
 # v1.4.0 Cortex remediation ledger
 
+## Retrospective correction, 15 November 2026
+
+This ledger preserves the original session's pre-commit snapshot. Its `not committed` cells and branch-policy blocker are historical, not the current repository state. Commit `c7660d911347d00abe7ab6ca0741f3e4586e1815` contains the remediation and these reports. Commit `95cfb11786f6aae8c15f308787b614520ca5718d` records the subsequent 1.4.1 release.
+
+The original R15 PASS did not establish its required commit gate at the time of that session. The later commit resolves that historical omission. The feature-freeze audit also reproduced a full-release bypass in R06's previously tested scope path. Historical PASS rows are not current acceptance evidence. See [the current release assessment](../../feature-freeze/RELEASE-READINESS.md).
+
+## Original execution snapshot
+
 Status: PASS
 Classification: ENGINEERING_READY_UAT_PENDING
 Baseline commit: `0f25a1e85cca1b7d61602f08f7b4a4c79f9746a3`
