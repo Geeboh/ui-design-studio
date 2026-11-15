@@ -843,12 +843,14 @@ class DashboardTests(unittest.TestCase):
 
     def test_unresponsive_foreign_runs_do_not_hide_a_healthy_landing_or_owned_run(self):
         release = threading.Event()
+        requests = []
 
         class StalledOwner(BaseHTTPRequestHandler):
             def log_message(self, *unused):
                 pass
 
             def do_GET(self):
+                requests.append(self.path)
                 release.wait(5)
 
         listener = ThreadingHTTPServer(("127.0.0.1", 0), StalledOwner)
@@ -859,8 +861,10 @@ class DashboardTests(unittest.TestCase):
         self.addCleanup(listener.shutdown)
         self.addCleanup(release.set)
         session = self.session()
-        for index in range(3):
-            root, unused_run = self.new_run()
+        foreign_runs = []
+        for index in range(4):
+            root, foreign_run = self.new_run()
+            foreign_runs.append(foreign_run)
             url = f"http://127.0.0.1:{listener.server_port}/#token=" + "t" * 43
             self.write_private(root / ".design-server.json", {
                 "schemaVersion": "1.0", "instanceId": str(index) * 48, "run": str(root),
@@ -869,12 +873,23 @@ class DashboardTests(unittest.TestCase):
             })
         unused_root, healthy_run = self.new_run()
         healthy = session.open_run(healthy_run)
+        owner = self.session()
+        unused_root, selected_run = self.new_run()
+        selected = owner.open_run(selected_run)
+        session.open_run(selected_run)
+        started = time.monotonic()
         code, unused_headers, data = self.request(session.local_url)
+        elapsed = time.monotonic() - started
         self.assertEqual(code, 200)
-        self.assertEqual(len(data["runs"]), 4)
+        self.assertLess(elapsed, dashboard.PROBE_TIMEOUT + 1)
+        self.assertEqual(requests, ["/api/identity"] * 4)
+        self.assertEqual([run["run"] for run in data["runs"]], foreign_runs + [healthy_run, selected_run])
         live = [run for run in data["runs"] if run["live"]]
-        self.assertEqual([run["run"] for run in live], [healthy_run])
-        self.assertEqual(data["selectedRun"]["instanceId"], healthy["instanceId"])
+        self.assertEqual([run["run"] for run in live], [healthy_run, selected_run])
+        self.assertEqual(live[0]["dashboard"]["instanceId"], healthy["instanceId"])
+        self.assertEqual(data["selectedRun"]["run"], selected_run)
+        self.assertEqual(data["selectedRun"]["instanceId"], selected["instanceId"])
+        self.assertEqual([run["run"] for run in data["runs"] if run["selected"]], [selected_run])
 
 
 class ForegroundDashboardTests(unittest.IsolatedAsyncioTestCase):

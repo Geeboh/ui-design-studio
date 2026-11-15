@@ -753,8 +753,12 @@ class DashboardSession:
 
             observed = {}
             if candidates:
+                probe_candidates = sorted(candidates, key=lambda candidate: (
+                    candidate[1] != self.selected_run,
+                    not isinstance(self._handles.get(candidate[0]), OwnedRun),
+                ))
                 with ThreadPoolExecutor(max_workers=min(4, len(candidates))) as pool:
-                    futures = {root: pool.submit(inspect, root) for root, unused, unused_record in candidates}
+                    futures = {root: pool.submit(inspect, root) for root, unused, unused_record in probe_candidates}
                     observed = {root: future.result() for root, future in futures.items()}
             runs = []
             for root, relative, record in candidates:
