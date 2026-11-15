@@ -997,6 +997,47 @@ test("run creation selects through authenticated loopback API without claiming t
 	assert.equal(exported(run).sessionId, "session-A");
 });
 
+test("newly discovered runs auto-open without selecting existing unfinished peers", async t => {
+	const f = fixture(t);
+	const first = addRun(f, "first", { instanceId: "e".repeat(48) });
+	addRun(f, "second", { instanceId: "f".repeat(48) });
+	const child = installRuntime(f);
+	const runtime = host(t, f.project);
+	await runtime.emit("session_start");
+	assert.deepEqual(child.events().filter(event => event.type === "open"), []);
+	const created = addRun(f, "created", { instanceId: "d".repeat(48) });
+	await runtime.emit("tool_result");
+	const selected = relative(f.project, created.root);
+	assert.deepEqual(child.events().filter(event => event.type === "open").map(event => event.run), [selected]);
+	await runtime.emit("before_agent_start");
+	await runtime.emit("tool_result");
+	assert.deepEqual(child.events().filter(event => event.type === "open").map(event => event.run), [selected]);
+	const explicit = relative(f.project, first.root);
+	await runtime.command(explicit);
+	await runtime.emit("tool_result");
+	assert.deepEqual(child.events().filter(event => event.type === "open").map(event => event.run), [selected, explicit]);
+	assert.equal(existsSync(exportPath(created)), false);
+});
+
+test("only a new session rediscovers an existing unfinished peer after others complete", async t => {
+	const f = fixture(t);
+	const first = addRun(f, "first", { instanceId: "e".repeat(48) });
+	const second = addRun(f, "second", { instanceId: "f".repeat(48) });
+	const child = installRuntime(f);
+	const runtime = host(t, f.project);
+	await runtime.emit("session_start");
+	assert.deepEqual(child.events().filter(event => event.type === "open"), []);
+	writeJson(join(first.root, "run.json"), { schemaVersion: "1.1", id: "first", phase: "finalize", status: "completed" });
+	await runtime.emit("tool_result");
+	assert.deepEqual(child.events().filter(event => event.type === "open"), []);
+	runtime.setSession("session-B");
+	await runtime.emit("session_switch");
+	await runtime.emit("tool_result");
+	assert.deepEqual(child.events().filter(event => event.type === "open").map(event => event.run), [relative(f.project, second.root)]);
+	assert.equal(child.events().filter(event => event.type === "spawn").length, 2);
+	assert.equal(existsSync(exportPath(second, "session-B")), false);
+});
+
 test("unexpected child death recovers and reopens the previous unfinished run once", async t => {
 	const f = fixture(t);
 	const run = addRun(f, "unfinished", { instanceId: "e".repeat(48) });
@@ -1245,6 +1286,31 @@ test("browser selection among several unfinished runs survives child recovery", 
 	await eventually(() => dashboardReports(runtime).length === 2, "browser-selected run did not recover");
 	assert.deepEqual(child.events().filter(event => event.type === "open").map(event => event.run), [selected, selected]);
 	assert.equal(existsSync(exportPath(second)), false);
+});
+
+test("ordinary tool activity preserves browser selection among existing unfinished runs", async t => {
+	const f = fixture(t);
+	const first = addRun(f, "first", { instanceId: "e".repeat(48) });
+	const second = addRun(f, "second", { instanceId: "f".repeat(48) });
+	for (const run of [first, second]) writeJson(join(run.root, "run.json"), { schemaVersion: "1.1", id: run.snapshot.run.id, phase: "design", status: "pending" });
+	const child = installRuntime(f);
+	const runtime = host(t, f.project);
+	await runtime.emit("session_start");
+	const directory = join(f.project, ".ui-design-studio", "runtime", "mcp");
+	const record = JSON.parse(readFileSync(join(directory, readdirSync(directory)[0]), "utf8"));
+	const endpoint = new URL(record.localUrl);
+	const token = endpoint.hash.slice("#token=".length);
+	endpoint.hash = "";
+	endpoint.pathname = "/api/open";
+	const selected = relative(f.project, second.root);
+	const response = await fetch(endpoint, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ run: selected }) });
+	assert.equal(response.status, 200);
+	await response.arrayBuffer();
+	runtime.tick();
+	await runtime.emit("tool_result");
+	assert.deepEqual(child.events().filter(event => event.type === "open").map(event => event.run), [selected]);
+	const current = JSON.parse(readFileSync(join(directory, readdirSync(directory)[0]), "utf8"));
+	assert.equal(current.selectedRun.run, selected);
 });
 
 test("a cancelled session switch leaves the dashboard reachable during a pause", async t => {

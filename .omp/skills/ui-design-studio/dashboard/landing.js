@@ -10,7 +10,8 @@
   const authenticated = params.size === 1 && /^[A-Za-z0-9_-]{16,256}$/.test(token || "");
   const rows = new Map();
   let timer = null;
-  let pending = false;
+  let requestController = null;
+  let stopped = false;
   let currentAddress = "";
   let addressSignature = "";
 
@@ -39,8 +40,7 @@
       || dashboardUrl(details.url) || dashboardUrl(details.qrUrl) || addresses[0] || null;
   }
 
-  async function request(path, payload) {
-    const controller = new AbortController();
+  async function request(path, payload, controller = new AbortController()) {
     const timeout = window.setTimeout(() => controller.abort(), 5000);
     try {
       const response = await fetch(path, {
@@ -215,13 +215,15 @@
   }
 
   async function refresh() {
-    if (pending || !authenticated) return;
-    pending = true;
+    if (requestController || stopped || !authenticated) return;
+    const controller = new AbortController();
+    requestController = controller;
     window.clearTimeout(timer);
     byId("refresh-session").disabled = true;
     byId("runs-panel").setAttribute("aria-busy", "true");
     try {
-      const details = await request("/api/session");
+      const details = await request("/api/session", null, controller);
+      if (stopped || requestController !== controller) return;
       renderAddresses(details);
       byId("repository").textContent = details.repo;
       byId("session-identity").textContent = `Connection ${details.instanceId}`;
@@ -230,13 +232,16 @@
       byId("runs-panel").hidden = false;
       showStatus("connected", "Connection dashboard is live. Select a run to open its separate workspace.");
     } catch (error) {
+      if (stopped || requestController !== controller) return;
       hidePrivateData();
       showStatus(error.unauthorized ? "unauthorized" : "offline", error.message || "The connection dashboard is unavailable.");
     } finally {
-      pending = false;
-      byId("refresh-session").disabled = false;
-      byId("runs-panel").setAttribute("aria-busy", "false");
-      timer = window.setTimeout(refresh, 2000);
+      if (requestController === controller) {
+        requestController = null;
+        byId("refresh-session").disabled = false;
+        byId("runs-panel").setAttribute("aria-busy", "false");
+        if (!stopped) timer = window.setTimeout(refresh, 2000);
+      }
     }
   }
 
@@ -247,7 +252,17 @@
     byId("workspace-main").focus();
   });
   window.addEventListener("hashchange", () => window.location.reload());
-  window.addEventListener("pagehide", () => window.clearTimeout(timer));
+  window.addEventListener("pagehide", () => {
+    stopped = true;
+    window.clearTimeout(timer);
+    requestController?.abort();
+    requestController = null;
+  });
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted || !stopped) return;
+    stopped = false;
+    refresh();
+  });
   if (authenticated) {
     refresh();
   } else {
