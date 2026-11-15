@@ -107,6 +107,83 @@ class DashboardBrowserTests(unittest.TestCase):
         later_run = self.new_run()
         expect(page.locator("#run-list")).to_contain_text(later_run.name, timeout=6000)
 
+    def test_guided_form_persists_exact_review_and_survives_reload(self):
+        root = self.new_run()
+        (root / "board.html").write_text("<!doctype html><title>Review board</title><h1>Review board</h1>", encoding="utf-8")
+        self.backend.publish_artwork(self.engine, root, "board.html", "Synthetic form fixture.", title="Review board")
+        request = self.backend.publish_request(
+            self.engine, root, "form-review", "plan", "Review the board",
+            "Synthetic approval fixture, not product acceptance.", ["board.html"],
+        )["request"]
+        server = self.backend.DesignServer(self.engine, root, interval=0.05)
+        self.addCleanup(server.close)
+        server.start()
+        page = self.page()
+        page.goto(server.url)
+        expect(page.locator("#connection-status")).to_have_text("Connected")
+        page.locator("#nav-approvals").click()
+        card = page.locator('[data-approval-id="form-review"]')
+        card.locator('input[name="optionId"][value="approve"]').check()
+        card.locator('input[name="outcome"][value="approved"]').check()
+        card.locator('textarea[name="rationale"]').fill("  The reviewed board preserves the required recovery state.  ")
+        card.locator('input[name="reviewed"]').check()
+        card.locator('button[type="submit"]').click()
+        expect(card.locator(".approval-readonly")).to_contain_text("Recorded decision: approved.")
+        decisions = self.engine.read_json(root / "decisions.json")["decisions"]
+        self.assertEqual(len(decisions), 1)
+        self.assertEqual(
+            {key: decisions[0][key] for key in ("stage", "actor", "outcome", "rationale", "optionId", "requestId")},
+            {"stage": "plan", "actor": "user", "outcome": "approved",
+             "rationale": "The reviewed board preserves the required recovery state.",
+             "optionId": "approve", "requestId": "form-review"},
+        )
+        self.assertEqual(decisions[0]["inputsDigest"], request["inputsDigest"])
+        page.reload()
+        expect(page.locator("#connection-status")).to_have_text("Connected")
+        page.locator("#nav-approvals").click()
+        expect(card.locator(".approval-readonly")).to_contain_text("Recorded decision: approved.")
+        expect(card.locator(".approval-form")).to_be_hidden()
+
+    def test_nested_configured_theme_approval_persists_through_browser_form(self):
+        theme = self.repo / "branding/themes/fixture"
+        theme.parent.mkdir(parents=True)
+        (self.repo / "themes/fixture").rename(theme)
+        self.engine.atomic_json(self.repo / "ui-design-studio.json",
+                                {"paths": {"themes": "branding/themes", "runs": "work/docs/design/runs"}})
+        root = self.new_run()
+        server = self.backend.DesignServer(self.engine, root, interval=0.05, repo=self.repo)
+        self.addCleanup(server.close)
+        server.start()
+        imported = "theme-artwork/fixture/preview.html"
+        request = self.backend.publish_request(
+            self.engine, root, "nested-form-review", "plan", "Review the configured theme",
+            "Synthetic nested-root browser fixture.", [imported], repo=self.repo,
+        )["request"]
+        page = self.page()
+        page.goto(server.url)
+        expect(page.locator("#connection-status")).to_have_text("Connected")
+        page.locator("#nav-approvals").click()
+        card = page.locator('[data-approval-id="nested-form-review"]')
+        expect(card.locator(".approval-inputs")).to_contain_text(imported)
+        card.locator('input[name="optionId"][value="approve"]').check()
+        card.locator('input[name="outcome"][value="approved"]').check()
+        card.locator('textarea[name="rationale"]').fill("The configured theme matches the reviewed artifact.")
+        card.locator('input[name="reviewed"]').check()
+        card.locator('button[type="submit"]').click()
+        expect(card.locator(".approval-readonly")).to_contain_text("Recorded decision: approved.")
+        page.reload()
+        expect(page.locator("#connection-status")).to_have_text("Connected")
+        page.locator("#nav-approvals").click()
+        expect(card.locator(".approval-form")).to_be_hidden()
+        decisions = self.engine.read_json(root / "decisions.json")["decisions"]
+        self.assertEqual(len(decisions), 1)
+        self.assertEqual(decisions[0]["inputsDigest"], request["inputsDigest"])
+        self.assertIn(imported, decisions[0]["inputs"])
+        self.assertEqual(decisions[0]["actor"], "user")
+        sources = self.engine.read_json(root / ".design-theme-sources.json")
+        self.assertEqual(sources["projectRoot"], str(self.repo))
+        self.assertEqual(sources["themePath"], "branding/themes/fixture")
+
     def test_artwork_close_focus_survives_concurrent_approval(self):
         root = self.new_run()
         (root / "a.html").write_text("<!doctype html><title>Focus board</title><h1>Synthetic focus board</h1>", encoding="utf-8")

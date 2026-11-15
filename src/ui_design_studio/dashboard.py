@@ -619,8 +619,9 @@ class DashboardSession:
     def _landing_details(self) -> dict:
         return _details(self.repo, self.instance_id, None, self.local_url, self.lan_urls, self.url)
 
-    def _live_details(self, root: Path, *, timeout: float = PROBE_TIMEOUT) -> dict | None:
-        handle = self._handles.get(root)
+    def _live_details(self, root: Path, *, timeout: float = PROBE_TIMEOUT,
+                      handles: dict[Path, RunHandle] | None = None) -> dict | None:
+        handle = (self._handles if handles is None else handles).get(root)
         if isinstance(handle, OwnedRun):
             if handle.server.closed.is_set() or handle.server.stop.is_set():
                 return None
@@ -731,38 +732,49 @@ class DashboardSession:
     def session_data(self) -> dict:
         with self._lock:
             self._require_live()
-            candidates = []
-            runs_root = _runs_root(self.repo)
-            if runs_root.exists():
-                for directory, children, files in os.walk(runs_root, followlinks=False):
-                    children[:] = sorted(name for name in children if not name.startswith(".") and not (Path(directory) / name).is_symlink())
-                    if "run.json" not in files:
-                        continue
-                    relative = Path(directory).relative_to(self.repo).as_posix()
-                    try:
-                        root = _run_path(self.repo, relative)
-                        record = studio().read_json(studio().safe_path(root, "run.json"))
-                    except (OSError, ValueError, TypeError, studio().StudioError):
-                        continue
-                    candidates.append((root, relative, record))
-            deadline = time.monotonic() + PROBE_TIMEOUT
+            handles = self._handles.copy()
+            selected_run = self.selected_run
+        candidates = []
+        runs_root = _runs_root(self.repo)
+        if runs_root.exists():
+            for directory, children, files in os.walk(runs_root, followlinks=False):
+                children[:] = sorted(name for name in children if not name.startswith(".") and not (Path(directory) / name).is_symlink())
+                if "run.json" not in files:
+                    continue
+                relative = Path(directory).relative_to(self.repo).as_posix()
+                try:
+                    root = _run_path(self.repo, relative)
+                    record = studio().read_json(studio().safe_path(root, "run.json"))
+                except (OSError, ValueError, TypeError, studio().StudioError):
+                    continue
+                candidates.append((root, relative, record))
+        deadline = time.monotonic() + PROBE_TIMEOUT
 
-            def inspect(root):
-                remaining = deadline - time.monotonic()
-                return self._live_details(root, timeout=remaining) if remaining > 0 else None
+        def inspect(root):
+            remaining = deadline - time.monotonic()
+            return self._live_details(root, timeout=remaining, handles=handles) if remaining > 0 else None
 
-            observed = {}
-            if candidates:
-                probe_candidates = sorted(candidates, key=lambda candidate: (
-                    candidate[1] != self.selected_run,
-                    not isinstance(self._handles.get(candidate[0]), OwnedRun),
-                ))
-                with ThreadPoolExecutor(max_workers=min(4, len(candidates))) as pool:
-                    futures = {root: pool.submit(inspect, root) for root, unused, unused_record in probe_candidates}
-                    observed = {root: future.result() for root, future in futures.items()}
+        observed = {}
+        if candidates:
+            probe_candidates = sorted(candidates, key=lambda candidate: (
+                candidate[1] != selected_run,
+                not isinstance(handles.get(candidate[0]), OwnedRun),
+            ))
+            with ThreadPoolExecutor(max_workers=min(4, len(candidates))) as pool:
+                futures = {root: pool.submit(inspect, root) for root, unused, unused_record in probe_candidates}
+                observed = {root: future.result() for root, future in futures.items()}
+        with self._lock:
+            self._require_live()
             runs = []
             for root, relative, record in candidates:
+                handle = self._handles.get(root)
                 details = observed[root]
+                current_instance = (handle.server.instance_id if isinstance(handle, OwnedRun)
+                                    else handle.instance_id if isinstance(handle, ReusedRun) else None)
+                if ((handle is not handles.get(root) and
+                     (details is None or details["instanceId"] != current_instance)) or
+                        isinstance(handle, OwnedRun) and (handle.server.closed.is_set() or handle.server.stop.is_set())):
+                    details = observed[root] = None
                 runs.append({"run": relative, "id": record["id"], "phase": record["phase"], "status": record["status"],
                              "selected": relative == self.selected_run, "live": details is not None, "dashboard": details})
             return {**self._landing_details(), "selectedRun": self._selected_details(observed), "runs": runs}

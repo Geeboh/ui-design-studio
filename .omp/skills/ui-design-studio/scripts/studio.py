@@ -1479,12 +1479,12 @@ def _design_backend():
     return _design_backend.module
 
 
-def _registered_result(result, run_path):
+def _registered_result(result, run_path, repo):
     try:
         run = read_json(Path(run_path) / "run.json")
         if run.get("mode") == "yolo":
             backend = _design_backend()
-            cleanup = backend.cleanup_registered_yolo(backend.studio, run_path)
+            cleanup = backend.cleanup_registered_yolo(backend.studio, run_path, repo)
             if cleanup is not None:
                 result["cleanup"] = cleanup
     except (StudioError, OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
@@ -1526,7 +1526,7 @@ def register_theme(repo, theme_id, run_path, make_default=False):
                 ("version", verification["version"]), ("themeDigest", verification["themeDigest"]), ("runId", run_result["runId"]))):
             return _registered_result({"status": "PASS", "registry": str(themes / "registry.json"), "defaultTheme": registry["defaultTheme"],
                     "alreadyRegistered": True, "backup": None,
-                    "message": "Identical run/version/digest is already registered; no registry or default change was made."}, run_path)
+                    "message": "Identical run/version/digest is already registered; no registry or default change was made."}, run_path, repo)
         if run_document["themeAction"] == "new":
             require(existing is None, "New theme ID is already registered; choose a new ID or explicitly start a modify-default run")
         if run_document["themeAction"] == "modify-default":
@@ -1554,7 +1554,7 @@ def register_theme(repo, theme_id, run_path, make_default=False):
         lock.unlink(missing_ok=True)
     return _registered_result({"status": "PASS", "registry": str(path), "defaultTheme": registry["defaultTheme"],
             "backup": str(backup) if backup else None,
-            "message": "Registry updated atomically. The app's reviewed adapter must consume this registry; this command does not deploy or activate a running application."}, run_path)
+            "message": "Registry updated atomically. The app's reviewed adapter must consume this registry; this command does not deploy or activate a running application."}, run_path, repo)
 
 
 def semver_newer(candidate, previous):

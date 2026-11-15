@@ -26,7 +26,7 @@ From the extracted package directory:
 
 ```bash
 python3 -m venv .venv-release
-.venv-release/bin/python -m pip install . build hatchling pillow zxing-cpp pytest playwright
+.venv-release/bin/python -m pip install . build hatchling zxing-cpp pytest playwright
 .venv-release/bin/python -m playwright install chromium
 .venv-release/bin/python -m pytest -q
 node --test tests/test_progress_extension.mjs

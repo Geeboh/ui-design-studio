@@ -86,7 +86,7 @@ Native Windows/macOS, a second physical device, and other native MCP clients wer
 
 ```bash
 python3 -m venv .venv-mcp-test
-.venv-mcp-test/bin/python -m pip install . build zxing-cpp pillow
+.venv-mcp-test/bin/python -m pip install . build zxing-cpp
 .venv-mcp-test/bin/python -m unittest discover -s tests -p 'test_mcp*.py' -v
 .venv-mcp-test/bin/python -m unittest discover -s tests -p 'test_design_server.py' -v
 .venv-mcp-test/bin/python -m unittest discover -s tests -p 'test_studio.py' -v

@@ -104,7 +104,7 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(result.structuredContent, dict)
         return result.structuredContent
 
-    async def fail(self, client, tool_name, **arguments):
+    async def call_failure(self, client, tool_name, **arguments):
         result = await client.call_tool(tool_name, arguments)
         self.assertTrue(result.isError, result)
         return result
@@ -210,7 +210,7 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                 await client.get_prompt("ui_design_workflow", {"intent": "resume"})
             self.assertIn("Resume intent requires run", str(failure.exception))
             self.assertFalse(list(self.repo.rglob("run.json")))
-            denied = await self.fail(client, "ui_design_read_guide", name="../README.md")
+            denied = await self.call_failure(client, "ui_design_read_guide", name="../README.md")
             self.assertEqual(denied.structuredContent["error"], "Unknown guide: ../README.md")
             with self.assertRaises(McpError):
                 await client.read_resource("ui-design://guide/skills/ui-design-studio/scripts/studio.py")
@@ -281,7 +281,7 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(resource["nextAction"], "Review the first concept")
             prompt = await client.get_prompt("ui_design_workflow", {"intent": "resume", "run": relative})
             self.assertIn("ui-design://status/" + quote(relative, safe=""), prompt.messages[0].content.text)
-            checked = await self.fail(client, "ui_design_check_run", path=relative)
+            checked = await self.call_failure(client, "ui_design_check_run", path=relative)
             self.assertEqual(checked.structuredContent["status"], "BLOCKED")
             self.assertTrue(checked.structuredContent["pending"])
             locator = json.loads((root / ".design-server.json").read_text(encoding="utf-8"))
@@ -308,7 +308,7 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(packet["role"], "ui-implementer")
             self.assertTrue(packet["instructions"])
             self.assertEqual(packet["concurrencyCeiling"], 3)
-            missing = await self.fail(client, "ui_design_worker_packet", path=relative,
+            missing = await self.call_failure(client, "ui_design_worker_packet", path=relative,
                                        role="ui-implementer", objective="Fix component state",
                                        owned=[relative + "/component.md"], instruction=[relative + "/project-context.md"])
             self.assertTrue("original applicable instructions" in missing.structuredContent["error"])
@@ -326,6 +326,10 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                 allow=[])
             self.assertEqual({entry["path"] for entry in packet["instructions"]},
                              {"project-context.md", "model-routing.md", "requirements.md"})
+            empty_artifacts = await self.call_failure(client, "ui_design_worker_packet", path=relative,
+                role="ui-implementer", objective="Inspect component", owned=[relative + "/component.md"],
+                artifact=[])
+            self.assertIn("Worker artifacts are required", empty_artifacts.structuredContent["error"])
             self.assertEqual(packet["allowedActions"], [])
 
     async def test_status_metadata_does_not_claim_read_only_artwork_publication(self):
@@ -366,7 +370,7 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
         write_json(root / "decisions.json", decisions)
         (root / "visual-source.txt").write_text("Changed MCP-bound input\n", encoding="utf-8")
         async with self.connect() as (client, unused):
-            checked = await self.fail(client, "ui_design_check_run", path=relative)
+            checked = await self.call_failure(client, "ui_design_check_run", path=relative)
             self.assertEqual(checked.structuredContent["status"], "FAIL")
             status = await self.call(client, "ui_design_status", run=relative)
             finalize = next(gate for gate in status["gates"] if gate["id"] == "finalize")
@@ -385,7 +389,7 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(completed["fullThemeRelease"], "BLOCKED")
             document = json.loads((root / "run.json").read_text(encoding="utf-8"))
             self.assertEqual(document["status"], "pending")
-            blocked = await self.fail(client, "ui_design_register", theme="fixture", run=relative)
+            blocked = await self.call_failure(client, "ui_design_register", theme="fixture", run=relative)
             self.assertIn("Run is BLOCKED", blocked.structuredContent["error"])
 
     async def test_repository_relative_inputs_and_configured_directory_boundaries(self):
@@ -397,35 +401,77 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             (self.repo / "plan.html").write_text("Outside the selected run", encoding="utf-8")
             for bad in ("../outside", str(root), relative + "/../escape", "themes/fixture", "docs\\design\\runs"):
                 with self.subTest(path=bad):
-                    await self.fail(client, "ui_design_resume_run", run=bad)
-            await self.fail(client, "ui_design_check_theme", path=relative)
-            await self.fail(client, "ui_design_check_run", path="themes/fixture")
-            short = await self.fail(client, "ui_design_decision_digest", path=relative, files=["plan.html"])
+                    await self.call_failure(client, "ui_design_resume_run", run=bad)
+            await self.call_failure(client, "ui_design_check_theme", path=relative)
+            await self.call_failure(client, "ui_design_check_run", path="themes/fixture")
+            short = await self.call_failure(client, "ui_design_decision_digest", path=relative, files=["plan.html"])
             self.assertEqual(short.structuredContent["error"], "Input file must be inside the selected run")
-            await self.fail(client, "ui_design_approval_request", run=relative, id="bad-plan", stage="plan",
+            await self.call_failure(client, "ui_design_approval_request", run=relative, id="bad-plan", stage="plan",
                             title="Invalid path", context="Reject a run-relative file argument", files=["plan.html"])
-            await self.fail(client, "ui_design_approval_request", run=relative, id="bad-choices", stage="plan",
+            await self.call_failure(client, "ui_design_approval_request", run=relative, id="bad-choices", stage="plan",
                             title="Invalid choices", context="Reject a foreign choices file",
                             files=[relative + "/plan.html"], choices="themes/fixture/theme.json")
-            await self.fail(client, "ui_design_package", path="themes/fixture", output="../escape.zip")
-            await self.fail(client, "ui_design_progress", run=relative)
-            await self.fail(client, "ui_design_worker", run=relative, id="worker", task="Fixture", status="invented", message="Invalid enum")
+            await self.call_failure(client, "ui_design_package", path="themes/fixture", output="../escape.zip")
+            await self.call_failure(client, "ui_design_progress", run=relative)
+            await self.call_failure(client, "ui_design_worker", run=relative, id="worker", task="Fixture", status="invented", message="Invalid enum")
             (self.repo / "outside.png").write_bytes(PNG)
-            await self.fail(client, "ui_design_artwork", run=relative, file="outside.png", context="Reject unrelated project file")
+            await self.call_failure(client, "ui_design_artwork", run=relative, file="outside.png", context="Reject unrelated project file")
             with tempfile.TemporaryDirectory(prefix="ui-design-mcp-outside-") as outside:
                 escape = self.repo / "docs/design/runs/escape"
                 escape.symlink_to(outside, target_is_directory=True)
                 write_json(Path(outside) / "run.json", {"id": "foreign"})
-                await self.fail(client, "ui_design_resume_run", run="docs/design/runs/escape")
+                await self.call_failure(client, "ui_design_resume_run", run="docs/design/runs/escape")
                 (root / "linked.html").symlink_to(self.repo / "plan.html")
-                await self.fail(client, "ui_design_decision_digest", path=relative, files=[relative + "/linked.html"])
+                await self.call_failure(client, "ui_design_decision_digest", path=relative, files=[relative + "/linked.html"])
                 (self.repo / "packages").symlink_to(outside, target_is_directory=True)
-                await self.fail(client, "ui_design_package", path="themes/fixture", output="packages/theme.zip")
+                await self.call_failure(client, "ui_design_package", path="themes/fixture", output="packages/theme.zip")
                 self.assertEqual(list(Path(outside).glob("*.zip")), [])
             expected = studio.file_digest(root, ["plan.html"])
             digest = await self.call(client, "ui_design_decision_digest", path=relative, files=[relative + "/plan.html"])
             self.assertEqual(digest, {"status": "PASS", "inputs": [relative + "/plan.html"], "inputsDigest": expected})
             self.assertFalse((root / "approval-requests/bad-plan.json").exists())
+
+    async def test_nested_configured_root_preserves_theme_provenance_across_status_and_review(self):
+        configured_theme = self.repo / "branding/themes/fixture"
+        configured_theme.parent.mkdir(parents=True)
+        self.theme.rename(configured_theme)
+        write_json(self.repo / "ui-design-studio.json",
+                   {"paths": {"themes": "branding/themes", "runs": "work/docs/design/runs"}})
+        async with self.connect() as (client, unused):
+            started = await self.start(client)
+            relative = started["run"]
+            root = self.repo / relative
+            imported = relative + "/theme-artwork/fixture/preview.html"
+            await self.call(client, "ui_design_status", run=relative)
+            sources = studio.read_json(root / ".design-theme-sources.json")
+            self.assertEqual(sources["projectRoot"], str(self.repo))
+            self.assertEqual(sources["themePath"], "branding/themes/fixture")
+            self.assertIn("theme-artwork/fixture/preview.html", sources["files"])
+            published = await self.call(client, "ui_design_artwork", run=relative, file=imported,
+                                        context="Synthetic nested-root theme review")
+            self.assertEqual(published["artwork"]["path"], "theme-artwork/fixture/preview.html")
+            review = await self.call(client, "ui_design_approval_request", run=relative, id="nested-review",
+                                     stage="plan", title="Review nested theme", context="Synthetic provenance regression",
+                                     files=[imported])
+            self.assertIn(".design-theme-sources.json", review["request"]["inputs"])
+            self.assertIn("theme-artwork/fixture/preview.html", review["request"]["inputs"])
+            self.assertEqual(studio.read_json(root / ".design-theme-sources.json")["projectRoot"], str(self.repo))
+            address = urlsplit(started["dashboard"]["localUrl"])
+            payload = {"id": "nested-review", "inputsDigest": review["request"]["inputsDigest"],
+                       "optionId": "approve", "outcome": "approved", "rationale": "Reviewed the configured theme source."}
+            connection = http.client.HTTPConnection(address.hostname, address.port, timeout=5)
+            try:
+                connection.request("POST", "/api/approval", json.dumps(payload),
+                                   {"Authorization": "Bearer " + address.fragment.removeprefix("token="),
+                                    "Content-Type": "application/json"})
+                response = connection.getresponse()
+                recorded = json.loads(response.read())
+                self.assertEqual(response.status, 200, recorded)
+            finally:
+                connection.close()
+            self.assertEqual(recorded["decision"]["inputsDigest"], review["request"]["inputsDigest"])
+            self.assertEqual(recorded["decision"]["actor"], "user")
+            self.assertEqual(studio.read_json(root / ".design-theme-sources.json")["projectRoot"], str(self.repo))
 
     async def test_configured_run_and_theme_roots_replace_the_defaults(self):
         configured_theme = self.repo / "branding/themes/fixture"
@@ -440,7 +486,7 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             created = await self.call(client, "ui_design_theme_new", id="configured", name="Configured fixture")
             self.assertEqual(Path(created["theme"]), self.repo / "branding/themes/configured")
             (self.repo / "themes/foreign").mkdir(parents=True)
-            await self.fail(client, "ui_design_check_theme", path="themes/foreign")
+            await self.call_failure(client, "ui_design_check_theme", path="themes/foreign")
             published = await self.call(client, "ui_design_artwork", run=started["run"],
                                         file="branding/themes/fixture/preview.html", context="Synthetic configured theme fixture")
             self.assertEqual(published["artwork"]["path"], "theme-artwork/fixture/preview.html")
@@ -464,22 +510,22 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             package = await self.call(client, "ui_design_package", path="themes/new-theme", output="packages/new-theme.zip")
             self.assertTrue((self.repo / "packages/new-theme.zip").is_file())
             self.assertEqual(package["sha256"], studio.sha_file(self.repo / "packages/new-theme.zip"))
-            await self.fail(client, "ui_design_package", path="themes/new-theme", output="packages/new-theme.zip")
+            await self.call_failure(client, "ui_design_package", path="themes/new-theme", output="packages/new-theme.zip")
             for name in ("context_digest", "models_digest"):
                 result = await self.call(client, "ui_design_" + name, path=relative)
                 self.assertEqual(result["status"], "PASS")
-            registration = await self.fail(client, "ui_design_register", theme="fixture", run=relative)
+            registration = await self.call_failure(client, "ui_design_register", theme="fixture", run=relative)
             self.assertIn("Run is BLOCKED", registration.structuredContent["error"])
             self.assertFalse((self.repo / "themes/registry.json").exists())
-            await self.fail(client, "ui_design_design_cleanup")
-            await self.fail(client, "ui_design_design_cleanup", run=relative, all=True)
+            await self.call_failure(client, "ui_design_design_cleanup")
+            await self.call_failure(client, "ui_design_design_cleanup", run=relative, all=True)
             cleaned = await self.call(client, "ui_design_design_cleanup", run=relative)
             self.assertTrue(cleaned["stopped"])
             self.assert_closed(started["dashboard"]["localUrl"])
             landing = await self.call(client, "ui_design_dashboard_info")
             self.assertEqual(landing["instanceId"], started["landing"]["instanceId"])
             self.assertEqual(request(landing["localUrl"])[0], 200)
-            stopped = await self.fail(client, "ui_design_dashboard_info", run=relative)
+            stopped = await self.call_failure(client, "ui_design_dashboard_info", run=relative)
             self.assertEqual(stopped.structuredContent["error"], "Dashboard is not running.")
             restarted = await self.call(client, "ui_design_resume_run", run=relative)
             self.assertNotEqual(restarted["dashboard"]["instanceId"], started["dashboard"]["instanceId"])
@@ -561,7 +607,7 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                 state["borrowed"] = await self.call(client, "ui_design_resume_run", run=relative)
                 ready.set()
                 await inspect_stopped.wait()
-                stopped = await self.fail(client, "ui_design_dashboard_info", run=relative)
+                stopped = await self.call_failure(client, "ui_design_dashboard_info", run=relative)
                 self.assertEqual(stopped.structuredContent["error"], "Dashboard is not running.")
                 self.assertEqual(request(state["borrowed"]["landing"]["localUrl"])[0], 200)
                 state["reopened"] = await self.call(client, "ui_design_resume_run", run=relative)
