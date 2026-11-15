@@ -45,3 +45,7 @@ Original outputs, exact target provenance, dispositions and limitations are embe
 ReviewEngineIntegrity exposed model identity `openai-codex/gpt-6.1-sol`; other current reviewer model identities are not inferred. Per-call alternate-family overrides were unavailable. No cross-family certification is claimed. Parent execution, not static agreement, establishes the reported test outcomes.
 
 The last CSS reviewer reported three concrete survivors rather than approval. The parent reproduced each, applied shared lexical/source-boundary corrections and ran the affected and full gates. Their dispositions and original rejection remain in the evidence; a later zero-finding independent CSS verdict is not claimed.
+
+## Shipping gate
+
+The explicit ShipIt follow-up requires a non-author verifier to exercise parent and final PR head through actual consumers and post `PASS`, `PASS+NOTES` or `FAIL` on that PR. The original audit reports above remain unchanged evidence of their reviewed snapshots. Final shipping verdicts belong on the PR so recording them does not mutate the already-verified head.

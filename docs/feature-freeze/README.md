@@ -21,4 +21,4 @@ The current remediation branch is `feature-freeze/2026-11-16-audit-unique` in `/
 | [Original review evidence](REVIEW-EVIDENCE.json) | Fourteen current reports with exact scope and dispositions |
 | [Security evidence](SECURITY-EVIDENCE.json) | Current scan, dependency records and 77 source identities |
 
-`decisions.tsv` records material decisions. No default-branch merge, deployment, or publication occurs during this freeze.
+`decisions.tsv` records material decisions. No default-branch merge, deployment or publication occurred during the original freeze audit. The later explicit ShipIt request authorizes one independently verified PR merge; package publication and deployment remain excluded.

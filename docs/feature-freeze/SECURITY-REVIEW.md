@@ -20,7 +20,7 @@ The first inferred checkout-wheel leak was disproved by an actual build. Indepen
 
 ## Scanners and limits
 
-Current point-in-time scanner and dependency responses are retained in [SECURITY-EVIDENCE.json](SECURITY-EVIDENCE.json), alongside 77 authored source hashes. Trivy batch `9c9ef4d6-5ff9-4040-bb22-e9599a20b502` returned an empty findings list for vulnerability, secret, misconfiguration and license scans. The tool did not return scanner version or scanned-file count. No completeness or license certification is inferred.
+Current point-in-time scanner and dependency responses are retained in [SECURITY-EVIDENCE.json](SECURITY-EVIDENCE.json), alongside 77 authored source hashes. Trivy batch `20ae704c-e6ca-49cf-a126-601958c52512` returned an empty findings list for vulnerability, secret, misconfiguration and license scans. The tool did not return scanner version or scanned-file count. No completeness or license certification is inferred.
 
 Python 3.10 and 3.12 environments contained 51 and 72 installed distributions respectively. Their final audits reported no known vulnerabilities. The Python 3.10 environment was inspected using the Python 3.12 auditor's `--path`; installing an auditor inside the minimum-version environment unnecessarily selected vulnerable verification-only `filelock` 4.1.0. Its 17 advisory IDs and the earlier 42 Pillow advisory IDs remain retained. Both avoidable dependencies were removed, not ignored. The unpublished local package can be skipped by the advisory database and is covered by source review rather than a fabricated advisory result.
 

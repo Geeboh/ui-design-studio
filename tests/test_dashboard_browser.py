@@ -1,12 +1,16 @@
 """Real-browser regressions over synthetic, isolated runs.
 
-Persisted lifecycle events are simulated. These tests do not verify native BFCache
-or establish application review evidence.
+Three lifecycle cases simulate persisted events. The history-navigation case uses
+real browser Back and observes cache restoration or reload. These synthetic runs
+do not establish application review evidence.
 """
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import os
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import unittest
 
 try:
@@ -26,7 +30,8 @@ class DashboardBrowserTests(unittest.TestCase):
     def setUpClass(cls):
         cls.playwright = sync_playwright().start()
         cls.addClassCleanup(cls.playwright.stop)
-        options = {"headless": True, "args": ["--no-sandbox"]}
+        options = {"headless": True, "args": ["--no-sandbox"],
+                   "ignore_default_args": ["--disable-back-forward-cache"]}
         executable = os.environ.get("UI_DESIGN_TEST_BROWSER")
         if executable:
             options["executable_path"] = executable
@@ -59,6 +64,46 @@ class DashboardBrowserTests(unittest.TestCase):
         expect(page.locator("#connection-status")).to_have_text("Connected")
         expect(page.locator("#refresh-session")).to_be_enabled()
         return session, page
+
+    def test_real_back_navigation_refreshes_runs_and_continues_polling(self):
+        (self.repo / "away.html").write_text("<!doctype html><title>Away</title><h1>Away</h1>", encoding="utf-8")
+        handler = partial(SimpleHTTPRequestHandler, directory=str(self.repo))
+        with ThreadingHTTPServer(("127.0.0.1", 0), handler) as away:
+            thread = threading.Thread(target=away.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
+            thread.start()
+            try:
+                session = dashboard.DashboardSession(self.repo, host="127.0.0.1")
+                self.addCleanup(session.close)
+                session.start()
+                page = self.page()
+                page.add_init_script("""window.__historyProbe = {identity: crypto.randomUUID(), shows: []};
+                    addEventListener("pageshow", event => __historyProbe.shows.push({
+                        persisted: event.persisted, trusted: event.isTrusted
+                    }));""")
+                page.goto(session.info()["localUrl"])
+                expect(page.locator("#connection-status")).to_have_text("Connected")
+                original = page.evaluate("window.__historyProbe.identity")
+                page.goto(f"http://localhost:{away.server_port}/away.html")
+                expect(page.locator("h1")).to_have_text("Away")
+                restored_run = self.new_run()
+                page.go_back(wait_until="commit")
+                expect(page.locator("#run-list")).to_contain_text(restored_run.name, timeout=8000)
+                observed = page.evaluate("""original => ({
+                    sameDocument: __historyProbe.identity === original,
+                    ...__historyProbe.shows.at(-1),
+                    reasons: performance.getEntriesByType("navigation")[0]
+                        ?.notRestoredReasons?.reasons.map(entry => entry.reason) || []
+                })""", original)
+                self.assertTrue(observed["trusted"])
+                self.assertEqual(observed["sameDocument"], observed["persisted"])
+                later_run = self.new_run()
+                expect(page.locator("#run-list")).to_contain_text(later_run.name, timeout=6000)
+                expect(page.locator("#run-count")).to_have_text("2 recorded runs")
+                expect(page.locator("#connection-status")).to_have_text("Connected")
+                print(f"Real history navigation in Chromium {self.browser.version}: {observed}")
+            finally:
+                away.shutdown()
+                thread.join()
 
     def test_landing_resumes_polling_after_simulated_persisted_restore(self):
         session, page = self.landing()

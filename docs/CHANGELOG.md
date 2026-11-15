@@ -22,6 +22,7 @@
 - Confined registration approvals to the selected repository and bound final acceptance to current assessment report bytes.
 - Rejected whitespace self-review and unchecked quoted or variable CSS image sources.
 - Corrected shared-file resume consumers and transitive invalidation; legacy incomplete manifests require reviewed refresh.
+- Exercised real Chromium Back navigation and continued run polling while preserving authenticated no-store responses; recorded actual BFCache exclusion rather than claiming a persisted restore.
 
 ## 1.4.1 · 14 November 2026
 

@@ -22,16 +22,20 @@ All 140 candidate paths have unique inspection dispositions. All 43 confirmed fi
 | Performance and coverage | Existing deterministic workload assertions passed; no incomparable timing claim; component-level parent-process statement/branch coverage 76%, with subprocess gaps explicit |
 | Independent review and remediation of review findings | Fourteen original reports retained in `REVIEW-EVIDENCE.json`; wrong-target output excluded; every concrete survivor reproduced and corrected |
 | Documentation and continuous progress | All thirteen requested reports maintained, plus original review/scanner records and append-only decisions |
-| No unauthorized release action | No default-branch merge, push, public release or deployment performed |
+| Original freeze authorization | No default-branch merge, push, public release or deployment occurred during the original audit; the later explicit ShipIt request authorizes normal PR shipping |
 
 Detailed commands and actual gate scope are in [TEST-MATRIX.md](TEST-MATRIX.md). Passing tests do not prove the absence of defects. The final source manifest is regenerated after report changes and must pass before the artifact commit.
 
 ## Conditions and attention flags
 
-Native Windows/macOS, non-Chromium engines, actual BFCache admission, physical devices and human target-application acceptance remain unverified. Simulated persisted Chromium events test lifecycle handlers, not real BFCache eligibility. Trusted-LAN HTTP retains its network-confidentiality limit. Low parent-process CLI/MCP/installer coverage is not complete subprocess coverage.
+Native Windows/macOS, non-Chromium engines, physical devices and human target-application acceptance remain unverified. Genuine cross-site Back navigation was exercised in Chromium 159.0.8154.6 with Playwright's BFCache-disable default removed. Chromium rejected cache admission with `response-cache-control-no-store` and `response-cache-control-no-store-with-js-network-request`. The page reloaded, displayed a run created while away and continued polling for another run. This proves real history-navigation recovery, not persisted BFCache restoration. Privacy headers remain unchanged. Trusted-LAN HTTP retains its network-confidentiality limit. Low parent-process CLI/MCP/installer coverage is not complete subprocess coverage.
 
 The last independent CSS review reported three survivors. The parent reproduced and corrected them with actual browser counterexamples and final regression gates. No subsequent zero-finding independent CSS verdict or cross-family review certification is claimed.
 
 The original checkout's user edits were not integrated. Review and test the combined changes before combining or shipping them. During setup, two files were accidentally copied into a different pre-existing worktree and restored to its committed bytes. No pre-copy snapshot exists there, so earlier uncommitted state in that separate worktree remains unknown. The original user checkout was not modified.
 
 Archive/checksum publication is recoverable after ordinary reported errors but not crash-atomic across two replacements. Verify the checksum before use and follow [BLOCKERS.md](BLOCKERS.md) after interruption. Local logs and candidate artifacts are review evidence, not a published release.
+
+## Shipping follow-up
+
+The user explicitly requested “Finish your work and ShipIt” after the audit. Shipping uses one normal GitHub PR into `main`, gated by an independent non-author parent/head consumer verdict. That PR records the exact verified head and final merge state. This authorization does not include force-push, package publication, production deployment or integration of the original checkout's separate user edits.

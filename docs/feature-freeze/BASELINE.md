@@ -79,3 +79,7 @@ Their verified SHA-256 values are `04e36fb8b093a02d81586185026c1ad22c8658931da50
 No pre-copy snapshot of that worktree exists for this session.
 Unobserved pre-existing uncommitted edits there cannot be ruled out or recovered from this session's evidence.
 The original checkout's two user files were not modified.
+
+## Explicit shipping authorization
+
+After the completed local audit, the user requested “Finish your work and ShipIt”. This supersedes the original no-automatic-shipping boundary for one normal branch push, GitHub PR and independently verified merge into `main`. GitHub CLI is used because no `origin` executable is installed. Remote `main` remained at the recorded `95cfb11786f6aae8c15f308787b614520ca5718d` baseline when shipping began. No force-push, package release, deployment or integration of the original user delta is authorized by this follow-up.

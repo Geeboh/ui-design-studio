@@ -94,7 +94,7 @@ The starting baseline and inherited candidate are distinguished below.
 | Wheel and sdist | Both final 1.4.1 candidate artifacts built with no isolation; installed consumers exercised outside checkout in both full suites | `audited-build.log`, `audited-packages/` |
 | Source ZIP privacy/recovery | 14 builder tests and 15 subtests passed, also included in final full suites | `package-template-after.log` |
 | Historical release ZIPs | All three existing sidecars verified from `dist/` | Parent checksum output |
-| Current scanner | Batch `9c9ef4d6-5ff9-4040-bb22-e9599a20b502`, empty findings across vulnerability, secret, configuration and license scans | Original response retained in `SECURITY-EVIDENCE.json` |
+| Current scanner | Batch `20ae704c-e6ca-49cf-a126-601958c52512`, empty findings across vulnerability, secret, configuration and license scans | Original response retained in `SECURITY-EVIDENCE.json` |
 | Resolved dependency audits | No known vulnerabilities in final Python 3.10 and 3.12 environments | Raw JSON and removed-dependency advisories in `SECURITY-EVIDENCE.json` |
 | Complete packaged-source identity | All 50 wheel members and 55 sdist source members matched final authored bytes | `audited-package-identity.log` |
 | Source manifest and ZIP | 127 source hashes verified; 128 ZIP members, original bytes and CRCs verified by builder; sidecar matches archive | `final-source-integrity.log`, regenerated after final report/traceability changes |
@@ -136,3 +136,13 @@ Combined parent-process statement/branch coverage is 76%. This is not directly c
 The first coverage report's output name overlapped the data-file prefix and caused an attempted combine warning. No test failed. The existing database still produced the reported component data. The audit environment initially lacked `pip_audit` on Python 3.10; installing it introduced an unnecessary vulnerable verification-only `filelock`. The added auditor packages were removed and that environment was audited from Python 3.12 with `--path`, rather than suppressing advisories.
 
 The native OMP smoke exercised the unchanged extension/dashboard lifecycle with the `final-review-packages` wheel. The final three CSS lexical/source corrections do not modify that surface; the newer `audited-packages` wheel received complete source-byte and installed-consumer verification in both full Python gates.
+
+## Explicit ShipIt follow-up
+
+`tests/test_dashboard_browser.py` now includes actual cross-site navigation and browser Back. All seven Chromium cases passed using `ignore_default_args=["--disable-back-forward-cache"]`, without changing application headers or synthesizing this test's lifecycle events.
+
+The trusted `pageshow` reported `persisted=false` and a new document identity. Chromium 159.0.8154.6 reported `response-cache-control-no-store` and `response-cache-control-no-store-with-js-network-request`. The reloaded landing page displayed the run created while away, then found a second run through continued polling. This verifies real history-navigation recovery, not a BFCache restore. Earlier simulated persisted cases remain separate coverage for the restoration handler.
+
+Current follow-up execution is retained at `/tmp/ui-freeze-shipping/browser-history-tests.log`. The earlier 298-case full-suite figures describe the complete pre-shipping audit head; the shipping PR's independent verifier records its final-head consumer results on GitHub.
+
+Playwright's [default Chromium switches](https://github.com/microsoft/playwright/blob/main/packages/playwright-core/src/server/chromium/chromiumSwitches.ts) explicitly disable BFCache by default. Removing that automation-only switch permits observation of the browser's real eligibility decision; it does not force cache admission.
