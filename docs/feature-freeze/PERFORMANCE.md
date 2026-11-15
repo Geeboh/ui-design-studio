@@ -20,3 +20,15 @@ The source review found probe starvation under a shared timeout. Selected/owned-
 
 The host had 16 logical CPUs and load averages near 2.7 to 2.9 during the audit. Parallel checks and other work preclude controlled latency conclusions. Benchmark redesign and speculative micro-optimizations were skipped because no measured product bottleneck justified them.
 
+
+## Current revalidation
+
+The benchmark was repeated using Python 3.12.3.
+The serialized byte counts and six-versus-two hash-call counts matched the table above.
+All six synthetic workload assertions passed.
+The local output is `/tmp/ui-freeze-evidence-UKWQB8/benchmark.json`.
+No execution error was observed.
+The timed functions and sample ordering were not changed, so timing comparisons remain inconclusive.
+The host had 16 logical CPUs and load averages of 4.96, 2.78, and 1.76 before this run.
+Concurrent audits and tests make this unsuitable for a controlled latency comparison.
+No timing-based optimization was attempted. FF-024 removes serialized probe waits and is verified against the existing five-second viewer deadline, not a claimed speedup.

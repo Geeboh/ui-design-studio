@@ -1,22 +1,37 @@
 # Release-readiness assessment
 
-Verdict: CONDITIONALLY READY. Automated engineering remediation is complete for the audited Linux source branch. This is not approval to publish or deploy.
+Verdict: CONDITIONALLY READY for the reviewed Linux engineering scope. Remediation is complete for achievable local gates. This is not approval to merge, publish, deploy or claim all-platform certification. Retain feature freeze until the release owner accepts the conditions below.
 
-## Engineering acceptance
+## Delivered state
 
-- All 116 baseline tracked paths received an inspection disposition. Generated historical evidence was integrity-checked without rewriting it.
-- All 20 confirmed findings are addressed and traceable to correction commits. Severity totals are zero Critical, four High, 12 Medium and four Low. No confirmed finding remains unresolved.
-- Full Python suites passed on 3.10.22 and 3.13.16 with 266 cases and 161 subtests each. All 52 Node cases and four Chromium regressions passed without skips.
-- Actual ZIP, wheel and sdist builds passed. Manifest and archive checks validate release inputs. Dependency auditing reported no known vulnerability.
-- Fresh independent reviews covered runtime, packaging, browser lifecycle, extension behavior and evidence integrity. Verified review findings were corrected; rejected hypotheses retain their reasons.
-- No unrelated feature, speculative rewrite, public API migration or measured speedup claim was introduced.
+The branch is `feature-freeze/2026-11-16-audit-unique` in `/code/ui-design-freeze-20261116-UKWQB8`. It preserves the original checkout's independent user edits and incorporates inherited remediation through `5b1d7313247eb33bae5319c4be72c63ef809357b`. Current package, runtime and engine corrections are committed as `6f5c08bb1c`, `e0af2429d1` and `35001cedc3`. Documentation and regenerated source-integrity artifacts are separate delivery units.
 
-Detailed execution evidence and coverage limits are in [TEST-MATRIX.md](TEST-MATRIX.md). Passing tests do not prove the absence of defects.
+All 140 candidate paths have unique inspection dispositions. All 43 confirmed findings have verified code corrections or completed documentation dispositions. Totals are zero Critical, four High, 29 Medium and ten Low. No confirmed product finding remains open. No unrelated feature, speculative rewrite or measured speedup claim was introduced.
 
-## Conditions before broader release
+## Objective acceptance
 
-Native Windows/macOS execution, other browser engines, actual browser BFCache restoration, physical-device testing and human acceptance were not available here. Simulated persisted page events in Chromium test the corrected lifecycle handlers, not native BFCache admission. Trusted-LAN HTTP retains the documented network trust limit.
+| Requirement | Evidence and disposition |
+| --- | --- |
+| Freeze, baseline, isolation and rollback | `BASELINE.md`, original delta backup, dedicated branch, selective commits; separate-worktree setup incident explicitly disclosed |
+| Entire repository inventory and architectural/data-flow review | `INVENTORY.md`, 140-row `inspection.tsv`, `ARCHITECTURE-REVIEW.md`, original whole-source reviewer scopes |
+| Defect discovery, priorities, corrections and traceability | `AUDIT.md`, 43 structured records in `DEFECT-REGISTER.md`, correction commits and actual failing/passing regressions |
+| Build, full regression, boundary, failure, concurrency and installation gates | Python 3.10 and 3.12 each passed 298 tests and 212 subtests without skips; 52 Node tests; actual CLI/MCP, browser and native OMP checks |
+| Significant runtime and CSS correctness | Real authenticated concurrent HTTP, guided browser decisions, ownership cleanup and locally intercepted Chromium resource counterexamples; final affected suite passed 188 tests and 134 subtests |
+| Distribution/source integrity | Wheel, sdist and ZIP built; all 50 wheel and 55 sdist authored members matched current bytes; release builder verified 127 source hashes and 128 archive members |
+| Security and dependency review | Current empty Trivy response, two clean resolved-environment audits, removed verifier advisories and 77 source identities retained in `SECURITY-EVIDENCE.json` |
+| Performance and coverage | Existing deterministic workload assertions passed; no incomparable timing claim; component-level parent-process statement/branch coverage 76%, with subprocess gaps explicit |
+| Independent review and remediation of review findings | Fourteen original reports retained in `REVIEW-EVIDENCE.json`; wrong-target output excluded; every concrete survivor reproduced and corrected |
+| Documentation and continuous progress | All thirteen requested reports maintained, plus original review/scanner records and append-only decisions |
+| No unauthorized release action | No default-branch merge, push, public release or deployment performed |
 
-The original checkout's independent user changes remain untouched and are not included. Review their integration separately before combining or shipping both changesets. The release ZIP/checksum pair is recoverable after ordinary write errors but not crash-atomic across two replacements. Verify checksums before use; follow [BLOCKERS.md](BLOCKERS.md) after interruption.
+Detailed commands and actual gate scope are in [TEST-MATRIX.md](TEST-MATRIX.md). Passing tests do not prove the absence of defects. The final source manifest is regenerated after report changes and must pass before the artifact commit.
 
-The dedicated branch and local candidate artifacts are review deliverables. No default-branch merge, push, deployment or public release was performed. Retain feature freeze until the release owner accepts the disclosed scope and completes required external acceptance.
+## Conditions and attention flags
+
+Native Windows/macOS, non-Chromium engines, actual BFCache admission, physical devices and human target-application acceptance remain unverified. Simulated persisted Chromium events test lifecycle handlers, not real BFCache eligibility. Trusted-LAN HTTP retains its network-confidentiality limit. Low parent-process CLI/MCP/installer coverage is not complete subprocess coverage.
+
+The last independent CSS review reported three survivors. The parent reproduced and corrected them with actual browser counterexamples and final regression gates. No subsequent zero-finding independent CSS verdict or cross-family review certification is claimed.
+
+The original checkout's user edits were not integrated. Review and test the combined changes before combining or shipping them. During setup, two files were accidentally copied into a different pre-existing worktree and restored to its committed bytes. No pre-copy snapshot exists there, so earlier uncommitted state in that separate worktree remains unknown. The original user checkout was not modified.
+
+Archive/checksum publication is recoverable after ordinary reported errors but not crash-atomic across two replacements. Verify the checksum before use and follow [BLOCKERS.md](BLOCKERS.md) after interruption. Local logs and candidate artifacts are review evidence, not a published release.

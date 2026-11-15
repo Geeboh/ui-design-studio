@@ -1,8 +1,8 @@
 # Feature freeze
 
-Status: automated engineering remediation complete. Release readiness is CONDITIONALLY READY, with native-platform and human acceptance limits in [BLOCKERS.md](BLOCKERS.md). All 116 baseline paths were reviewed. All 20 confirmed findings were addressed, including four High findings.
+Status: local engineering remediation complete. CONDITIONALLY READY for the reviewed Linux scope, not an unconditional release approval. All 43 confirmed findings are corrected or have completed documentation dispositions: four High, 29 Medium and ten Low. External acceptance and setup-recovery limits remain explicit in [BLOCKERS.md](BLOCKERS.md).
 
-The remediation branch is `feature-freeze/2026-11-15-hardening` in `/code/ui-design-studio-freeze`. Existing user edits remain in the original checkout.
+The current remediation branch is `feature-freeze/2026-11-16-audit-unique` in `/code/ui-design-freeze-20261116-UKWQB8`. It includes prior remediation through `5b1d7313247eb33bae5319c4be72c63ef809357b`. Original user edits remain in the original checkout. The setup incident and its recovery limits are recorded in [BASELINE.md](BASELINE.md).
 
 | Record | Purpose |
 | --- | --- |
@@ -18,5 +18,7 @@ The remediation branch is `feature-freeze/2026-11-15-hardening` in `/code/ui-des
 | [Change history](CHANGELOG.md) | Verified remediation units |
 | [Release readiness](RELEASE-READINESS.md) | Final gate assessment |
 | [Blockers](BLOCKERS.md) | Exact remaining requirements |
+| [Original review evidence](REVIEW-EVIDENCE.json) | Fourteen current reports with exact scope and dispositions |
+| [Security evidence](SECURITY-EVIDENCE.json) | Current scan, dependency records and 77 source identities |
 
-`decisions.tsv` records material decisions. No merge, deployment, or publication occurs during this freeze.
+`decisions.tsv` records material decisions. No default-branch merge, deployment, or publication occurs during this freeze.

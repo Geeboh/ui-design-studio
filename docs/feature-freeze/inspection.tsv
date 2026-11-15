@@ -115,3 +115,27 @@ tests/test_progress_extension.py	source/test	AuditUiWholeSource	reviewed; correc
 tests/test_remediation_contract.py	build/config/test	AuditDistribution/Main	reviewed
 tests/test_studio.py	source/test	Main	reviewed
 tools/ui-design	build/config/test	AuditDistribution/Main	reviewed
+docs/feature-freeze/ARCHITECTURE-REVIEW.md	audit record	Main	reviewed; current evidence reconciliation
+docs/feature-freeze/AUDIT.md	audit record	Main	reviewed; current evidence reconciliation
+docs/feature-freeze/BASELINE.md	audit record	Main	reviewed; preserved user delta and setup recovery limitation
+docs/feature-freeze/BLOCKERS.md	audit record	Main	reviewed; external and recovery limits explicit
+docs/feature-freeze/CHANGELOG.md	audit record	Main	reviewed; inherited commits distinguished from revalidation
+docs/feature-freeze/DEFECT-REGISTER.md	audit record	Main	reviewed; current findings and traceability
+docs/feature-freeze/INVENTORY.md	audit record	Main	reviewed; expanded current-path accounting
+docs/feature-freeze/PERFORMANCE.md	audit record	Main	reviewed; synthetic observations and inconclusive timings
+docs/feature-freeze/README.md	audit record	Main	reviewed; current branch and status
+docs/feature-freeze/RELEASE-READINESS.md	audit record	Main	reviewed; current evidence reconciliation
+docs/feature-freeze/REMEDIATION-PLAN.md	audit record	Main	reviewed; current work reconciliation
+docs/feature-freeze/REVIEWS.md	audit record	Main	reviewed; historical reviews separated from current audits
+docs/feature-freeze/SECURITY-REVIEW.md	audit record	Main	reviewed; current scan evidence
+docs/feature-freeze/TEST-MATRIX.md	audit record	Main	reviewed; current full-suite and runtime evidence
+docs/feature-freeze/WORKFLOW-REVIEW.md	audit record	Main	reviewed; shared acceptance boundaries retained
+docs/feature-freeze/decisions.tsv	audit record	Main	reviewed; append-only current decision trail
+docs/feature-freeze/inspection.tsv	audit record	Main	reviewed; current ledger includes itself
+tests/test_dashboard_browser.py	source/test	Main	reviewed; actual form persistence regression verified
+tests/test_feature_freeze.py	source/test	Main	reviewed; acceptance filesystem and resume behavioral cases
+tests/test_release_builder.py	source/test	Main	reviewed; privacy destination rollback and determinism cases
+docs/feature-freeze/SECURITY-EVIDENCE.json	audit evidence	Main/WorkflowAudit	reviewed; retained scanner dependency and source identity records
+docs/feature-freeze/REVIEW-EVIDENCE.json	audit evidence	Main/ReviewAuditTrail	reviewed; original outputs target provenance dispositions and limits
+tests/test_freeze_acceptance.py	source/test	EngineAcceptanceTests/Main	reviewed; cross-project report and independent-review regressions
+tests/test_freeze_integrity.py	source/test	EngineIntegrityTests/Main	reviewed; static resources and modern legacy resume consumers

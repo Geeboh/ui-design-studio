@@ -1,6 +1,6 @@
 # Test matrix
 
-## Baseline results
+## Inherited baseline results
 
 Environment: isolated CPython 3.13.16, system Python 3.12.3 available, Node 24.22.2, Linux x64.
 
@@ -16,7 +16,7 @@ Environment: isolated CPython 3.13.16, system Python 3.12.3 available, Node 24.2
 
 Baseline additionally passed five pytest-only remediation-contract functions. Baseline unittest does not collect those functions. Final `pytest -q` collects both styles.
 
-## Final results
+## Prior remediation results
 
 All source corrections were present for these gates. Logs remain at `/tmp/ui-design-freeze-baseline/`; these are local evidence, not portable release assets.
 
@@ -33,7 +33,7 @@ All source corrections were present for these gates. Logs remain at `/tmp/ui-des
 | Ruff correctness subset | `E9,F63,F7,F82` passed for source, scripts and tests | Central command output |
 | Shell and browser-script syntax | `bash -n install.sh tools/ui-design` and both `node --check` commands passed | Central command output |
 | Runtime dependencies | pip-audit reported no known vulnerabilities | `release-dependency-audit.json` |
-| Secrets/configuration | Trivy batch `02cf14e6-cf83-4300-93f9-d8bead9634d4` returned no findings | Scanner result; not proof of absence |
+| Secrets/configuration | Historical Trivy batch `02cf14e6-cf83-4300-93f9-d8bead9634d4` was reported empty | Original response was not retained; not current acceptance evidence (FF-028) |
 | Native OMP 18.20.2 | Real PTY loaded the extension, waiting widget, authenticated dashboard URL and QR card without a model prompt | Native smoke observation |
 | Native OMP cleanup | Owned dashboard port closed and no private runtime JSON remained | Post-exit command |
 | Historical release archives | Three existing ZIPs matched their SHA-256 sidecars | Central checksum command |
@@ -53,7 +53,7 @@ sha256sum -c MANIFEST.sha256
 
 Use the verification dependencies in [DISTRIBUTION.md](../DISTRIBUTION.md). A missing Playwright/browser skips browser tests, so inspect the reported skip count. The Python 3.10 environment initially lacked pip; after installing that test prerequisite, its complete final run passed. An initial sidecar check used the repository directory and could not resolve the sidecar's relative ZIP name; checking from `/tmp` passed. Neither environment error is counted as a passing product check.
 
-## Risk-weighted coverage
+## Inherited coverage
 
 Parent-process statement coverage increased from 74% to 77%. Subprocess execution is not included.
 
@@ -71,3 +71,68 @@ Parent-process statement coverage increased from 74% to 77%. Subprocess executio
 | Benchmark script | 0% |
 
 CLI, installer, MCP stdio and benchmark subprocess checks exist; their child-process execution does not contribute to this report. The benchmark was executed separately. Coverage is not a release certificate. Native Windows/macOS execution, native BFCache restoration, other browser engines, physical devices and human acceptance remain unverified. No configured project-wide type-check or lint gate exists; the correctness-only static check does not claim strict typing.
+
+## Independent revalidation on 16 November 2026
+
+Current evidence is retained under `/tmp/ui-freeze-evidence-UKWQB8/`.
+These local logs are not portable release assets.
+The starting baseline and inherited candidate are distinguished below.
+
+| Gate | Current observed result | Local evidence |
+| --- | --- | --- |
+| Unchanged release baseline, Python 3.12.3 | 228 unittest cases ran, five dependency/setup errors | `baseline-tests.log` |
+| Inherited candidate, Python 3.12.3 | 261 unittest cases passed | `candidate-tests.log` |
+| Final Python 3.10.22 full pytest | 298 passed, 212 subtests passed, zero skips/failures | `audited-full-py310.log` |
+| Final Python 3.12.3 full pytest with branch coverage | 298 passed, 212 subtests passed, zero skips/failures | `audited-full-py312.log` |
+| Engine correction regressions | Initial 36 failures; later review reproduced eight cases and final CSS review four cases; final affected suite 188 passed and 134 subtests passed | `engine-regressions-before.log`, `integrity-review-before.log`, `css-final-review-before.log`, `css-final-review-after.log` |
+| Chromium 159.0.8154.6 | Six lifecycle, focus and actual guided form regressions, included in both final full suites | Full Python logs |
+| Browser workflow smoke | Actual landing/run navigation, retained HTML, focus restoration, four sections at 320px, approval controls and zero page errors | `browser-smoke.log` |
+| Node 24.22.2 extension | 52 passed, zero failures/skips | `engine-node.log` |
+| Actual OMP 18.20.2 | Final installed wheel and candidate extension, live dashboard card, authenticated matching identity; owned listener and runtime records removed after exit | `final-native.log` |
+| Ruff correctness subset | `E9,F63,F7,F82` passed for final runtime, scripts and tests | `audited-static.log` |
+| Shell and browser JavaScript syntax | `bash -n` and both `node --check` commands passed | Parent command output |
+| Wheel and sdist | Both final 1.4.1 candidate artifacts built with no isolation; installed consumers exercised outside checkout in both full suites | `audited-build.log`, `audited-packages/` |
+| Source ZIP privacy/recovery | 14 builder tests and 15 subtests passed, also included in final full suites | `package-template-after.log` |
+| Historical release ZIPs | All three existing sidecars verified from `dist/` | Parent checksum output |
+| Current scanner | Batch `9c9ef4d6-5ff9-4040-bb22-e9599a20b502`, empty findings across vulnerability, secret, configuration and license scans | Original response retained in `SECURITY-EVIDENCE.json` |
+| Resolved dependency audits | No known vulnerabilities in final Python 3.10 and 3.12 environments | Raw JSON and removed-dependency advisories in `SECURITY-EVIDENCE.json` |
+| Complete packaged-source identity | All 50 wheel members and 55 sdist source members matched final authored bytes | `audited-package-identity.log` |
+| Source manifest and ZIP | 127 source hashes verified; 128 ZIP members, original bytes and CRCs verified by builder | `source-archive.log`; final reports require regeneration before artifact commit |
+
+The initial errors were four missing Pillow errors and missing Hatchling for a no-isolation wheel build.
+Verification dependencies were installed before candidate checks.
+An initial pip-audit command used `--disable-pip` without `-r` and was rejected.
+The corrected installed-environment audit passed.
+An initial historical ZIP check used the wrong working directory.
+The corrected check ran from `dist/` and passed.
+The browser smoke initially selected all three artwork cards instead of the named fixture.
+The corrected specific selector passed without changing product code.
+The host browser helper could not launch its daemon.
+Actual Chromium checks used Playwright directly instead.
+
+Parent-process coverage excludes child-process execution.
+The source CLI, MCP, installer, and installed-console checks execute real subprocesses.
+No strict TypeScript check is claimed because the repository has no resolvable host API types or configured type-check gate.
+
+## Current risk-weighted coverage
+
+Combined parent-process statement/branch coverage is 76%. This is not directly comparable to the inherited statement-only 77% figure.
+
+| Component | Combined coverage |
+| --- | ---: |
+| Workflow engine | 90% |
+| Design server | 87% |
+| Dashboard service | 91% |
+| Runtime | 92% |
+| MCP server | 54% |
+| CLI | 12% |
+| Project installer | 22% |
+| Global installer | 87% |
+| Release builder | 81% |
+| Benchmark script | 0% |
+
+`audited-coverage-report.txt` retains the final component data. Child processes are not measured by this report. CLI, installer, MCP stdio, installed console and benchmark checks execute separately. Low parent-process coverage remains a disclosed measurement gap, not an invented complete-coverage claim.
+
+The first coverage report's output name overlapped the data-file prefix and caused an attempted combine warning. No test failed. The existing database still produced the reported component data. The audit environment initially lacked `pip_audit` on Python 3.10; installing it introduced an unnecessary vulnerable verification-only `filelock`. The added auditor packages were removed and that environment was audited from Python 3.12 with `--path`, rather than suppressing advisories.
+
+The native OMP smoke exercised the unchanged extension/dashboard lifecycle with the `final-review-packages` wheel. The final three CSS lexical/source corrections do not modify that surface; the newer `audited-packages` wheel received complete source-byte and installed-consumer verification in both full Python gates.

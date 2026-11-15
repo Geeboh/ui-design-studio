@@ -25,6 +25,29 @@ Verification status describes observed checks, not proof that no other defects e
 | FF-018 | Medium | Run-selection correctness | `.omp/extensions/ui-design-progress.ts` | Fixed, 52 Node tests passed | `700cc01362` |
 | FF-019 | Medium | Browser lifecycle | Dashboard `landing.js` | Fixed, real-browser regressions passed | `700cc01362` |
 | FF-020 | Medium | Keyboard accessibility | Dashboard `dashboard.js` | Fixed, real-browser regressions passed | `700cc01362` |
+| FF-021 | Low | Testing coverage | `tests/test_dashboard_browser.py` | Fixed, six Chromium tests passed | `e0af2429d1` |
+| FF-022 | Low | Audit completeness | `docs/feature-freeze/inspection.tsv` | Corrected, 140 unique existing paths reconciled | Current audit documentation commit |
+| FF-023 | Medium | Repository provenance | MCP status, artwork, requests, approval and cleanup | Fixed, real stdio, HTTP and browser regressions passed | `e0af2429d1` |
+| FF-024 | Medium | Concurrent liveness | Landing `session_data` probe lock | Fixed, concurrent authenticated HTTP regression passed | `e0af2429d1` |
+| FF-025 | Low | API contract | MCP empty artifact selection | Fixed, real-stdio regression passed | `e0af2429d1` |
+| FF-026 | Low | Test diagnostics | MCP protocol failure helper | Fixed, full protocol suite passed | `e0af2429d1` |
+| FF-027 | Medium | Package privacy | Source ZIP `.env.example` directory exception | Fixed, 14 builder tests and 15 subtests passed | `6f5c08bb1c` |
+| FF-028 | Medium | Security evidence | Historical scanner batch without retained output | Corrected, final scan and 77 current source hashes retained and verified | Current audit documentation commit |
+| FF-029 | Low | Review evidence | Historical summaries without original review records | Corrected, 14 original review records retained with dispositions | Current audit documentation commit |
+| FF-030 | Medium | Verification supply chain | Unnecessary Pillow dependency on Python 3.10 | Removed, dashboard tests and clean audits without Pillow | `e0af2429d1` |
+| FF-031 | Low | Concurrent liveness | Landing selected-owner handle replacement | Fixed, deterministic authenticated owner race regression passed | `e0af2429d1` |
+| FF-032 | Medium | Acceptance boundary | `studio.py` cross-project registration | Fixed, affected and full Python gates passed | `35001cedc3` |
+| FF-033 | Medium | Approval integrity | `studio.py` assessment report binding | Fixed, affected and full Python gates passed | `35001cedc3` |
+| FF-034 | Medium | Offline asset boundary | `studio.py` quoted CSS image sources | Fixed, affected and full Python gates passed | `35001cedc3` |
+| FF-035 | Medium | Resume correctness | `studio.py` leaf and shared consumer dependencies | Fixed, affected and full Python gates passed | `35001cedc3` |
+| FF-036 | Medium | Reviewer independence | Engine and dashboard identity comparison | Fixed, affected and full Python gates passed | `35001cedc3` |
+| FF-037 | Medium | CSS lexical boundary | `studio.py` comment removal | Fixed, affected and full Python gates passed | `35001cedc3` |
+| FF-038 | Medium | CSS lexical boundary | `studio.py` malformed string recovery | Fixed, affected and full Python gates passed | `35001cedc3` |
+| FF-039 | Medium | CSS URL interpretation | `studio.py` leading resource whitespace | Fixed, affected and full Python gates passed | `35001cedc3` |
+| FF-040 | Medium | Resume input inventory | `studio.py` recorded context/routing paths | Fixed, affected and full Python gates passed | `35001cedc3` |
+| FF-041 | Medium | CSS lexical boundary | `studio.py` unquoted URL comment markers | Fixed, affected and full Python gates passed | `35001cedc3` |
+| FF-042 | Medium | CSS source substitution | `studio.py` environment fallback | Fixed, affected and full Python gates passed | `35001cedc3` |
+| FF-043 | Medium | CSS error recovery | `studio.py` EOF resource extraction | Fixed, affected and full Python gates passed | `35001cedc3` |
 
 ## FF-001
 
@@ -106,3 +129,152 @@ Landing `pagehide` canceled polling permanently because no persisted `pageshow` 
 
 A concurrent reviewer could hide and disable an approval form while its artwork dialog stayed open. Closing the dialog tried to focus the still-connected hidden opener. Actual Chromium left the invisible `viewer-close` button focused. Restoration now selects an enabled visible original, replacement, heading, or navigation control. The real-browser regression checks normal original focus and visible replacement focus after concurrent approval. No visual design or workflow change is introduced.
 
+
+## FF-021
+
+The existing browser suite tested polling and focus but approved requests only through the backend.
+It would not catch broken form submission controls or a browser payload that failed to persist the user's selected option and rationale.
+The smallest correction adds one real-browser test through the existing guided controls.
+It verifies the exact durable user decision, reviewed input digest, trimmed rationale, and read-only state after reload.
+No production behavior changes.
+All five Chromium tests passed in the current Python 3.12 environment.
+Both full Python gates passed with the additional browser test.
+
+## FF-022
+
+The inherited inspection ledger listed all 116 release-baseline paths but omitted 20 files added during remediation.
+Those files had associated review narratives but lacked the requested file-level accounting.
+The ledger now lists all 136 current tracked paths, including audit documents and the three new regression modules.
+No source component is excluded.
+The final inventory check compares immutable tracked membership with ledger membership and rejects duplicates, omissions, or unexpected paths.
+This is an audit-record correction with no runtime regression risk.
+
+## FF-023
+
+With runs under `work/docs/design/runs` and themes under `branding/themes`, MCP status rediscovered a nearer default-layout ancestor.
+It changed `.design-theme-sources.json` from the fixed repository to its `work` subdirectory.
+Artwork publication and review also discarded the known repository.
+The new real-stdio regression failed before correction.
+The correction preserves the existing authoritative repository through snapshots, artwork, requests, browser approval, and finalized-run cleanup.
+Regression risk is disagreement between existing run-relative and repository-relative publication callers.
+Verification includes current provenance, imported artwork, a digest-bound review, and actual authenticated HTTP approval.
+
+## FF-024
+
+Four authenticated landing requests against a stalled foreign owner serialized their probe passes under the session lock.
+Later viewers exceeded the existing five-second browser deadline while a healthy owned run remained live.
+The new real-HTTP regression failed with `TimeoutError: timed out`.
+The correction snapshots protected ownership, probes outside the mutation lock, and revalidates ownership before responding.
+The existing per-observation deadline and selected/owned priority remain unchanged.
+Regression risk is stale ownership after concurrent close or selection changes.
+Verification requires all four viewers to receive HTTP 200 with the healthy selected run.
+
+## FF-025
+
+The MCP adapter converted an explicit `artifact=[]` to `None`.
+The engine defaults only an omitted list and rejects an empty list, so the adapter silently expanded invalid input to all owned artifacts.
+The new real-stdio regression failed before correction.
+Testing `artifact is not None` preserves the existing engine contract without changing omitted arguments.
+Verification checks the consumer-visible rejected tool result.
+
+## FF-026
+
+`MCPProtocolTests.fail` shadowed `unittest.TestCase.fail`.
+When a new regression found an unequal value, assertions raised an unrelated missing-argument TypeError instead of displaying the mismatch.
+The failure helper is now named `call_failure`, and every caller was migrated.
+A direct assertion check now raises `AssertionError` with both differing values.
+No production behavior changes.
+The full protocol suite verifies the renamed error-call helper.
+
+## FF-027
+
+The source ZIP collector exempted every path component named `.env.example`.
+A directory with that name therefore exposed descendants in the ZIP and manifest.
+The new disposable-source regression failed by finding private descendants in the archive.
+Only a leaf template file remains exempt; all `.env.*` ancestor directories are excluded.
+The 14 builder tests and 15 subtests passed after correction, including retained plain templates and symlink rejection.
+No new dependency or archive format is introduced.
+
+## FF-028
+
+The inherited security report cited a Trivy batch whose result was no longer available through the findings API.
+A batch ID alone could not substantiate the readiness claim.
+The historical claim is narrowed rather than silently treated as fresh evidence.
+The current scan and findings responses, target metadata, and 77 authored source hashes are retained in `SECURITY-EVIDENCE.json`.
+The tool returned neither scanner version nor scanned-file count, so neither is invented.
+
+## FF-029
+
+The inherited independent-review summary did not preserve original outputs or per-review target provenance.
+Current reports distinguish historical narrative from freshly inspected evidence.
+Original current review outputs and reviewed source identity are retained with explicit scope and dispositions.
+The wrong-target engine report is excluded from acceptance and replaced by a correct-target review.
+No production behavior changes.
+
+## FF-030
+
+Unversioned verification instructions installed Pillow 12.3.0 on Python 3.10.
+The actual dependency audit reported 42 advisories with fixed version 13.0.0.
+Pillow was not a runtime dependency and only provided an avoidable grayscale allocation in QR verification.
+The decoder now receives a shaped standard-library byte buffer through ZXing's documented buffer interface.
+Pillow was removed from both validation environments and current reproduction instructions.
+The complete 44-case dashboard suite with 37 subtests passed on Python 3.10 without Pillow.
+Both Python 3.10 and 3.12 dependency audits then reported no known vulnerabilities.
+No malicious image was executed and no advisory was suppressed.
+An additional final audit prerequisite selected verification-only `filelock` 4.1.0 with 17 advisories on Python 3.10. The unnecessary auditor packages were removed, and that environment was audited through Python 3.12 using its documented `--path` option. Both final resolved environments reported no known vulnerabilities. This was verification setup, not a product dependency or an ignored finding.
+
+## FF-031
+
+The first outside-lock probe correction discarded a valid observation when a concurrent borrow replaced its handle object with the same authenticated listener identity. Object identity did not establish listener replacement. The response now preserves observations only when the current authenticated instance still matches and the owned listener is not stopping. A deterministic delay after a real probe reproduced the false offline state and passed after correction. No cache or longer deadline was added.
+
+## FF-032
+
+Two projects with identical theme bytes had different current project-context sources and separately valid runs. Registration in project B accepted project A's run and created B's registry. The direct engine and CLI lacked the repository confinement already enforced by MCP. Registration now confines the run to the explicitly selected repository before consuming approvals or writing metadata. Valid in-repository run paths remain supported. The new regression failed before correction and passed afterward.
+
+## FF-033
+
+Changing or deleting `report.md` after final approval left `check_run` and registration at PASS when the report was not separately listed as evidence. Final review inputs omitted the required assessment report. Its current confined regular-file SHA now contributes to `reviewDigest`; absence fails closed. Existing final approvals require actual re-review against the new digest. Mutation and deletion regressions failed before correction and passed afterward.
+
+## FF-034
+
+CSS `image-set()` and `-webkit-image-set()` accepted remote quoted resources without `url()`, including custom-property values. Local quoted resources also bypassed required existence and manifest membership checks. A shared token scan now validates direct image-source strings and existing `url()` values through the established confined local-file policy. It preserves declared local assets, nested MIME strings, gradients and nonfetching content strings. Source-bearing `image()` is checked conservatively; no current-browser fetch through that unsupported feature is claimed. The external, missing and undeclared resource regressions failed before correction and passed afterward.
+
+## FF-035
+
+Resume graph leaf edges pointed toward their consumers, while invalidation traversed dependencies toward dependents. Approvals lacked an evidence dependency. Path deduplication also dropped later coverage and approval consumers of a shared physical file. New snapshots retain one hash with every direct consumer, and consumer nodes depend on their file leaves. Legacy records with incomplete consumer membership now block conservatively and request reviewed refresh; known kind-based stale categories remain reported without replacing stored hashes. Direct, transitive, shared-file, unrelated-file and legacy preservation regressions verify the correction.
+
+## FF-036
+
+An implementer named `alice` could record a passed review as `alice ` and receive final acceptance. Both engine and dashboard compared untrimmed identity strings, although validation only required nonblank trimmed values. Both comparisons now trim surrounding whitespace while preserving case and original record bytes. Fresh-final-approval regressions isolate self-review rejection from unrelated stale digest failures. An authenticated HTTP regression additionally verifies that Produce and Finalize remain pending while Design stays passed.
+
+## Rejected scaffold hypothesis
+
+The fresh audit suspected that `theme_new` failed when the configured themes parent did not exist. A real empty-project invocation created the theme and passed `check_theme`. `shutil.copytree` already creates the needed parent path. No product change was justified.
+
+## FF-037
+
+Quoted `/*` and `*/` markers caused quote-unaware comment removal to erase an active remote `url()` declaration from validation. Actual Chromium fetched that resource while the validator passed. Comment recognition now runs alongside complete string recognition and preserves markers inside strings. The resource regression failed before correction and passed afterward. All browser requests were intercepted locally.
+
+## FF-038
+
+The resource tokenizer treated raw newline characters inside quotes as valid string contents. Browser bad-string recovery instead resumed parsing and fetched a subsequent remote background declaration. The conservative lexer now rejects bad or unterminated strings and comments before resource scanning. Newline, carriage-return and form-feed regressions failed before correction and passed afterward. This deliberately rejects malformed CSS rather than attempting browser error recovery.
+
+## FF-039
+
+A quoted resource beginning with a space and `//` passed local classification when the theme supplied a declared local lookalike under a space-named directory. Chromium removed URL-leading whitespace and fetched the remote host. The shared resource helper now rejects surrounding whitespace before fragment, scheme and path checks. Both `url()` and quoted image-set regressions failed before correction and passed afterward. Ordinary explicit local resource candidates remain supported.
+
+## FF-040
+
+The resume writer hashed default context and routing filenames even when a valid run recorded different confined paths. Changing those actual inputs then returned resume PASS without stale nodes. The writer now snapshots the same recorded paths that acceptance validates. Context and routing mutation regressions fail against the old writer and pass with the corrected inventory. Their exact dependent categories are checked, and stored manifest bytes remain unchanged during inspection.
+
+## FF-041
+
+Unquoted fragment URL tokens `url(#/*)` and `url(#*/)` still made comment removal erase an intervening remote resource. CSS tokenization treats those markers as URL contents. The lexer now recognizes complete quoted and unquoted URL tokens before recognizing comments, reusing the same URL shape for resource extraction. The failing regression and actual intercepted Chromium request establish the defect. Original valid fragment references remain supported.
+
+## FF-042
+
+An unknown `env()` inside image-set substituted its quoted remote fallback after static checking. The earlier direct-`var()` guard was too narrow. Direct source positions now admit only the documented static image-producing functions and MIME descriptors, rejecting dynamic substitutions without banning normal gradient/color variables. Standard and prefixed image-set regressions and an actual intercepted browser fetch reproduced the defect.
+
+## FF-043
+
+An unquoted URL ending at CSS EOF bypassed extraction because the scanner required a closing parenthesis. Chromium recovered the unfinished construct and fetched its resource. The conservative checker now rejects residual unfinished functions instead of treating unextracted inputs as safe. The new regression and actual intercepted browser request reproduced the defect. Static local candidates and gradients remain covered by positive tests.

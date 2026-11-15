@@ -13,6 +13,15 @@
 - Excluded private environment inputs from archives, wheels, and sdists, including nested example-file overrides.
 - Preflighted release destinations and preserved existing archives when checksum publication fails.
 - Recorded the feature-freeze baseline, findings, verification, and release assessment under `docs/feature-freeze/`.
+- Added a real-browser guided approval submission test covering the durable user decision, reviewed digest, rationale, and reload state.
+- Revalidated inherited hardening on Python 3.10 and 3.12 and expanded the inspection ledger to every current tracked path.
+- Preserved explicit repository provenance through nested-run MCP, browser approval, and cleanup paths.
+- Removed serialized landing-probe lock holds and preserved matching authenticated listener identity during concurrent selection.
+- Preserved explicit empty MCP artifact selections and restored unittest assertion diagnostics.
+- Restricted environment-template packaging exceptions to leaf files and removed the unnecessary Pillow verification dependency.
+- Confined registration approvals to the selected repository and bound final acceptance to current assessment report bytes.
+- Rejected whitespace self-review and unchecked quoted or variable CSS image sources.
+- Corrected shared-file resume consumers and transitive invalidation; legacy incomplete manifests require reviewed refresh.
 
 ## 1.4.1 · 14 November 2026
 

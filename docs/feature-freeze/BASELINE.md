@@ -48,3 +48,34 @@ Independent review must cover the remediation.
 All thirteen requested feature-freeze documents must reflect current evidence.
 Changes must be committed in reviewable units without including existing user edits.
 Any unverified required criterion prevents an unconditional release-ready verdict.
+
+## Independent revalidation on 16 November 2026
+
+The current audit uses branch `feature-freeze/2026-11-16-audit-unique` in `/code/ui-design-freeze-20261116-UKWQB8`.
+It starts from the same `95cfb11786f6aae8c15f308787b614520ca5718d` baseline.
+The initial user delta remains in `/code/ui-design-studio`.
+Its separate backup is `/tmp/ui-design-feature-freeze-user-baseline.patch`.
+The backup SHA-256 is `fb29118bac96bc2cd4a80991b40ac662f084614eaa50e9deb89bffde29ba229c`.
+
+Existing remediation through `5b1d7313247eb33bae5319c4be72c63ef809357b` was integrated by fast-forward on this isolated branch.
+Its earlier verification claims remain historical until repeated in this audit.
+Four independent read-only reviewers inspect the actual engine, adapter, distribution, and workflow files.
+The parent reviews browser and extension code.
+The throughput checkpoint assigns independent review partitions while keeping mutation and final validation under one owner.
+
+The current validation environment is `/tmp/ui-freeze-env-pLA7SH`, using Python 3.12.3 and Node 24.22.2.
+The unchanged baseline ran 228 unittest cases and ended with five errors.
+Four errors required the verification-only Pillow dependency.
+Wheel test setup also required Hatchling for its explicit no-isolation build.
+Those missing prerequisites were installed before candidate verification.
+The baseline output is `/tmp/ui-freeze-evidence-UKWQB8/baseline-tests.log`.
+
+### Setup incident
+
+A failed worktree-creation command did not stop subsequent copies.
+Those copies replaced `studio.py` and `docs/CHANGELOG.md` in the pre-existing `/code/ui-design-studio-freeze` worktree.
+Both files were restored to that worktree's committed bytes before further work.
+Their verified SHA-256 values are `04e36fb8b093a02d81586185026c1ad22c8658931da50d75db99497a65a55922` and `5470e75bb2e9f6e5af7f61eba63623b8b4a5d56d6d53c75eece4f6c8d10110e5`.
+No pre-copy snapshot of that worktree exists for this session.
+Unobserved pre-existing uncommitted edits there cannot be ruled out or recovered from this session's evidence.
+The original checkout's two user files were not modified.

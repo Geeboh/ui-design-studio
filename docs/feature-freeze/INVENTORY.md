@@ -15,3 +15,13 @@ Historical ZIPs and screenshots are generated release evidence. Audit their inte
 New regression files and freeze records are reviewed with their associated remediation batches. `REVIEWS.md` records independent review scope and rejected hypotheses. No source component is excluded because it was unchanged.
 
 There is no database, application migration framework, container deployment, or tracked CI configuration. State uses confined JSON/Markdown dossiers, registry files, retained artwork, private runtime locators, and installation/routing journals. Installed third-party dependencies are audited as integration inputs rather than rewritten.
+
+## Current tracked membership
+
+The final candidate source set has 140 paths, including four newly authored evidence and regression files.
+The original 116-path ledger omitted 17 audit records and three remediation regression modules.
+Those 20 paths and the four current additions now have explicit entries in [inspection.tsv](inspection.tsv).
+This corrects FF-022 without changing the earlier baseline count.
+Current review partitions are engine/run server, adapter/landing server, distribution/installers, and workflow/documentation.
+The parent additionally read the complete dashboard and extension code and every new regression module.
+Fresh reviewer coverage and gaps are recorded in [REVIEWS.md](REVIEWS.md).

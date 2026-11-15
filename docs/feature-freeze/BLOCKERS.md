@@ -1,6 +1,6 @@
 # Blockers and remaining acceptance
 
-No confirmed code finding remains unresolved in the audited remediation branch. Automated engineering gates pass. The following limits prevent an unconditional, all-platform release claim.
+No confirmed product finding remains open after the available Linux engineering gates. The following limits prevent an unconditional, all-platform release claim. Keep feature freeze until the release owner accepts these conditions and completes required external acceptance.
 
 | Limit | Impact | Required action |
 | --- | --- | --- |
@@ -9,6 +9,9 @@ No confirmed code finding remains unresolved in the audited remediation branch. 
 | Native BFCache and other engines unverified | Chromium persisted-event simulation exercises handlers but not browser cache admission | Exercise real back/forward restoration and supported non-Chromium browsers |
 | Original user edits not integrated | Their combined behavior is outside this branch's evidence | Review and test the combination without overwriting the original checkout |
 | Alternate-family review override unavailable | Host rejected per-call model selection | Available-model fresh-context reviews were used; do not advertise cross-family certification |
+| Setup recovery limitation | Two accidental copies in another pre-existing worktree were restored to committed bytes, but its unobserved earlier uncommitted state is unknown | Review [BASELINE.md](BASELINE.md) before relying on that separate worktree; the original checkout's user edits remain intact |
+
+The final CSS reviewer reported concrete defects, which the parent reproduced and corrected with affected and full-suite verification. There is no later zero-finding independent CSS verdict. Original reports and dispositions are retained rather than presenting that review as unconditional approval.
 
 ## Operational recovery
 

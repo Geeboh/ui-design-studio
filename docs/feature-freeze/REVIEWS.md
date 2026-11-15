@@ -20,3 +20,28 @@
 `ReviewFinalPackage`, model `openai-codex/gpt-6.1-sol`, accepted the final five-file packaging batch with no remaining finding. Earlier review caught the private-ancestor template exception and publication ordering; both received reproduced regressions and corrections.
 
 Independent reviewers did not implement the batches they approved. Review outcomes are not substituted for execution evidence. A requested alternate-family model override was rejected because host per-call model selection is disabled; no settings were changed. Reviews used available models and fresh contexts. Final central execution results are in [TEST-MATRIX.md](TEST-MATRIX.md).
+
+## Current independent revalidation
+
+Original outputs, exact target provenance, dispositions and limitations are embedded in [REVIEW-EVIDENCE.json](REVIEW-EVIDENCE.json). Earlier sections are inherited narratives, not substitutes for current review.
+
+| Reviewer | Current scope | Disposition |
+| --- | --- | --- |
+| AdapterAudit | Complete inherited MCP, dashboard and lifecycle source | FF-023–025 reproduced and fixed |
+| DistributionAudit | Complete inherited installation and distribution slice | FF-027 reproduced and fixed |
+| WorkflowAudit | Guides, assets, contracts and audit evidence | FF-028–029 corrected with original retained outputs |
+| EngineAuditCorrected | Correct inherited engine/server checkout | No confirmed additional defect; initial wrong-target output excluded |
+| ReauditEngine | Whole current engine/run server and tests | FF-032–036 reproduced and fixed; scaffold hypothesis disproved |
+| ReviewRepoBoundary | Explicit repository propagation and empty artifacts | Accepted |
+| ReviewPollAndPrivacy | Concurrent probes and template exception | FF-031 reproduced and fixed |
+| ReviewNewRegressions | Current regression assertions and browser coverage | Three specific test gaps closed |
+| ReviewFinalRaceVerifier | Final listener race, QR buffer and nested browser form | Accepted |
+| ReviewAuditTrail | Interim report, gate and preservation evidence | Final reconciliation required; recovery uncertainty retained |
+| ReviewEngineAcceptance | Registration, report binding and reviewer identity | Accepted |
+| ReviewEngineIntegrity | CSS resources and resume consumers | FF-037–040 reproduced and fixed |
+| ReviewFinalResumePaths | Recorded input inventory and dependent categories | Accepted |
+| ReviewFinalCssBoundary | Final lexical/resource correction | FF-041–043 reproduced in validator and Chromium, then corrected and regression-verified by parent |
+
+ReviewEngineIntegrity exposed model identity `openai-codex/gpt-6.1-sol`; other current reviewer model identities are not inferred. Per-call alternate-family overrides were unavailable. No cross-family certification is claimed. Parent execution, not static agreement, establishes the reported test outcomes.
+
+The last CSS reviewer reported three concrete survivors rather than approval. The parent reproduced each, applied shared lexical/source-boundary corrections and ran the affected and full gates. Their dispositions and original rejection remain in the evidence; a later zero-finding independent CSS verdict is not claimed.
