@@ -2,6 +2,11 @@
 
 ## 1.4.2 · 15 November 2026
 
+- Fixed SVG artwork previews by preserving the SVG namespace and serving an explicit `image/svg+xml` response.
+- Persisted terminal approval status for shared browser/console observers and displayed approval requests newest-first.
+- Added atomic rollback for shared approval/request persistence and failed owned global MCP upgrades.
+- Excluded dashboard runtime secrets from source archives and hardened release manifest publication.
+
 - Blocked full-theme finalization and registration for bounded workflow scopes.
 - Required an applicable viewport for every declared critical coverage state.
 - Preserved explicitly empty worker-action allowlists.

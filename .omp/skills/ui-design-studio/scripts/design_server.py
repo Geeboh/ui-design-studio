@@ -50,6 +50,7 @@ import xml.etree.ElementTree as ET
 
 
 VISUAL = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".svg", ".html", ".htm", ".pdf"}
+SVG_CONTENT_TYPE = "image/svg+xml"
 DEPENDENCIES = VISUAL | {".css", ".woff", ".woff2", ".ttf", ".otf", ".eot"}
 STATUSES = {"active", "done", "blocked", "failed", "pending"}
 DOWNSTREAM_STAGES = {"plan": ("design", "finalize"), "design": ("finalize",)}
@@ -434,7 +435,8 @@ def approve(studio, root, payload, repo=None):
         source_record = import_theme_art(studio, root, repo)
         run = studio.read_json(root / "run.json")
         need(studio, run.get("mode") == "guided", "Yolo mode does not accept human approval forms")
-        request = studio.read_json(studio.safe_path(root, f"approval-requests/{request_id}.json"))
+        request_path = studio.safe_path(root, f"approval-requests/{request_id}.json")
+        request = studio.read_json(request_path)
         decisions, latest = latest_decisions(studio, root)
         try:
             current_inputs = expanded_inputs(studio, root, request["inputs"])
@@ -463,7 +465,20 @@ def approve(studio, root, payload, repo=None):
                 decisions["decisions"].append({"stage": stage, "actor": "user", "outcome": "superseded",
                     "rationale": f"Superseded by the new {request['stage'].title()} review; downstream approval must be renewed.",
                     "recordedAt": timestamp(), "supersededByRequestId": request_id})
-        studio.atomic_json(studio.safe_path(root, "decisions.json"), decisions)
+        original_decisions = json.loads(json.dumps(studio.read_json(studio.safe_path(root, "decisions.json"))))
+        original_request = json.loads(json.dumps(request))
+        decisions_path = studio.safe_path(root, "decisions.json")
+        try:
+            studio.atomic_json(decisions_path, decisions)
+            request["status"] = decision["outcome"]
+            studio.atomic_json(request_path, request)
+        except BaseException:
+            try:
+                studio.atomic_json(decisions_path, original_decisions)
+                studio.atomic_json(request_path, original_request)
+            except BaseException as rollback_error:
+                raise RuntimeError("Approval persistence failed and rollback failed") from rollback_error
+            raise
     return {"status": "PASS", "decision": decision}
 
 
@@ -699,6 +714,7 @@ def safe_svg(studio, root, source, content, files, prefix):
                 parent.attrib[key] = safe_css(studio, root, source, value, files, prefix)
         if parent.tag.rsplit("}", 1)[-1].lower() == "style" and parent.text:
             parent.text = safe_css(studio, root, source, parent.text, files, prefix)
+    ET.register_namespace("", "http://www.w3.org/2000/svg")
     return ET.tostring(document, encoding="utf-8", xml_declaration=True)
 
 
@@ -978,10 +994,14 @@ class DesignState:
                     elif digest(canonical(decisions)) != request["decisionsDigest"]:
                         status = "stale"
                     item = {key: request[key] for key in ("id", "stage", "title", "context", "inputs", "inputsDigest", "options")}
+                    created_at = request.get("createdAt")
+                    if isinstance(created_at, str) and created_at:
+                        item["createdAt"] = created_at
                     item["status"] = status
                     approvals.append(item)
                 except (studio.StudioError, OSError, ValueError, TypeError, KeyError) as exc:
                     warnings.append(f"Approval {path.stem}: {exc}")
+            approvals.sort(key=lambda item: (item.get("createdAt", ""), item["id"]), reverse=True)
         blockers = [text for text in progress.get("blockers", []) if isinstance(text, str) and text.strip()] if isinstance(progress.get("blockers", []), list) else []
         blockers += [gate["label"] + ": " + gate["detail"] for gate in gates if gate["status"] == "failed"]
         next_action = progress.get("nextAction", "")
@@ -995,7 +1015,8 @@ class DesignState:
                 elapsed = max(0, int((dt.datetime.now(dt.timezone.utc) - created).total_seconds()))
         except (ValueError, TypeError):
             pass
-        snap = {"schemaVersion": "1.0", "run": {key: run.get(key, "") for key in ("id", "themeId", "mode", "phase", "status")},
+        snap = {"schemaVersion": "1.0", "run": {key: run.get(key, "") for key in (
+                    "id", "themeId", "mode", "phase", "status", "scope", "scopeSchemaVersion", "scopeRationale")},
                 "server": self.server_details(), "gates": gates, "coverage": counts,
                 "nextAction": next_action, "blockers": blockers, "warnings": warnings, "workers": workers, "tasks": tasks,
                 "statistics": {"artworks": len(published_art), "workers": len(workers), "tasks": len(tasks), "evidence": len(evidence), "passedEvidence": len(fresh), "elapsedSeconds": elapsed},
@@ -1045,7 +1066,7 @@ def compact_status(snapshot, *, max_items=8, max_text=256):
         "revision": snapshot.get("revision", ""),
         "observedAt": snapshot.get("observedAt", ""),
         "run": dict(snapshot.get("run", {})),
-        "gates": [{"id": gate.get("id", ""), "status": gate.get("status", "")}
+        "gates": [{"id": gate.get("id", ""), "status": gate.get("status", ""), "detail": text(gate.get("detail"))}
                   for gate in snapshot.get("gates", [])[:max_items]],
         "coverage": dict(snapshot.get("coverage", {})),
         "statistics": dict(snapshot.get("statistics", {})),
@@ -1332,7 +1353,7 @@ class Handler(BaseHTTPRequestHandler):
             content = safe_css(owner.studio, directory, relative, content.decode("utf-8"), record["files"], prefix).encode("utf-8")
         elif suffix == ".svg":
             content = safe_svg(owner.studio, directory, relative, content, record["files"], prefix)
-        content_type = mimetypes.guess_type(relative)[0] or "application/octet-stream"
+        content_type = SVG_CONTENT_TYPE if suffix == ".svg" else mimetypes.guess_type(relative)[0] or "application/octet-stream"
         parsed = urlsplit(self.request_base)
         source = f"{parsed.scheme}://{parsed.netloc}{prefix}"
         csp = f"sandbox; default-src 'none'; script-src 'none'; style-src 'unsafe-inline' {source}; img-src {source} data:; font-src {source} data:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"

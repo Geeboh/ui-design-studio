@@ -146,3 +146,22 @@ The trusted `pageshow` reported `persisted=false` and a new document identity. C
 Current follow-up execution is retained at `/tmp/ui-freeze-shipping/browser-history-tests.log`. The earlier 298-case full-suite figures describe the complete pre-shipping audit head; the shipping PR's independent verifier records its final-head consumer results on GitHub.
 
 Playwright's [default Chromium switches](https://github.com/microsoft/playwright/blob/main/packages/playwright-core/src/server/chromium/chromiumSwitches.ts) explicitly disable BFCache by default. Removing that automation-only switch permits observation of the browser's real eligibility decision; it does not force cache admission.
+
+## Current checkout revalidation
+
+Environment: CPython 3.12.3 in `.venv`, Node 24.22.2, OMP 18.20.3, Linux x64, cached Chromium executable.
+
+| Gate | Command | Observed result |
+| --- | --- | --- |
+| Python full suite | `UI_DESIGN_TEST_BROWSER=/root/.cache/ms-playwright/chromium-1255/chrome-linux64/chrome .venv/bin/python -m pytest -q` | `312 passed, 212 subtests passed` |
+| Browser affected suite | same environment, `pytest -q tests/test_dashboard_browser.py` | `8 passed` |
+| Node extension | `node --experimental-strip-types --test tests/test_progress_extension.mjs` | `52 passed` |
+| Syntax/compile | `.venv/bin/python -m compileall -q ...`; `node --check ...`; `bash -n ...` | PASS |
+| Ruff correctness subset | `.venv/bin/ruff check --select E9,F63,F7,F82 ...` | PASS |
+| Benchmark | `.venv/bin/python scripts/remediation_benchmark.py` | PASS, synthetic only |
+| Dependency audit | `.venv/bin/pip-audit --format=json` | No known vulnerabilities; local package skipped by advisory database |
+| Source scan | `trivy fs --scanners vuln,misconfig,secret,license ...` | No findings returned; no language/config files detected |
+| Source manifest and archive | package build, `--check`, and `sha256sum -c MANIFEST.sha256` | PASS; 137 archive entries and 136 source hashes |
+| Wheel and sdist | `.venv/bin/python -m build --wheel --sdist --no-isolation` | PASS |
+
+Playwright Fast `plan --profile affected` returned `PLAN_NOT_READY`, `qaStatus=NOT_RUN`, `runnable=false`. It found no application Playwright config, CLI, or projects. Direct Python Playwright Chromium evidence is not a Playwright Fast pass.

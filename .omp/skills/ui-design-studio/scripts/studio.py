@@ -97,6 +97,15 @@ def sha_file(path):
 
 def now():
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+def valid_timestamp(value):
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None
+
 
 
 def read_json(path):
@@ -504,8 +513,8 @@ def validate_evidence_entry(root, entry, digest_cache=None, *, offline_required=
             f"Evidence {evidence_id} has invalid status: {status}")
     require(isinstance(entry.get("reviewer"), str) and entry["reviewer"].strip(),
             f"Evidence {evidence_id} has no reviewer")
-    require(isinstance(entry.get("recordedAt"), str) and entry["recordedAt"].strip(),
-            f"Evidence {evidence_id} has no recordedAt")
+    require(valid_timestamp(entry.get("recordedAt")),
+            f"Evidence {evidence_id} has invalid recordedAt")
     result = {"id": evidence_id, "kind": kind, "status": status, "fresh": False,
               "reviewer": entry["reviewer"], "recordedAt": entry["recordedAt"],
               "reasons": []}
@@ -589,8 +598,8 @@ def check_model_routing(root, run, pending):
         pending.append("Specialist model routing has not been resolved and recorded")
         return {**routing, "actualSha256": actual}
     require(is_model_identity(routing.get("sessionModel")), "modelRouting.sessionModel must be an exact provider/model identity")
-    require(isinstance(routing.get("sessionThinking"), str) and routing["sessionThinking"].strip(),
-            "modelRouting.sessionThinking must record the active effort or provider-default")
+    require(routing["sessionThinking"] in NATIVE_THINKING,
+            "modelRouting.sessionThinking must use a supported OMP thinking selection")
     assignments = routing.get("assignments")
     routing_version = routing.get("schemaVersion", "1.1")
     require(routing_version in ("1.1", "1.2"), "Unsupported modelRouting schemaVersion")
@@ -615,6 +624,8 @@ def check_model_routing(root, run, pending):
         require(is_model_identity(assignment.get("model")), f"Model assignment for {agent} must use an exact provider/model identity")
         for field in ("thinking", "rationale"):
             require(isinstance(assignment.get(field), str) and assignment[field].strip(), f"Model assignment for {agent} needs {field}")
+        require(assignment["thinking"] in NATIVE_THINKING,
+                f"Model assignment for {agent} uses an unsupported OMP thinking selection")
         if policy == "current-model":
             require(assignment["model"] == routing["sessionModel"] and assignment["thinking"] == routing["sessionThinking"],
                     f"current-model must retain the active session model and thinking for {agent}")
@@ -1008,6 +1019,10 @@ def check_run(path):
     require(run.get("themeAction") in ("new", "modify-default"), "Run themeAction must be new or modify-default")
     scope = run.get("scope", "full-redesign")
     require(scope in SCOPE_VALUES, f"Run scope must be one of {', '.join(SCOPE_VALUES)}")
+    if run.get("schemaVersion") == "1.1":
+        require(run.get("scopeSchemaVersion") == "1.0", "Run 1.1 must declare scopeSchemaVersion 1.0")
+        require(isinstance(run.get("scopeRationale"), str) and run["scopeRationale"].strip(),
+                "Run 1.1 must record a nonempty scopeRationale")
     validate_slug(run.get("themeId"))
     pending, errors = [], []
     if scope != "full-redesign":
@@ -1241,10 +1256,30 @@ def _resume_manifest(root, repo):
                 add(relative, "approval-input", f"approval-input:{relative}")
 
     sources = []
+
+    def add_source(candidate, source_id):
+        candidate = Path(candidate)
+        if not candidate.is_file() or candidate.is_symlink():
+            return
+        resolved = candidate.resolve()
+        if not resolved.is_relative_to(repo):
+            return
+        relative = resolved.relative_to(repo).as_posix()
+        if not any(item["path"] == relative for item in sources):
+            sources.append({"id": source_id, "path": relative, "sha256": sha_file(resolved)})
+
+    context_sources = run.get("projectContext", {}).get("sources", [])
+    if isinstance(context_sources, list):
+        for index, source in enumerate(context_sources):
+            if isinstance(source, str) and source.strip():
+                candidate = Path(source)
+                add_source(candidate if candidate.is_absolute() else repo / candidate,
+                           f"project-source:{index}:{source}")
+    for relative in ("AGENTS.md", ".omp/RULES.md"):
+        add_source(repo / relative, f"project-instruction:{relative}")
     contract = repo / "UI-Design-Studio-v1.4.0-Cortex-Remediation.md"
     if contract.is_file():
-        relative = contract.relative_to(repo).as_posix()
-        sources.append({"id": "remediation-contract", "path": relative, "sha256": sha_file(contract)})
+        add_source(contract, "remediation-contract")
     graph = [
         {"id": "project-context", "dependsOn": [source["id"] for source in sources]},
         {"id": "model-routing", "dependsOn": [source["id"] for source in sources]},

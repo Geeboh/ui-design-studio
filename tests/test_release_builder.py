@@ -77,6 +77,25 @@ class ReleaseBuilderTests(unittest.TestCase):
             self.assertNotIn(b"PRIVATE_SECRET", b"".join(archive.read(name) for name in archive.namelist()))
         self.assertNotIn(".env.example/", self.manifest.read_text(encoding="utf-8"))
 
+    def test_runtime_design_records_are_excluded(self):
+        runtime = self.root / "docs/design/runs/current"
+        runtime.mkdir(parents=True)
+        (runtime / ".design-server.json").write_text('{"token":"private"}\n', encoding="utf-8")
+        (runtime / "draft.html").write_text("<h1>private</h1>\n", encoding="utf-8")
+        (self.root / "docs/.design-owner.json").write_text('{"owner":"private"}\n', encoding="utf-8")
+        builder.build(self.output)
+        with zipfile.ZipFile(self.output) as archive:
+            payload = b"".join(archive.read(name) for name in archive.namelist())
+        self.assertNotIn(b"private", payload)
+
+    def test_symlinked_manifest_is_rejected_in_check_mode(self):
+        target = self.base / "manifest-target.txt"
+        target.write_bytes(self.original_manifest)
+        self.manifest.unlink()
+        self.manifest.symlink_to(target)
+        with self.assertRaisesRegex(ValueError, "non-regular manifest"):
+            builder.build(self.output, check=True)
+
     def test_env_and_credentials_remain_rejected(self):
         for name in (".env", "credentials/token"):
             with self.subTest(name=name):

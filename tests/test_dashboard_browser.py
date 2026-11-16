@@ -228,6 +228,39 @@ class DashboardBrowserTests(unittest.TestCase):
         sources = self.engine.read_json(root / ".design-theme-sources.json")
         self.assertEqual(sources["projectRoot"], str(self.repo))
         self.assertEqual(sources["themePath"], "branding/themes/fixture")
+    def test_svg_artwork_renders_and_newest_approval_is_first(self):
+        root = self.new_run()
+        (root / "plan.html").write_text("<!doctype html><title>Review board</title><h1>Review board</h1>", encoding="utf-8")
+        (root / "diagram.svg").write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
+            encoding="utf-8",
+        )
+        artwork = self.backend.publish_artwork(self.engine, root, "diagram.svg", "Synthetic SVG preview.")["artwork"]
+        self.backend.publish_request(
+            self.engine, root, "z-review", "plan", "Newer review",
+            "Synthetic approval fixture.", ["plan.html"],
+        )
+        server = self.backend.DesignServer(self.engine, root, interval=0.05)
+        self.addCleanup(server.close)
+        server.start()
+        page = self.page()
+        page.goto(server.url)
+        expect(page.locator("#connection-status")).to_have_text("Connected")
+        page.locator("#nav-approvals").click()
+        expect(page.locator(".approval-card").nth(0)).to_have_attribute("data-approval-id", "z-review")
+        self.backend.publish_request(
+            self.engine, root, "a-review", "plan", "Older review",
+            "Synthetic approval fixture.", ["plan.html"],
+        )
+        expect(page.locator(".approval-card").nth(0)).to_have_attribute("data-approval-id", "a-review")
+        page.locator("#nav-feed").click()
+        card = page.locator('[data-artwork-id="' + artwork["id"] + '"]')
+        card.scroll_into_view_if_needed()
+        card.locator(".artwork-open").click()
+        image = page.locator("#viewer-content img")
+        expect(image).to_be_visible()
+        self.assertGreater(image.evaluate("(node) => node.naturalWidth"), 0)
+
 
     def test_artwork_close_focus_survives_concurrent_approval(self):
         root = self.new_run()

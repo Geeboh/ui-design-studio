@@ -83,3 +83,8 @@ The original checkout's two user files were not modified.
 ## Explicit shipping authorization
 
 After the completed local audit, the user requested “Finish your work and ShipIt”. This supersedes the original no-automatic-shipping boundary for one normal branch push, GitHub PR and independently verified merge into `main`. GitHub CLI is used because no `origin` executable is installed. Remote `main` remained at the recorded `95cfb11786f6aae8c15f308787b614520ca5718d` baseline when shipping began. No force-push, package release, deployment or integration of the original user delta is authorized by this follow-up.
+# Current checkout revalidation
+
+The active checkout is `main` at `5a3c603e4f95c884d5b0535eb4aa52c2a7ff62c4` (`v1.4.2`), not the historical audit worktree named above. The working tree contains the three requested UI remediations, their tests, and changelog entries. Untracked `AGENTS.md` is preserved as project instructions.
+
+The current verification environment uses CPython 3.12, Node 24.22.2, OMP 18.20.3, and a cached Chromium executable. The historical branch and worktree claims remain historical evidence and do not describe this checkout.

@@ -17,3 +17,7 @@ The original dirty checkout remains untouched. Inherited remediation through `5b
 | `82268c984c` | Complete inspection ledger, original review/scanner retention, final gate reconciliation and conditional readiness | FF-022, FF-028–029; final reports |
 
 Final report reconciliation retains original reviewer/scanner evidence and all 140 inspection dispositions. A separate final artifact unit regenerates the source manifest after report changes. The defect register identifies each correction commit. No unrelated product feature or speculative refactor was added.
+
+## Active checkout revalidation — 16 November 2026
+
+The `main` v1.4.2 checkout received verified fixes for SVG browser rendering, shared browser/console approval terminal state, and newest-first approval presentation. Current tests and limitations are recorded in [TEST-MATRIX.md](TEST-MATRIX.md) and [RELEASE-READINESS.md](RELEASE-READINESS.md).

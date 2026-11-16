@@ -19,6 +19,26 @@ The retained [feature-freeze records](feature-freeze/) describe the earlier merg
 
 Screenshot timestamps use the browser's local timezone. The candidate date above uses UTC. See [release notes and screenshots](RELEASE-v1.4.2.md).
 
+## Current main revalidation · 16 November 2026 UTC
+
+This revalidation covers checkout `main` at `5a3c603e4f95c884d5b0535eb4aa52c2a7ff62c4` plus the current remediation changes. It uses disposable local artifacts and synthetic fixtures. No hosted release, deployment, or human UAT was performed.
+
+| Check | Observed result | Scope |
+| --- | --- | --- |
+| Full Python suite | 312 tests and 212 subtests passed | `.venv`, Linux, Chromium executable configured for browser tests |
+| Affected browser suite | 8 tests passed | Direct Python Playwright Chromium coverage |
+| Node extension suite | 52 tests passed | Node `--experimental-strip-types` |
+| Static checks | PASS | `compileall`, Node syntax, shell syntax, Ruff correctness subset |
+| Benchmark contract | PASS | Offline synthetic benchmark compared stable committed contract |
+| Dependency audit | PASS | `pip-audit` reported no known vulnerabilities |
+| Filesystem scan | PASS | Trivy 0.76.2 returned no findings; no language/config files detected |
+| Source ZIP | PASS | 137 archive entries; final checksum sidecar generated and verified |
+| Manifest and archive verification | PASS | 136 source hashes verified; `sha256sum -c MANIFEST.sha256` passed |
+| Wheel and sdist | PASS | `ui_design_studio_mcp-1.4.2-py3-none-any.whl` and `.tar.gz` built |
+| Playwright Fast application QA | NOT RUN | `PLAN_NOT_READY`; no application config, CLI, or project was available |
+
+Direct Chromium tests are not a Playwright Fast pass. Firefox, WebKit, native Windows/macOS, physical devices, and recipient-application acceptance remain unverified.
+
 ## Version 1.4.1 Cortex remediation · 14 November 2026
 
 The release checks cover the remediation changes on Linux with Python 3.12.3 and Node 24.22.2. They use synthetic fixtures and do not establish recipient-application design evidence.

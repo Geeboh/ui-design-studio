@@ -6,6 +6,12 @@ Prepared 15 November 2026 UTC. This is a local release candidate, not a publishe
 
 This patch hardens the existing workflow. It adds no product feature, runtime dependency, or schema migration.
 
+- Serves serialized SVG previews with an explicit `image/svg+xml` response and browser-renderable XML.
+- Persists approval outcomes to both decision and request records with rollback on write failure.
+- Orders approvals by full recorded timestamps and reorders live browser cards after refresh.
+- Cancels stale browser fetches when approval and landing pages leave or reload.
+- Rolls back owned global MCP upgrades after a failed pip transaction.
+- Excludes private dashboard runtime records from source ZIPs and rejects nonregular manifests.
 - Prevents bounded scopes from passing full-theme finalization and registration.
 - Binds final acceptance to current assessment report bytes and retained artwork to its content-addressed identity.
 - Preserves repository provenance, listener ownership, run selection, durable guided approvals, and polling recovery.
@@ -39,6 +45,12 @@ Fresh Chromium captures use synthetic projects and the 1.4.2 candidate. Private 
 - SHA-256 checksums verify exact bytes. They are not publisher signatures.
 
 No tag, hosted release, or deployment is created by this build.
+
+Current disposable revalidation artifacts:
+
+- `/tmp/ui-design-release-final/ui-design-studio-v1.4.2.zip`
+- `/tmp/ui-design-build-final/ui_design_studio_mcp-1.4.2-py3-none-any.whl`
+- `/tmp/ui-design-build-final/ui_design_studio_mcp-1.4.2.tar.gz`
 
 ## Limits
 

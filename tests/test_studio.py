@@ -255,6 +255,20 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(record["modelPolicy"], "auto-models")
         self.assertEqual(record["modelRouting"]["status"], "pending")
         self.assertEqual(record["projectContext"]["offline"], "unknown")
+    def test_schema_scope_and_evidence_timestamps_are_required(self):
+        root = fixture_run(self.repo, self.theme)
+        record = studio.read_json(root / "run.json")
+        record["scopeSchemaVersion"] = "0.9"
+        write_json(root / "run.json", record)
+        with self.assertRaisesRegex(studio.StudioError, "scopeSchemaVersion"):
+            studio.check_run(root)
+        record["scopeSchemaVersion"] = "1.0"
+        evidence = record["evidence"][0]
+        evidence["recordedAt"] = "not-a-timestamp"
+        write_json(root / "run.json", record)
+        with self.assertRaisesRegex(studio.StudioError, "invalid recordedAt"):
+            studio.check_run(root)
+
 
     def test_profile_free_cli_and_model_policy_precedence(self):
         args = studio.parser().parse_args(["init-run", "--repo", str(self.repo), "--theme-id", "fixture"])
@@ -884,6 +898,16 @@ class ModelRoutingTests(unittest.TestCase):
         with self.assertRaisesRegex(studio.StudioError, "Symlink"):
             studio.models_apply(self.repo, self.root)
         self.assertEqual(outside.read_bytes(), self.original[path][0])
+
+    def test_check_model_routing_rejects_unsupported_session_thinking(self):
+        self.record["modelRouting"].update(
+            status="resolved",
+            sha256=studio.sha_file(self.root / "model-routing.md"),
+            sessionThinking="invented-effort",
+        )
+        write_json(self.root / "run.json", self.record)
+        with self.assertRaisesRegex(studio.StudioError, "supported OMP thinking"):
+            studio.check_model_routing(self.root, self.record, [])
 
     def test_prepared_journal_can_recover_an_interrupted_application(self):
         result = studio.models_apply(self.repo, self.root)

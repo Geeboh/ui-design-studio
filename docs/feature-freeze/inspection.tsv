@@ -139,3 +139,12 @@ docs/feature-freeze/SECURITY-EVIDENCE.json	audit evidence	Main/WorkflowAudit	rev
 docs/feature-freeze/REVIEW-EVIDENCE.json	audit evidence	Main/ReviewAuditTrail	reviewed; original outputs target provenance dispositions and limits
 tests/test_freeze_acceptance.py	source/test	EngineAcceptanceTests/Main	reviewed; cross-project report and independent-review regressions
 tests/test_freeze_integrity.py	source/test	EngineIntegrityTests/Main	reviewed; static resources and modern legacy resume consumers
+docs/RELEASE-v1.4.2.md	audit record	Main	reviewed; current candidate release notes
+docs/screenshots/v1.4.2-approval.png	release evidence	Main	reviewed; redacted synthetic browser capture
+docs/screenshots/v1.4.2-artwork.png	release evidence	Main	reviewed; redacted synthetic browser capture
+docs/screenshots/v1.4.2-connection.png	release evidence	Main	reviewed; redacted synthetic browser capture
+docs/feature-freeze/CONTINUATION.md	audit record	Main	reviewed; current autonomous continuation record
+docs/feature-freeze/MODEL-ESCALATIONS.md	audit record	Main	reviewed; current escalation policy
+docs/feature-freeze/MODEL-ROUTING.md	audit record	Main	reviewed; current routing evidence
+docs/feature-freeze/MODEL-USAGE.md	audit record	Main	reviewed; current usage evidence
+docs/feature-freeze/QUALITY-GATES.md	audit record	Main	reviewed; current gate status

@@ -113,7 +113,7 @@
     requireValue(Array.isArray(data.history) && data.history.every((point) => record(point) && date(point.at) && ["verified", "required", "passedGates"].every((key) => count(point[key]))), "History records are invalid.");
     requireValue(Array.isArray(data.artworks) && data.artworks.every((artwork) => record(artwork) && ["id", "path", "title", "context", "version", "url"].every((key) => text(artwork[key])) && ["image", "html", "pdf"].includes(artwork.kind) && date(artwork.createdAt)), "Artwork records are invalid.");
     requireValue(new Set(data.artworks.map((artwork) => artwork.id)).size === data.artworks.length, "Artwork IDs must identify unique retained versions.");
-    requireValue(Array.isArray(data.approvals) && data.approvals.every((request) => record(request) && ["id", "title", "context", "inputsDigest"].every((key) => text(request[key])) && ["plan", "design"].includes(request.stage) && strings(request.inputs) && ["pending", "approved", "rejected", "stale"].includes(request.status) && Array.isArray(request.options) && request.options.every((option) => record(option) && text(option.id) && text(option.label) && strings(option.artworkIds)) && new Set(request.options.map((option) => option.id)).size === request.options.length), "Approval requests are invalid.");
+    requireValue(Array.isArray(data.approvals) && data.approvals.every((request) => record(request) && ["id", "title", "context", "inputsDigest"].every((key) => text(request[key])) && (request.createdAt === undefined || date(request.createdAt)) && ["plan", "design"].includes(request.stage) && strings(request.inputs) && ["pending", "approved", "rejected", "stale"].includes(request.status) && Array.isArray(request.options) && request.options.every((option) => record(option) && text(option.id) && text(option.label) && strings(option.artworkIds)) && new Set(request.options.map((option) => option.id)).size === request.options.length), "Approval requests are invalid.");
     requireValue(new Set(data.approvals.map((request) => request.id)).size === data.approvals.length, "Approval request IDs are duplicated.");
     requireValue(data.decisions === undefined || (Array.isArray(data.decisions) && data.decisions.every((decision) => record(decision) && ["stage", "actor", "outcome", "rationale"].every((key) => text(decision[key])) && ["recordedAt", "optionId", "inputsDigest"].every((key) => decision[key] === undefined || text(decision[key])))), "Recorded decisions are invalid.");
     return data;
@@ -218,7 +218,7 @@
         throw error;
       }
       const snapshot = validateSnapshot(await response.json());
-      if (state.stopped || token !== state.token) return;
+      if (state.stopped || token !== state.token || state.requestController !== controller) return;
       state.snapshot = snapshot;
       // Preserve publication order without truncating submillisecond version timestamps.
       state.artworks = snapshot.artworks.slice().reverse();
@@ -227,7 +227,7 @@
       state.failure = null;
       renderSnapshot();
     } catch (error) {
-      if (!state.stopped && token === state.token) {
+      if (!state.stopped && token === state.token && state.requestController === controller) {
         state.failure = {
           kind: error.kind || "error",
           message: error.name === "AbortError" ? "The snapshot request timed out." : error.message || "The snapshot request failed.",
@@ -235,6 +235,7 @@
       }
     } finally {
       clearTimeout(deadline);
+      if (state.requestController !== controller) return;
       state.inFlight = false;
       state.requestController = null;
       updateConnection();
@@ -801,14 +802,16 @@
       : snapshot.run.mode === "yolo"
         ? "Autonomous yolo mode. The director records its decisions and continues without waiting for user approval. Pending gates remain pending until evidence passes."
         : "Run mode is unverified. No user approval can be submitted.";
-    const pending = snapshot.approvals.filter((request) => request.status === "pending").length;
+    const approvals = snapshot.approvals.slice().sort((left, right) => (right.createdAt || "").localeCompare(left.createdAt || "")
+      || right.id.localeCompare(left.id));
+    const pending = approvals.filter((request) => request.status === "pending").length;
     byId("approval-count").hidden = !guided || pending === 0;
     byId("approval-count").textContent = String(pending);
     byId("approval-count").setAttribute("aria-label", `${pending} pending requests`);
     const list = byId("approval-list");
     if (!state.approvalViews.size) list.replaceChildren();
     const present = new Set();
-    for (const request of snapshot.approvals) {
+    for (const request of approvals) {
       present.add(request.id);
       let view = state.approvalViews.get(request.id);
       if (!view) {
@@ -831,6 +834,7 @@
       }
       updateApprovalOptions(view);
       updateApprovalAvailability(view);
+      list.append(view.card);
     }
     for (const [id, view] of state.approvalViews) {
       if (!present.has(id)) {
@@ -1169,6 +1173,9 @@
     clearTimeout(state.pollTimer);
     clearInterval(ageTimer);
     state.requestController?.abort();
+    state.requestController = null;
+    state.inFlight = false;
+    state.refreshQueued = false;
     previewObserver?.disconnect();
     previewResize?.disconnect();
     viewerResize?.disconnect();
