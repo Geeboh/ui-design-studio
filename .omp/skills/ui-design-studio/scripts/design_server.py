@@ -24,6 +24,7 @@ LAN updates replace advertised URLs, permitted Hosts and permitted Origins.
 from __future__ import annotations
 
 from contextlib import contextmanager
+import base64
 import datetime as dt
 import errno
 import hashlib
@@ -33,8 +34,9 @@ import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import ipaddress
 import json
-import mimetypes
 import os
+import math
+import mimetypes
 from pathlib import Path, PurePosixPath
 import re
 import secrets
@@ -59,7 +61,13 @@ CSS_URL = re.compile(r"url\(\s*(?P<quote>['\"]?)(?P<url>.*?)\1\s*\)", re.I | re.
 CSS_IMPORT = re.compile(r"@import\s+(['\"])(.*?)\1", re.I)
 SLUG = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 HASH = re.compile(r"[0-9a-f]{64}\Z")
-MAX_BODY = 128 * 1024
+MAX_BODY = 12 * 1024 * 1024
+MAX_ATTACHMENTS = 4
+MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024
+MAX_ANNOTATIONS = 256
+ATTACHMENT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._ -]{0,159}\Z")
+ATTACHMENT_MIME = {"image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "image/webp": ".webp"}
+ANNOTATION_TOOLS = {"arrow", "line", "curve", "rectangle", "ellipse", "text"}
 
 
 def digest(data):
@@ -76,6 +84,78 @@ def timestamp():
 
 def need(studio, condition, message):
     studio.require(condition, message)
+
+def _attachment_bytes(mime_type, content):
+    signatures = {
+        "image/png": content.startswith(b"\x89PNG\r\n\x1a\n"),
+        "image/jpeg": content.startswith(b"\xff\xd8\xff"),
+        "image/gif": content.startswith((b"GIF87a", b"GIF89a")),
+        "image/webp": len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP",
+    }
+    return signatures.get(mime_type, False)
+
+
+def approval_feedback(studio, root, request_id, payload):
+    raw_attachments = payload.get("attachments", [])
+    need(studio, isinstance(raw_attachments, list) and len(raw_attachments) <= MAX_ATTACHMENTS,
+         f"Attachments must be a list with at most {MAX_ATTACHMENTS} images")
+    attachments, pending = [], []
+    total_bytes = 0
+    seen = set()
+    for item in raw_attachments:
+        need(studio, isinstance(item, dict), "Attachment records must be objects")
+        attachment_id = item.get("id")
+        name = item.get("name")
+        mime_type = item.get("mimeType")
+        encoded = item.get("data")
+        need(studio, isinstance(attachment_id, str) and SLUG.fullmatch(attachment_id) and attachment_id not in seen,
+             "Attachment IDs must be unique slugs")
+        need(studio, isinstance(name, str) and ATTACHMENT_NAME.fullmatch(name), "Attachment names are invalid")
+        need(studio, mime_type in ATTACHMENT_MIME, "Only PNG, JPEG, GIF, and WebP attachments are supported")
+        need(studio, isinstance(encoded, str) and encoded, "Attachment data is required")
+        try:
+            content = base64.b64decode(encoded, validate=True)
+        except (ValueError, base64.binascii.Error) as exc:
+            raise studio.StudioError("Attachment data must be valid base64") from exc
+        need(studio, 1 <= len(content) <= MAX_ATTACHMENT_BYTES, "Attachment size is outside the supported limit")
+        total_bytes += len(content)
+        need(studio, total_bytes <= 8 * 1024 * 1024, "Combined attachment size exceeds the supported limit")
+        need(studio, _attachment_bytes(mime_type, content), "Attachment bytes do not match their image type")
+        file_hash = digest(content)
+        relative = f"approval-attachments/{request_id}/{file_hash}{ATTACHMENT_MIME[mime_type]}"
+        attachments.append({"id": attachment_id, "name": name, "mimeType": mime_type,
+                            "bytes": len(content), "sha256": file_hash, "path": relative})
+        pending.append((relative, content))
+        seen.add(attachment_id)
+
+    raw_annotations = payload.get("annotations", [])
+    need(studio, isinstance(raw_annotations, list) and len(raw_annotations) <= MAX_ANNOTATIONS,
+         f"Annotations must be a list with at most {MAX_ANNOTATIONS} marks")
+    annotations = []
+    for item in raw_annotations:
+        need(studio, isinstance(item, dict), "Annotation records must be objects")
+        attachment_id = item.get("attachmentId")
+        tool = item.get("tool")
+        points = item.get("points")
+        need(studio, attachment_id in seen, "Annotations must refer to an uploaded image")
+        need(studio, tool in ANNOTATION_TOOLS, "Annotation tool is not supported")
+        need(studio, isinstance(points, list) and 1 <= len(points) <= 128, "Annotation points are invalid")
+        normalized_points = []
+        for point in points:
+            need(studio, isinstance(point, list) and len(point) == 2
+                 and all(isinstance(value, (int, float)) and math.isfinite(value) and 0 <= value <= 1 for value in point),
+                 "Annotation coordinates must be finite normalized values")
+            normalized_points.append([float(point[0]), float(point[1])])
+        text = item.get("text", "")
+        color = item.get("color", "#ff5c7a")
+        width = item.get("width", 3)
+        need(studio, isinstance(text, str) and len(text) <= 500, "Annotation text is invalid")
+        need(studio, isinstance(color, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", color), "Annotation color is invalid")
+        need(studio, isinstance(width, (int, float)) and math.isfinite(width) and 0.5 <= width <= 20, "Annotation width is invalid")
+        need(studio, tool != "text" or text.strip(), "Text annotations require text")
+        annotations.append({"attachmentId": attachment_id, "tool": tool, "points": normalized_points,
+                            "text": text, "color": color.lower(), "width": float(width)})
+    return attachments, annotations, pending
 
 
 def read_record(studio, root, relative, default=None):
@@ -449,16 +529,20 @@ def approve(studio, root, payload, repo=None):
             raise ApprovalConflict("Review inputs or decisions changed; refresh the approval request and review again")
         option = next((item for item in request["options"] if item["id"] == payload.get("optionId")), None)
         need(studio, option is not None, "Unknown approval option")
-        need(studio, payload.get("outcome") in ("approved", "changes", "rejected"), "Approval outcome must be approved, changes or rejected")
-        need(studio, payload.get("outcome") == "approved" or (isinstance(payload.get("rationale"), str) and payload["rationale"].strip()), "Feedback is required for changes or rejection")
-        need(studio, payload.get("optionId") != "request-changes" or payload.get("outcome") == "rejected", "Request changes cannot grant approval")
+        outcome = payload.get("outcome")
+        need(studio, outcome in ("approved", "changes", "rejected"), "Approval outcome must be approved, changes or rejected")
+        rationale = payload.get("rationale", "")
+        need(studio, outcome == "approved" or (isinstance(rationale, str) and rationale.strip()), "Feedback is required for changes or rejection")
+        need(studio, option["id"] != "request-changes" or outcome == "rejected", "Request changes cannot grant approval")
+        attachments, annotations, pending_attachments = approval_feedback(studio, root, request_id, payload)
         if request["stage"] == "design":
             plan = latest.get("plan")
             if not current_decision(studio, root, run, plan) or not set(plan["inputs"]).issubset(request["inputs"]):
                 raise ApprovalConflict("The approved Plan changed; publish and review the Design request again")
-        decision = {"stage": request["stage"], "actor": "user", "outcome": payload["outcome"],
-                    "rationale": payload["rationale"].strip(), "inputs": request["inputs"], "inputsDigest": request["inputsDigest"],
-                    "optionId": option["id"], "requestId": request_id, "recordedAt": timestamp()}
+        decision = {"stage": request["stage"], "actor": "user", "outcome": outcome,
+                    "rationale": rationale.strip(), "inputs": request["inputs"], "inputsDigest": request["inputsDigest"],
+                    "optionId": option["id"], "requestId": request_id, "recordedAt": timestamp(),
+                    "attachments": attachments, "annotations": annotations}
         decisions["decisions"].append(decision)
         for stage in DOWNSTREAM_STAGES[request["stage"]]:
             if latest.get(stage, {}).get("outcome") == "approved":
@@ -468,7 +552,21 @@ def approve(studio, root, payload, repo=None):
         original_decisions = json.loads(json.dumps(studio.read_json(studio.safe_path(root, "decisions.json"))))
         original_request = json.loads(json.dumps(request))
         decisions_path = studio.safe_path(root, "decisions.json")
+        written = []
+        attachment_directory = None
+        attachment_directory_created = False
+        if pending_attachments:
+            attachment_directory = studio.safe_path(root, f"approval-attachments/{request_id}", must_exist=False, allow_dir=True)
+            attachment_directory_created = not attachment_directory.exists()
+            attachment_directory.mkdir(parents=True, exist_ok=True)
         try:
+            for relative, content in pending_attachments:
+                path = studio.safe_path(root, relative, must_exist=False)
+                if path.exists():
+                    need(studio, studio.sha_file(path) == digest(content), "Attachment digest collision detected")
+                else:
+                    studio.atomic_bytes(path, content, 0o600)
+                    written.append(path)
             studio.atomic_json(decisions_path, decisions)
             request["status"] = decision["outcome"]
             studio.atomic_json(request_path, request)
@@ -476,6 +574,10 @@ def approve(studio, root, payload, repo=None):
             try:
                 studio.atomic_json(decisions_path, original_decisions)
                 studio.atomic_json(request_path, original_request)
+                for path in written:
+                    path.unlink(missing_ok=True)
+                if attachment_directory_created and attachment_directory is not None:
+                    attachment_directory.rmdir()
             except BaseException as rollback_error:
                 raise RuntimeError("Approval persistence failed and rollback failed") from rollback_error
             raise
@@ -1021,7 +1123,7 @@ class DesignState:
                 "nextAction": next_action, "blockers": blockers, "warnings": warnings, "workers": workers, "tasks": tasks,
                 "statistics": {"artworks": len(published_art), "workers": len(workers), "tasks": len(tasks), "evidence": len(evidence), "passedEvidence": len(fresh), "elapsedSeconds": elapsed},
                 "artworks": published_art, "evidence": published_evidence, "approvals": approvals,
-                "decisions": [{key: decision[key] for key in ("stage", "actor", "outcome", "rationale", "recordedAt", "optionId", "inputsDigest") if key in decision}
+                "decisions": [{key: decision[key] for key in ("stage", "actor", "outcome", "rationale", "recordedAt", "optionId", "inputsDigest", "attachments", "annotations") if key in decision}
                               for decision in decisions["decisions"]]}
         stable = {key: value for key, value in snap.items() if key != "statistics"}
         stable["statistics"] = {key: value for key, value in snap["statistics"].items() if key != "elapsedSeconds"}

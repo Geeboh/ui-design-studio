@@ -200,7 +200,24 @@ textarea { resize: vertical; min-block-size: 7rem; }
 .approval-stale { margin-block: 1rem; padding: 0.85rem; border: 1px solid var(--warning); border-radius: 0.35rem; background: var(--warning-surface); }
 .approval-stale button { margin-block-start: 0.65rem; }
 .approval-readonly { margin-block-start: 1rem; color: var(--muted); }
-.approval-readonly-options { margin-block-start: 1rem; }
+.approval-feedback { margin-block: 1rem; padding: 0.9rem; border: 1px solid var(--border-subtle); border-radius: 0.35rem; background: var(--canvas); }
+.approval-feedback h4 { margin: 0; }
+.approval-feedback > p { margin-block: 0.35rem 0.8rem; }
+.approval-feedback > label { display: block; }
+.annotation-attachments { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.7rem 0; padding: 0; list-style: none; }
+.annotation-attachment { display: flex; gap: 0.25rem; align-items: center; }
+.annotation-attachment .button { min-block-size: 2.25rem; }
+.annotation-attachment button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-surface); }
+.annotation-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 0.4rem; }
+.annotation-toolbar .button { min-block-size: 2.4rem; }
+.annotation-toolbar label { display: grid; gap: 0.2rem; color: var(--muted); font-size: 0.75rem; }
+.annotation-toolbar input[type="text"] { min-inline-size: 8rem; }
+.annotation-color input { min-inline-size: 2.5rem; min-block-size: 2.4rem; padding: 0.1rem; }
+.annotation-stage { position: relative; display: grid; place-items: center; min-block-size: 12rem; max-block-size: 32rem; margin-block-start: 0.8rem; overflow: auto; background: #101722; }
+.annotation-stage[data-disabled="true"] { cursor: not-allowed; opacity: 0.65; }
+.annotation-stage img { display: block; max-inline-size: 100%; max-block-size: 32rem; object-fit: contain; }
+.annotation-stage svg { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; overflow: visible; touch-action: none; }
+.annotation-stage svg text { paint-order: stroke; stroke: #101722; stroke-width: 0.3px; }
 .decision-list { margin: 1rem 0 0; padding: 0; list-style: none; }
 .decision-record { padding-block: 1rem; border-block-start: 1px solid var(--border-subtle); }
 .decision-record-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }

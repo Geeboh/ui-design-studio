@@ -406,6 +406,30 @@ class DesignServerTests(unittest.TestCase):
         self.assertEqual(self.request(server, "/api/approval", "POST", payload)[0], 200)
         self.assertEqual(studio.read_json(self.root / "approval-requests/changes-review.json")["status"], "changes")
         self.assertEqual(studio.read_json(self.root / "decisions.json")["decisions"][-1]["outcome"], "changes")
+    def test_approval_persists_image_attachment_and_annotations(self):
+        request = self.plan("annotated-review")
+        server = self.start()
+        payload = self.payload(request)
+        payload["attachments"] = [{
+            "id": "attachment-one",
+            "name": "feedback.png",
+            "mimeType": "image/png",
+            "data": base64.b64encode(PNG).decode("ascii"),
+        }]
+        payload["annotations"] = [{
+            "attachmentId": "attachment-one",
+            "tool": "arrow",
+            "points": [[0.1, 0.2], [0.8, 0.9]],
+            "color": "#ff5c7a",
+            "width": 3,
+        }]
+        code, unused, result = self.request(server, "/api/approval", "POST", payload)
+        self.assertEqual(code, 200)
+        decision = result["decision"]
+        self.assertEqual(decision["attachments"][0]["name"], "feedback.png")
+        self.assertEqual(decision["annotations"][0]["tool"], "arrow")
+        attachment = self.root / decision["attachments"][0]["path"]
+        self.assertEqual(attachment.read_bytes(), PNG)
 
 
     def test_approval_order_uses_full_timestamp_before_id(self):

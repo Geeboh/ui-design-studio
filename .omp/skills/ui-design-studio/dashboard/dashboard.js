@@ -596,6 +596,230 @@
     }
   }
 
+  const ANNOTATION_TOOLS = [
+    ["arrow", "Arrow"],
+    ["line", "Line"],
+    ["curve", "Curve"],
+    ["rectangle", "Rectangle"],
+    ["ellipse", "Ellipse"],
+    ["text", "Text"],
+  ];
+
+  function annotationSvgElement(tag, attributes = {}, text) {
+    const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function annotationPoint(event, stage) {
+    const bounds = stage.getBoundingClientRect();
+    return [
+      Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)),
+      Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)),
+    ];
+  }
+
+  function copyAnnotations(annotations) {
+    return annotations.map((annotation) => ({ ...annotation, points: annotation.points.map((point) => [...point]) }));
+  }
+
+  function annotationPath(points) {
+    return points.map(([x, y], index) => `${index ? "L" : "M"} ${x * 100} ${y * 100}`).join(" ");
+  }
+
+  function renderAnnotationMark(annotation) {
+    const [first, second = first] = annotation.points;
+    const attrs = { stroke: annotation.color, "stroke-width": String(annotation.width / 2), fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" };
+    if (annotation.tool === "arrow" || annotation.tool === "line") {
+      const line = annotationSvgElement("line", { ...attrs, x1: first[0] * 100, y1: first[1] * 100, x2: second[0] * 100, y2: second[1] * 100 });
+      if (annotation.tool === "arrow") line.setAttribute("marker-end", "url(#annotation-arrow)");
+      return line;
+    }
+    if (annotation.tool === "curve") return annotationSvgElement("path", { ...attrs, d: annotationPath(annotation.points) });
+    if (annotation.tool === "rectangle") {
+      return annotationSvgElement("rect", { ...attrs, x: Math.min(first[0], second[0]) * 100, y: Math.min(first[1], second[1]) * 100,
+        width: Math.abs(second[0] - first[0]) * 100, height: Math.abs(second[1] - first[1]) * 100 });
+    }
+    if (annotation.tool === "ellipse") {
+      return annotationSvgElement("ellipse", { ...attrs, cx: ((first[0] + second[0]) / 2) * 100, cy: ((first[1] + second[1]) / 2) * 100,
+        rx: Math.abs(second[0] - first[0]) * 50, ry: Math.abs(second[1] - first[1]) * 50 });
+    }
+    return annotationSvgElement("text", { x: first[0] * 100, y: first[1] * 100, fill: annotation.color, "font-size": "4", "font-family": "sans-serif" }, annotation.text);
+  }
+
+  function renderAnnotationEditor(view) {
+    const active = view.draft.attachments.find((attachment) => attachment.id === view.draft.activeAttachmentId) || view.draft.attachments[0];
+    view.draft.activeAttachmentId = active?.id || "";
+    view.attachmentList.replaceChildren(...view.draft.attachments.map((attachment) => {
+      const row = element("li", "annotation-attachment");
+      const select = element("button", "button button-quiet", attachment.name);
+      select.type = "button";
+      select.setAttribute("aria-pressed", String(attachment.id === view.draft.activeAttachmentId));
+      select.addEventListener("click", () => {
+        view.draft.activeAttachmentId = attachment.id;
+        renderAnnotationEditor(view);
+      });
+      const remove = element("button", "button button-quiet", "Remove");
+      remove.type = "button";
+      remove.setAttribute("aria-label", `Remove ${attachment.name}`);
+      remove.addEventListener("click", () => {
+        view.draft.attachments = view.draft.attachments.filter((item) => item.id !== attachment.id);
+        view.draft.annotations = view.draft.annotations.filter((item) => item.attachmentId !== attachment.id);
+        view.draft.activeAttachmentId = view.draft.attachments[0]?.id || "";
+        renderAnnotationEditor(view);
+      });
+      row.append(select, remove);
+      return row;
+    }));
+    view.annotationStage.hidden = !active;
+    view.annotationUndo.disabled = !view.annotationPast.length;
+    view.annotationRedo.disabled = !view.annotationFuture.length;
+    view.annotationClear.disabled = !view.draft.annotations.some((item) => item.attachmentId === active?.id);
+    view.annotationToolButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.tool === view.draft.annotationTool)));
+    if (!active) return;
+    view.annotationImage.src = active.previewUrl;
+    view.annotationSvg.replaceChildren(annotationSvgElement("defs"));
+    const defs = view.annotationSvg.querySelector("defs");
+    const marker = annotationSvgElement("marker", { id: "annotation-arrow", markerWidth: "6", markerHeight: "6", refX: "5", refY: "3", orient: "auto", markerUnits: "strokeWidth" });
+    marker.append(annotationSvgElement("path", { d: "M 0 0 L 6 3 L 0 6 z", fill: view.annotationColor.value }));
+    defs.append(marker);
+    for (const annotation of view.draft.annotations.filter((item) => item.attachmentId === active.id)) view.annotationSvg.append(renderAnnotationMark(annotation));
+    if (view.annotationPreview) view.annotationSvg.append(renderAnnotationMark({ ...view.annotationPreview, attachmentId: active.id }));
+  }
+
+  function setAnnotations(view, annotations) {
+    view.annotationPast.push(JSON.stringify(view.draft.annotations));
+    view.annotationFuture = [];
+    view.draft.annotations = copyAnnotations(annotations);
+    renderAnnotationEditor(view);
+  }
+
+  function createAnnotationEditor(view, prefix) {
+    const feedback = element("section", "approval-feedback");
+    feedback.append(element("h4", "", "Visual feedback (optional)"), element("p", "muted", "Upload a reference image, then mark it without changing the original. Marks and attachments are submitted only with this decision."));
+    const uploadLabel = element("label", "", "Attach images");
+    const upload = element("input");
+    upload.type = "file";
+    upload.accept = "image/png,image/jpeg,image/gif,image/webp";
+    upload.multiple = true;
+    upload.id = `${prefix}-attachments`;
+    uploadLabel.htmlFor = upload.id;
+    uploadLabel.append(upload);
+    const attachmentList = element("ul", "annotation-attachments");
+    const toolbar = element("div", "annotation-toolbar");
+    const toolButtons = ANNOTATION_TOOLS.map(([tool, label]) => {
+      const button = element("button", "button button-quiet", label);
+      button.type = "button";
+      button.dataset.tool = tool;
+      button.setAttribute("aria-pressed", String(tool === "arrow"));
+      button.addEventListener("click", () => {
+        view.draft.annotationTool = tool;
+        renderAnnotationEditor(view);
+      });
+      toolbar.append(button);
+      return button;
+    });
+    const colorLabel = element("label", "annotation-color", "Color");
+    const color = element("input");
+    color.type = "color";
+    color.value = "#ff5c7a";
+    colorLabel.append(color);
+    const textLabel = element("label", "annotation-text", "Text");
+    const text = element("input");
+    text.type = "text";
+    text.maxLength = 500;
+    text.placeholder = "Text mark";
+    textLabel.append(text);
+    const undo = element("button", "button button-quiet", "Undo");
+    const redo = element("button", "button button-quiet", "Redo");
+    const clear = element("button", "button button-quiet", "Clear marks");
+    for (const button of [undo, redo, clear]) button.type = "button";
+    toolbar.append(colorLabel, textLabel, undo, redo, clear);
+    const stage = element("div", "annotation-stage");
+    stage.tabIndex = 0;
+    stage.setAttribute("role", "application");
+    stage.setAttribute("aria-label", "Image annotation canvas");
+    const image = element("img");
+    image.alt = "Uploaded feedback image";
+    const svg = annotationSvgElement("svg", { viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true" });
+    stage.append(image, svg);
+    feedback.append(uploadLabel, attachmentList, toolbar, stage);
+    view.feedback = feedback;
+    view.attachmentUpload = upload;
+    view.attachmentList = attachmentList;
+    view.annotationToolButtons = toolButtons;
+    view.annotationColor = color;
+    view.annotationText = text;
+    view.annotationUndo = undo;
+    view.annotationRedo = redo;
+    view.annotationClear = clear;
+    view.annotationStage = stage;
+    view.annotationImage = image;
+    view.annotationSvg = svg;
+    view.annotationPast = [];
+    view.annotationFuture = [];
+    view.annotationPreview = null;
+    upload.addEventListener("change", () => {
+      const files = [...upload.files];
+      for (const file of files) {
+        if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type) || file.size > 2 * 1024 * 1024) {
+          view.message.hidden = false;
+          view.message.dataset.state = "error";
+          view.message.textContent = "Only PNG, JPEG, GIF, and WebP images up to 2 MB can be attached.";
+          continue;
+        }
+        const reader = new FileReader();
+        reader.addEventListener("load", () => {
+          const previewUrl = String(reader.result);
+          const data = previewUrl.split(",", 2)[1] || "";
+          const id = `attachment-${++view.draft.attachmentSequence}`;
+          view.draft.attachments.push({ id, name: file.name, mimeType: file.type, data, previewUrl });
+          view.draft.activeAttachmentId = id;
+          renderAnnotationEditor(view);
+        });
+        reader.readAsDataURL(file);
+      }
+      upload.value = "";
+    });
+    stage.addEventListener("pointerdown", (event) => {
+      const active = view.draft.attachments.find((item) => item.id === view.draft.activeAttachmentId);
+      if (stage.dataset.disabled === "true" || !active) return;
+      const point = annotationPoint(event, stage);
+      view.annotationPreview = { attachmentId: active.id, tool: view.draft.annotationTool, points: [point], text: text.value.trim(), color: color.value, width: 3 };
+      stage.setPointerCapture(event.pointerId);
+      renderAnnotationEditor(view);
+    });
+    stage.addEventListener("pointermove", (event) => {
+      if (!view.annotationPreview) return;
+      view.annotationPreview.points.push(annotationPoint(event, stage));
+      renderAnnotationEditor(view);
+    });
+    stage.addEventListener("pointerup", () => {
+      if (!view.annotationPreview) return;
+      const mark = view.annotationPreview;
+      view.annotationPreview = null;
+      if (mark.tool === "text") mark.points = [mark.points[0]];
+      if (mark.points.length < 2 && mark.tool !== "text") return renderAnnotationEditor(view);
+      setAnnotations(view, [...view.draft.annotations, mark]);
+    });
+    undo.addEventListener("click", () => {
+      if (!view.annotationPast.length) return;
+      view.annotationFuture.unshift(JSON.stringify(view.draft.annotations));
+      view.draft.annotations = JSON.parse(view.annotationPast.pop());
+      renderAnnotationEditor(view);
+    });
+    redo.addEventListener("click", () => {
+      if (!view.annotationFuture.length) return;
+      view.annotationPast.push(JSON.stringify(view.draft.annotations));
+      view.draft.annotations = JSON.parse(view.annotationFuture.shift());
+      renderAnnotationEditor(view);
+    });
+    clear.addEventListener("click", () => setAnnotations(view, view.draft.annotations.filter((item) => item.attachmentId !== view.draft.activeAttachmentId)));
+    renderAnnotationEditor(view);
+    return feedback;
+  }
+
   function createApprovalView(request) {
     const prefix = `approval-${++approvalSequence}`;
     const card = element("article", "approval-card");
@@ -676,8 +900,12 @@
       form, choices, options, outcomes, rationale, confirmation, stale, staleText,
       useCurrent, submit, availability, message, request, withdrawn: false,
       optionsKey: null, inputsKey: null,
-      draft: { inputsDigest: request.inputsDigest, optionId: "", outcome: "", rationale: "", reviewed: false, submitting: false, conflict: false, result: null },
+      draft: { inputsDigest: request.inputsDigest, optionId: "", outcome: "", rationale: "", reviewed: false,
+        submitting: false, conflict: false, result: null, attachments: [], annotations: [], activeAttachmentId: "",
+        annotationTool: "arrow", attachmentSequence: 0 },
     };
+    const feedback = createAnnotationEditor(view, prefix);
+    form.insertBefore(feedback, confirmationLabel);
     form.addEventListener("input", () => {
       view.draft.rationale = rationale.value;
       rationale.setCustomValidity("");
@@ -793,6 +1021,15 @@
     view.choices.disabled = draft.submitting || terminal || !guided || view.withdrawn;
     view.outcomes.disabled = draft.submitting || terminal || !guided || view.withdrawn;
     view.rationale.readOnly = draft.submitting || terminal || !guided || view.withdrawn;
+    const feedbackDisabled = draft.submitting || stale || terminal || !guided || view.withdrawn;
+    view.attachmentUpload.disabled = feedbackDisabled;
+    view.annotationToolButtons.forEach((button) => { button.disabled = feedbackDisabled; });
+    view.annotationColor.disabled = feedbackDisabled;
+    view.annotationText.readOnly = feedbackDisabled;
+    view.annotationUndo.disabled = feedbackDisabled || !view.annotationPast.length;
+    view.annotationRedo.disabled = feedbackDisabled || !view.annotationFuture.length;
+    view.annotationClear.disabled = feedbackDisabled || !draft.annotations.some((item) => item.attachmentId === draft.activeAttachmentId);
+    view.annotationStage.dataset.disabled = String(feedbackDisabled);
     view.confirmation.disabled = draft.submitting || stale || terminal || !guided;
     if (stale && draft.reviewed) {
       draft.reviewed = false;
@@ -919,6 +1156,12 @@
         meta.append(element("span", "", decision.recordedAt ? `Recorded time ${decision.recordedAt}` : "Timestamp not recorded"));
       }
       item.append(heading, meta, element("p", "decision-rationale", decision.rationale || "No rationale recorded."));
+      if (Array.isArray(decision.attachments) && decision.attachments.length) {
+        item.append(element("p", "decision-feedback-meta", `${decision.attachments.length} image attachment${decision.attachments.length === 1 ? "" : "s"} submitted`));
+      }
+      if (Array.isArray(decision.annotations) && decision.annotations.length) {
+        item.append(element("p", "decision-feedback-meta", `${decision.annotations.length} annotation${decision.annotations.length === 1 ? "" : "s"} submitted`));
+      }
       if (decision.optionId !== undefined) item.append(element("p", "monospace", `Chosen option ${decision.optionId}`));
       if (decision.inputsDigest !== undefined) {
         const details = element("details");
@@ -946,7 +1189,11 @@
       view.message.textContent = "A listed input digest, an available option, an outcome, and your review confirmation are required. No decision was submitted.";
       return;
     }
-    const payload = { id: request.id, inputsDigest: draft.inputsDigest, optionId: option.id, outcome: draft.outcome, rationale };
+    const payload = {
+      id: request.id, inputsDigest: draft.inputsDigest, optionId: option.id, outcome: draft.outcome, rationale,
+      attachments: draft.attachments.map(({ id, name, mimeType, data }) => ({ id, name, mimeType, data })),
+      annotations: draft.annotations,
+    };
     draft.submitting = true;
     view.message.hidden = false;
     view.message.dataset.state = "pending";
