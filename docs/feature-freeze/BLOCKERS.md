@@ -20,3 +20,8 @@ Archive and checksum publication cannot be crash-atomic across two filesystem re
 Dashboard capabilities grant access to their run. Use only trusted hosts/networks; plain LAN HTTP does not provide transport confidentiality. Do not publish capability URLs, private runtime records or credentials.
 
 No credentials, deployment access or irreversible action is needed to review this local delivery. Merge, publication and deployment remain deliberately unperformed, not passing acceptance checks.
+
+## Current verification blockers
+
+- Playwright Fast application QA is `PLAN_NOT_READY`/`NOT_RUN` because no application Playwright project is configured. Direct Python Chromium tests are separate evidence.
+- Alternate browser engines, Windows/macOS, native devices, production deployment and human UAT remain unverified or deferred.

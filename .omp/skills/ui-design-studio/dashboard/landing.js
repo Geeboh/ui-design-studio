@@ -11,6 +11,8 @@
   const rows = new Map();
   let timer = null;
   let requestController = null;
+  let openController = null;
+  let openControl = null;
   let stopped = false;
   let currentAddress = "";
   let addressSignature = "";
@@ -121,15 +123,24 @@
   async function openRun(run, control) {
     control.setAttribute("aria-disabled", "true");
     if (control.tagName === "BUTTON") control.disabled = true;
+    const controller = new AbortController();
+    openController = controller;
+    openControl = control;
     notice.textContent = "Opening the design run.";
     try {
-      const details = await request("/api/open", { run });
+      const details = await request("/api/open", { run }, controller);
+      if (stopped || openController !== controller) return;
       const destination = directAddress(details);
       if (!destination) throw new Error("The run has no usable dashboard address.");
       window.location.assign(destination);
     } catch (error) {
+      if (stopped || openController !== controller) return;
       showStatus(error.unauthorized ? "unauthorized" : "error", error.message || "The design run could not be opened.");
       if (error.unauthorized) hidePrivateData();
+    } finally {
+      if (openController !== controller) return;
+      openController = null;
+      openControl = null;
       control.removeAttribute("aria-disabled");
       if (control.tagName === "BUTTON") control.disabled = false;
     }
@@ -257,6 +268,13 @@
     window.clearTimeout(timer);
     requestController?.abort();
     requestController = null;
+    openController?.abort();
+    openController = null;
+    if (openControl) {
+      openControl.removeAttribute("aria-disabled");
+      if (openControl.tagName === "BUTTON") openControl.disabled = false;
+      openControl = null;
+    }
   });
   window.addEventListener("pageshow", (event) => {
     if (!event.persisted || !stopped) return;

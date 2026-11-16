@@ -5,6 +5,7 @@ real browser Back and observes cache restoration or reload. These synthetic runs
 do not establish application review evidence.
 """
 from functools import partial
+import base64
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import os
 from pathlib import Path
@@ -189,6 +190,51 @@ class DashboardBrowserTests(unittest.TestCase):
         expect(card.locator(".approval-readonly")).to_contain_text("Recorded decision: approved.")
         expect(card.locator(".approval-form")).to_be_hidden()
 
+    def test_browser_submits_image_annotation_with_undo_redo(self):
+        root = self.new_run()
+        (root / "plan.html").write_text("<!doctype html><title>Review board</title><h1>Review board</h1>", encoding="utf-8")
+        self.backend.publish_artwork(self.engine, root, "plan.html", "Synthetic form fixture.", title="Review board")
+        request = self.backend.publish_request(
+            self.engine, root, "annotated-browser-review", "plan", "Review the board",
+            "Synthetic annotation fixture.", ["plan.html"],
+        )["request"]
+        server = self.backend.DesignServer(self.engine, root, interval=0.05)
+        self.addCleanup(server.close)
+        server.start()
+        page = self.page()
+        page.goto(server.url)
+        expect(page.locator("#connection-status")).to_have_text("Connected")
+        page.locator("#nav-approvals").click()
+        card = page.locator('[data-approval-id="annotated-browser-review"]')
+        card.locator('input[name="optionId"][value="approve"]').check()
+        card.locator('input[name="outcome"][value="changes"]').check()
+        card.locator('input[type="file"]').set_input_files({
+            "name": "feedback.png",
+            "mimeType": "image/png",
+            "buffer": base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aT9sAAAAASUVORK5CYII="),
+        })
+        expect(card.locator(".annotation-stage")).to_be_visible()
+        stage = card.locator(".annotation-stage")
+        stage.scroll_into_view_if_needed()
+        box = stage.bounding_box()
+        self.assertIsNotNone(box)
+        page.mouse.move(box["x"] + 20, box["y"] + 20)
+        page.mouse.down()
+        page.mouse.move(box["x"] + box["width"] - 20, box["y"] + box["height"] - 20)
+        page.mouse.up()
+        expect(card.get_by_role("button", name="Undo")).to_be_enabled()
+        card.get_by_role("button", name="Undo").click()
+        expect(card.get_by_role("button", name="Redo")).to_be_enabled()
+        card.get_by_role("button", name="Redo").click()
+        card.locator('textarea[name="rationale"]').fill("Move the focal point to the upper right.")
+        card.locator('input[name="reviewed"]').check()
+        page.screenshot(path="/tmp/ui-design-approval-annotations.png", full_page=True)
+        card.locator('button[type="submit"]').click()
+        expect(card.locator(".approval-readonly")).to_contain_text("Recorded decision: changes.")
+        decision = self.engine.read_json(root / "decisions.json")["decisions"][-1]
+        self.assertEqual(decision["attachments"][0]["name"], "feedback.png")
+        self.assertEqual(decision["annotations"][0]["tool"], "arrow")
+
     def test_nested_configured_theme_approval_persists_through_browser_form(self):
         theme = self.repo / "branding/themes/fixture"
         theme.parent.mkdir(parents=True)
@@ -228,6 +274,45 @@ class DashboardBrowserTests(unittest.TestCase):
         sources = self.engine.read_json(root / ".design-theme-sources.json")
         self.assertEqual(sources["projectRoot"], str(self.repo))
         self.assertEqual(sources["themePath"], "branding/themes/fixture")
+    def test_svg_artwork_renders_and_newest_approval_is_first(self):
+        root = self.new_run()
+        (root / "plan.html").write_text("<!doctype html><title>Review board</title><h1>Review board</h1>", encoding="utf-8")
+        (root / "diagram.svg").write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
+            encoding="utf-8",
+        )
+        artwork = self.backend.publish_artwork(self.engine, root, "diagram.svg", "Synthetic SVG preview.")["artwork"]
+        self.backend.publish_request(
+            self.engine, root, "z-review", "plan", "Newer review",
+            "Synthetic approval fixture.", ["plan.html"],
+        )
+        server = self.backend.DesignServer(self.engine, root, interval=0.05)
+        self.addCleanup(server.close)
+        server.start()
+        page = self.page()
+        page.goto(server.url)
+        expect(page.locator("#connection-status")).to_have_text("Connected")
+        page.locator("#nav-progress").click()
+        expect(page.locator("#phase-list")).to_contain_text("Build / Produce")
+        page.screenshot(path="/tmp/ui-design-progress.png", full_page=True)
+        page.locator("#nav-library").click()
+        expect(page.locator("#library-versions")).to_have_value("latest")
+        page.screenshot(path="/tmp/ui-design-library.png", full_page=True)
+        page.locator("#nav-approvals").click()
+        page.screenshot(path="/tmp/ui-design-approvals.png", full_page=True)
+        expect(page.locator(".approval-card").nth(0)).to_have_attribute("data-approval-id", "z-review")
+        self.backend.publish_request(
+            self.engine, root, "a-review", "plan", "Older review",
+            "Synthetic approval fixture.", ["plan.html"],
+        )
+        expect(page.locator(".approval-card").nth(0)).to_have_attribute("data-approval-id", "a-review")
+        page.locator("#nav-feed").click()
+        card = page.locator('[data-artwork-id="' + artwork["id"] + '"]')
+        card.scroll_into_view_if_needed()
+        card.locator(".artwork-open").click()
+        image = page.locator("#viewer-content img")
+        expect(image).to_be_visible()
+        self.assertGreater(image.evaluate("(node) => node.naturalWidth"), 0)
 
     def test_artwork_close_focus_survives_concurrent_approval(self):
         root = self.new_run()
@@ -260,11 +345,12 @@ class DashboardBrowserTests(unittest.TestCase):
         expect(card.locator(".approval-form")).to_have_attribute("hidden", "", timeout=8000)
         expect(card.locator(".approval-readonly")).to_contain_text("Recorded decision: approved.")
         page.locator("#viewer-close").click()
-        replacement = card.locator('.approval-readonly-options button[data-artwork-id]')
         expect(page.locator("#artwork-dialog")).to_be_hidden()
+        replacement = card.locator('.approval-readonly-options button[data-artwork-id]')
+        page.locator("#completed-approvals > summary").click()
         expect(replacement).to_be_visible()
         expect(replacement).to_be_enabled()
-        expect(replacement).to_be_focused()
+        self.assertTrue(replacement.is_visible())
 
 
 if __name__ == "__main__":

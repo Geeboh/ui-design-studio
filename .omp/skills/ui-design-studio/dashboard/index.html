@@ -67,45 +67,53 @@
           </div>
           <p id="coverage-note" class="muted">Verification requires a mockup, implementation, and fresh passed QA evidence for each required case.</p>
         </section>
-        <section class="panel" aria-labelledby="gates-heading">
-          <div class="panel-heading"><h3 id="gates-heading">Acceptance gates</h3><span id="gate-count" class="muted">Not loaded</span></div>
-          <ol id="gate-list" class="gate-list"><li class="empty-state">Waiting for gate records.</li></ol>
+        <section class="panel" aria-labelledby="phase-heading">
+          <div class="panel-heading"><h3 id="phase-heading">Workflow phase</h3><span id="phase-summary" class="muted">Not loaded</span></div>
+          <ol id="phase-list" class="phase-list"><li class="empty-state">Waiting for phase records.</li></ol>
+          <progress id="phase-progress" max="5" value="0" hidden></progress>
         </section>
       </div>
 
-      <section class="panel next-panel" aria-labelledby="next-heading">
-        <h3 id="next-heading">Next action</h3>
-        <p id="next-action">Waiting for the director's progress record.</p>
-        <div class="notice-columns">
-          <div><h4>Blockers</h4><ul id="blocker-list" class="message-list"><li class="muted">Not loaded.</li></ul></div>
-          <div id="warnings-section" hidden><h4>Warnings</h4><ul id="warning-list" class="message-list"></ul></div>
-        </div>
+      <section class="panel" aria-labelledby="gates-heading">
+        <div class="panel-heading"><h3 id="gates-heading">Acceptance gates</h3><span id="gate-count" class="muted">Not loaded</span></div>
+        <ol id="gate-list" class="gate-list"><li class="empty-state">Waiting for gate records.</li></ol>
       </section>
 
-      <section class="panel" aria-labelledby="statistics-heading">
-        <div class="panel-heading"><h3 id="statistics-heading">Recorded statistics</h3><span class="muted">Actual counts only</span></div>
-        <dl id="statistics" class="statistics-grid">
-          <div><dt>Artwork versions</dt><dd data-stat="artworks">Not loaded</dd></div>
-          <div><dt>Workers</dt><dd data-stat="workers">Not loaded</dd></div>
-          <div><dt>Tasks</dt><dd data-stat="tasks">Not loaded</dd></div>
-          <div><dt>Evidence records</dt><dd data-stat="evidence">Not loaded</dd></div>
-          <div><dt>Passed evidence</dt><dd data-stat="passedEvidence">Not loaded</dd></div>
-          <div><dt>Elapsed time</dt><dd data-stat="elapsedSeconds">Not loaded</dd></div>
-        </dl>
-      </section>
+      <div class="progress-layout">
+        <section class="panel next-panel" aria-labelledby="next-heading">
+          <h3 id="next-heading">Next action</h3>
+          <p id="next-action">Waiting for the director's progress record.</p>
+          <div class="notice-columns">
+            <div><h4>Blockers</h4><ul id="blocker-list" class="message-list"><li class="muted">Not loaded.</li></ul></div>
+            <div id="warnings-section" hidden><h4>Warnings</h4><ul id="warning-list" class="message-list"></ul></div>
+          </div>
+        </section>
+        <section class="panel" aria-labelledby="statistics-heading">
+          <div class="panel-heading"><h3 id="statistics-heading">Recorded statistics</h3><span class="muted">Actual counts only</span></div>
+          <dl id="statistics" class="statistics-grid">
+            <div><dt>Artwork versions</dt><dd data-stat="artworks">Not loaded</dd></div>
+            <div><dt>Workers</dt><dd data-stat="workers">Not loaded</dd></div>
+            <div><dt>Tasks</dt><dd data-stat="tasks">Not loaded</dd></div>
+            <div><dt>Evidence records</dt><dd data-stat="evidence">Not loaded</dd></div>
+            <div><dt>Passed evidence</dt><dd data-stat="passedEvidence">Not loaded</dd></div>
+            <div><dt>Elapsed time</dt><dd data-stat="elapsedSeconds">Not loaded</dd></div>
+          </dl>
+        </section>
+      </div>
 
       <div class="work-layout">
         <section class="panel" aria-labelledby="workers-heading">
           <div class="panel-heading"><h3 id="workers-heading">Workers</h3><span id="worker-count" class="muted">Not loaded</span></div>
-          <p class="muted">Reported worker status is not proof of process liveness.</p>
-          <ul id="worker-list" class="work-list"><li class="empty-state">Waiting for worker records.</li></ul>
+          <p class="muted">No worker record means no worker status was published; liveness is never inferred.</p>
+          <ul id="worker-list" class="work-list"><li class="empty-state">No worker records published.</li></ul>
         </section>
         <section class="panel" aria-labelledby="tasks-heading">
           <div class="panel-heading"><h3 id="tasks-heading">Tasks</h3><span id="task-count" class="muted">Not loaded</span></div>
-          <p class="muted">Director records and available Pi Tasks state. No task status is inferred.</p>
-          <ul id="task-list" class="work-list"><li class="empty-state">Waiting for task records.</li></ul>
+          <p class="muted">No task record means no task status was published; completion is never inferred.</p>
+          <ul id="task-list" class="work-list"><li class="empty-state">No task records published.</li></ul>
         </section>
       </div>
+
 
       <section class="panel" aria-labelledby="history-heading">
         <div class="panel-heading"><h3 id="history-heading">Progress history</h3><span class="muted">Recorded changes, not a forecast</span></div>
@@ -135,7 +143,7 @@
       <form id="library-filters" class="library-filters" role="search" aria-label="Filter artwork library">
         <label class="search-field" for="library-search">Search artwork<input id="library-search" type="search" placeholder="Title, context, path, or version" autocomplete="off"></label>
         <label for="library-kind">Type<select id="library-kind"><option value="all">All types</option><option value="image">Images</option><option value="html">HTML mockups</option><option value="pdf">PDF documents</option></select></label>
-        <label for="library-versions">Versions<select id="library-versions"><option value="all">All versions</option><option value="latest">Latest per path</option></select></label>
+        <label for="library-versions">Versions<select id="library-versions"><option value="latest" selected>Latest per path</option><option value="all">All versions</option></select></label>
         <label for="library-sort">Sort<select id="library-sort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="title">Title</option></select></label>
       </form>
       <div class="library-summary"><p id="library-summary" class="muted" role="status">No artwork records loaded.</p><button id="library-clear" type="button" class="button button-quiet">Clear filters</button></div>
@@ -146,7 +154,20 @@
 
     <section id="approvals-panel" data-view-panel="approvals" aria-labelledby="approvals-heading" hidden aria-busy="true">
       <div class="section-heading"><div><p class="eyebrow">Digest-bound decisions</p><h2 id="approvals-heading" tabindex="-1">Approvals</h2><p id="approval-mode" class="muted">Run mode not loaded. No approval can be submitted.</p></div></div>
-      <div id="approval-list"><p class="empty-state">Waiting for approval requests.</p></div>
+      <div id="approval-list">
+        <section class="approval-group" aria-labelledby="live-approvals-heading">
+          <div class="panel-heading"><h3 id="live-approvals-heading">Live approvals</h3><span id="live-approval-count" class="muted">0 pending</span></div>
+          <div id="live-approval-list"><p class="empty-state">No live approvals.</p></div>
+        </section>
+        <details class="approval-group" id="completed-approvals">
+          <summary><span id="completed-approvals-heading">Completed approvals</span><span id="completed-approval-count" class="muted">0</span></summary>
+          <div id="completed-approval-list"><p class="empty-state">No completed approvals.</p></div>
+        </details>
+        <details class="approval-group" id="stale-approvals">
+          <summary><span id="stale-approvals-heading">Stale approvals</span><span id="stale-approval-count" class="muted">0</span></summary>
+          <div id="stale-approval-list"><p class="empty-state">No stale approvals.</p></div>
+        </details>
+      </div>
       <section class="panel decision-history" aria-labelledby="decisions-heading">
         <div class="panel-heading"><h3 id="decisions-heading" tabindex="-1">Recorded decisions</h3><span id="decision-count" class="muted">Not loaded</span></div>
         <p class="muted">Actual decision records, newest first. These records do not replace acceptance gates.</p>

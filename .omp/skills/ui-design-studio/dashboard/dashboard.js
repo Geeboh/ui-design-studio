@@ -113,7 +113,7 @@
     requireValue(Array.isArray(data.history) && data.history.every((point) => record(point) && date(point.at) && ["verified", "required", "passedGates"].every((key) => count(point[key]))), "History records are invalid.");
     requireValue(Array.isArray(data.artworks) && data.artworks.every((artwork) => record(artwork) && ["id", "path", "title", "context", "version", "url"].every((key) => text(artwork[key])) && ["image", "html", "pdf"].includes(artwork.kind) && date(artwork.createdAt)), "Artwork records are invalid.");
     requireValue(new Set(data.artworks.map((artwork) => artwork.id)).size === data.artworks.length, "Artwork IDs must identify unique retained versions.");
-    requireValue(Array.isArray(data.approvals) && data.approvals.every((request) => record(request) && ["id", "title", "context", "inputsDigest"].every((key) => text(request[key])) && ["plan", "design"].includes(request.stage) && strings(request.inputs) && ["pending", "approved", "rejected", "stale"].includes(request.status) && Array.isArray(request.options) && request.options.every((option) => record(option) && text(option.id) && text(option.label) && strings(option.artworkIds)) && new Set(request.options.map((option) => option.id)).size === request.options.length), "Approval requests are invalid.");
+    requireValue(Array.isArray(data.approvals) && data.approvals.every((request) => record(request) && ["id", "title", "context", "inputsDigest"].every((key) => text(request[key])) && (request.createdAt === undefined || date(request.createdAt)) && ["plan", "design"].includes(request.stage) && strings(request.inputs) && ["pending", "approved", "changes", "rejected", "stale"].includes(request.status) && Array.isArray(request.options) && request.options.every((option) => record(option) && text(option.id) && text(option.label) && strings(option.artworkIds)) && new Set(request.options.map((option) => option.id)).size === request.options.length), "Approval requests are invalid.");
     requireValue(new Set(data.approvals.map((request) => request.id)).size === data.approvals.length, "Approval request IDs are duplicated.");
     requireValue(data.decisions === undefined || (Array.isArray(data.decisions) && data.decisions.every((decision) => record(decision) && ["stage", "actor", "outcome", "rationale"].every((key) => text(decision[key])) && ["recordedAt", "optionId", "inputsDigest"].every((key) => decision[key] === undefined || text(decision[key])))), "Recorded decisions are invalid.");
     return data;
@@ -218,7 +218,7 @@
         throw error;
       }
       const snapshot = validateSnapshot(await response.json());
-      if (state.stopped || token !== state.token) return;
+      if (state.stopped || token !== state.token || state.requestController !== controller) return;
       state.snapshot = snapshot;
       // Preserve publication order without truncating submillisecond version timestamps.
       state.artworks = snapshot.artworks.slice().reverse();
@@ -227,7 +227,7 @@
       state.failure = null;
       renderSnapshot();
     } catch (error) {
-      if (!state.stopped && token === state.token) {
+      if (!state.stopped && token === state.token && state.requestController === controller) {
         state.failure = {
           kind: error.kind || "error",
           message: error.name === "AbortError" ? "The snapshot request timed out." : error.message || "The snapshot request failed.",
@@ -235,6 +235,7 @@
       }
     } finally {
       clearTimeout(deadline);
+      if (state.requestController !== controller) return;
       state.inFlight = false;
       state.requestController = null;
       updateConnection();
@@ -274,7 +275,25 @@
     progress.setAttribute("aria-valuetext", `${numberFormat.format(value)} of ${numberFormat.format(required)} required cases`);
   }
 
+  function renderPhaseProgress(snapshot) {
+    const phases = ["assessment", "plan", "design", "produce", "finalize"];
+    const labels = ["Assessment", "Plan", "Design", "Build / Produce", "Finalize"];
+    const current = phases.indexOf(snapshot.run.phase);
+    const completed = snapshot.run.status === "passed" ? phases.length : Math.max(0, current);
+    const list = phases.map((phase, index) => {
+      const item = element("li", index < completed ? "phase-done" : index === current ? "phase-active" : "phase-pending");
+      item.append(element("span", "phase-label", labels[index]), badge(index < completed ? "passed" : index === current ? "active" : "pending"));
+      return item;
+    });
+    byId("phase-list").replaceChildren(...list);
+    byId("phase-progress").hidden = false;
+    byId("phase-progress").value = snapshot.run.status === "passed" ? phases.length : Math.max(0, current + 1);
+    byId("phase-progress").setAttribute("aria-valuetext", `${labels[Math.max(0, current)] || "Unknown"} phase; ${completed} of ${phases.length} phases completed`);
+    byId("phase-summary").textContent = current < 0 ? "Phase unverified" : `${labels[current]} active · ${completed} of ${phases.length} complete`;
+  }
+
   function renderProgress(snapshot) {
+    renderPhaseProgress(snapshot);
     const coverage = snapshot.coverage;
     renderCoverage("mockup", coverage.mockups, coverage.required);
     renderCoverage("verified", coverage.verified, coverage.required);
@@ -374,7 +393,13 @@
     svg.append(svgElement("text", { x: 48, y: 211, "text-anchor": "end", class: "history-label" }, "0"));
     svg.append(svgElement("text", { x: 48, y: 41, "text-anchor": "end", class: "history-label" }, numberFormat.format(maximum)));
     for (const [field, className] of [["required", "history-required"], ["verified", "history-verified"]]) {
-      if (points.length > 1) svg.append(svgElement("polyline", { points: points.map((point) => `${x(point)},${y(point[field])}`).join(" "), class: className }));
+      if (points.length > 1) {
+        const path = points.map((point, index) => {
+          if (index === 0) return `M ${x(point)} ${y(point[field])}`;
+          return `H ${x(point)} V ${y(point[field])}`;
+        }).join(" ");
+        svg.append(svgElement("path", { d: path, class: `${className} history-line` }));
+      }
       for (const point of points) {
         const mark = svgElement("circle", { cx: x(point), cy: y(point[field]), r: field === "verified" ? 3.5 : 2.5, class: field === "verified" ? "history-point" : "history-required" });
         mark.append(svgElement("title", {}, `${formatTime(point.at)} · ${field} ${point[field]}`));
@@ -571,6 +596,230 @@
     }
   }
 
+  const ANNOTATION_TOOLS = [
+    ["arrow", "Arrow"],
+    ["line", "Line"],
+    ["curve", "Curve"],
+    ["rectangle", "Rectangle"],
+    ["ellipse", "Ellipse"],
+    ["text", "Text"],
+  ];
+
+  function annotationSvgElement(tag, attributes = {}, text) {
+    const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function annotationPoint(event, stage) {
+    const bounds = stage.getBoundingClientRect();
+    return [
+      Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)),
+      Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)),
+    ];
+  }
+
+  function copyAnnotations(annotations) {
+    return annotations.map((annotation) => ({ ...annotation, points: annotation.points.map((point) => [...point]) }));
+  }
+
+  function annotationPath(points) {
+    return points.map(([x, y], index) => `${index ? "L" : "M"} ${x * 100} ${y * 100}`).join(" ");
+  }
+
+  function renderAnnotationMark(annotation) {
+    const [first, second = first] = annotation.points;
+    const attrs = { stroke: annotation.color, "stroke-width": String(annotation.width / 2), fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" };
+    if (annotation.tool === "arrow" || annotation.tool === "line") {
+      const line = annotationSvgElement("line", { ...attrs, x1: first[0] * 100, y1: first[1] * 100, x2: second[0] * 100, y2: second[1] * 100 });
+      if (annotation.tool === "arrow") line.setAttribute("marker-end", "url(#annotation-arrow)");
+      return line;
+    }
+    if (annotation.tool === "curve") return annotationSvgElement("path", { ...attrs, d: annotationPath(annotation.points) });
+    if (annotation.tool === "rectangle") {
+      return annotationSvgElement("rect", { ...attrs, x: Math.min(first[0], second[0]) * 100, y: Math.min(first[1], second[1]) * 100,
+        width: Math.abs(second[0] - first[0]) * 100, height: Math.abs(second[1] - first[1]) * 100 });
+    }
+    if (annotation.tool === "ellipse") {
+      return annotationSvgElement("ellipse", { ...attrs, cx: ((first[0] + second[0]) / 2) * 100, cy: ((first[1] + second[1]) / 2) * 100,
+        rx: Math.abs(second[0] - first[0]) * 50, ry: Math.abs(second[1] - first[1]) * 50 });
+    }
+    return annotationSvgElement("text", { x: first[0] * 100, y: first[1] * 100, fill: annotation.color, "font-size": "4", "font-family": "sans-serif" }, annotation.text);
+  }
+
+  function renderAnnotationEditor(view) {
+    const active = view.draft.attachments.find((attachment) => attachment.id === view.draft.activeAttachmentId) || view.draft.attachments[0];
+    view.draft.activeAttachmentId = active?.id || "";
+    view.attachmentList.replaceChildren(...view.draft.attachments.map((attachment) => {
+      const row = element("li", "annotation-attachment");
+      const select = element("button", "button button-quiet", attachment.name);
+      select.type = "button";
+      select.setAttribute("aria-pressed", String(attachment.id === view.draft.activeAttachmentId));
+      select.addEventListener("click", () => {
+        view.draft.activeAttachmentId = attachment.id;
+        renderAnnotationEditor(view);
+      });
+      const remove = element("button", "button button-quiet", "Remove");
+      remove.type = "button";
+      remove.setAttribute("aria-label", `Remove ${attachment.name}`);
+      remove.addEventListener("click", () => {
+        view.draft.attachments = view.draft.attachments.filter((item) => item.id !== attachment.id);
+        view.draft.annotations = view.draft.annotations.filter((item) => item.attachmentId !== attachment.id);
+        view.draft.activeAttachmentId = view.draft.attachments[0]?.id || "";
+        renderAnnotationEditor(view);
+      });
+      row.append(select, remove);
+      return row;
+    }));
+    view.annotationStage.hidden = !active;
+    view.annotationUndo.disabled = !view.annotationPast.length;
+    view.annotationRedo.disabled = !view.annotationFuture.length;
+    view.annotationClear.disabled = !view.draft.annotations.some((item) => item.attachmentId === active?.id);
+    view.annotationToolButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.tool === view.draft.annotationTool)));
+    if (!active) return;
+    view.annotationImage.src = active.previewUrl;
+    view.annotationSvg.replaceChildren(annotationSvgElement("defs"));
+    const defs = view.annotationSvg.querySelector("defs");
+    const marker = annotationSvgElement("marker", { id: "annotation-arrow", markerWidth: "6", markerHeight: "6", refX: "5", refY: "3", orient: "auto", markerUnits: "strokeWidth" });
+    marker.append(annotationSvgElement("path", { d: "M 0 0 L 6 3 L 0 6 z", fill: view.annotationColor.value }));
+    defs.append(marker);
+    for (const annotation of view.draft.annotations.filter((item) => item.attachmentId === active.id)) view.annotationSvg.append(renderAnnotationMark(annotation));
+    if (view.annotationPreview) view.annotationSvg.append(renderAnnotationMark({ ...view.annotationPreview, attachmentId: active.id }));
+  }
+
+  function setAnnotations(view, annotations) {
+    view.annotationPast.push(JSON.stringify(view.draft.annotations));
+    view.annotationFuture = [];
+    view.draft.annotations = copyAnnotations(annotations);
+    renderAnnotationEditor(view);
+  }
+
+  function createAnnotationEditor(view, prefix) {
+    const feedback = element("section", "approval-feedback");
+    feedback.append(element("h4", "", "Visual feedback (optional)"), element("p", "muted", "Upload a reference image, then mark it without changing the original. Marks and attachments are submitted only with this decision."));
+    const uploadLabel = element("label", "", "Attach images");
+    const upload = element("input");
+    upload.type = "file";
+    upload.accept = "image/png,image/jpeg,image/gif,image/webp";
+    upload.multiple = true;
+    upload.id = `${prefix}-attachments`;
+    uploadLabel.htmlFor = upload.id;
+    uploadLabel.append(upload);
+    const attachmentList = element("ul", "annotation-attachments");
+    const toolbar = element("div", "annotation-toolbar");
+    const toolButtons = ANNOTATION_TOOLS.map(([tool, label]) => {
+      const button = element("button", "button button-quiet", label);
+      button.type = "button";
+      button.dataset.tool = tool;
+      button.setAttribute("aria-pressed", String(tool === "arrow"));
+      button.addEventListener("click", () => {
+        view.draft.annotationTool = tool;
+        renderAnnotationEditor(view);
+      });
+      toolbar.append(button);
+      return button;
+    });
+    const colorLabel = element("label", "annotation-color", "Color");
+    const color = element("input");
+    color.type = "color";
+    color.value = "#ff5c7a";
+    colorLabel.append(color);
+    const textLabel = element("label", "annotation-text", "Text");
+    const text = element("input");
+    text.type = "text";
+    text.maxLength = 500;
+    text.placeholder = "Text mark";
+    textLabel.append(text);
+    const undo = element("button", "button button-quiet", "Undo");
+    const redo = element("button", "button button-quiet", "Redo");
+    const clear = element("button", "button button-quiet", "Clear marks");
+    for (const button of [undo, redo, clear]) button.type = "button";
+    toolbar.append(colorLabel, textLabel, undo, redo, clear);
+    const stage = element("div", "annotation-stage");
+    stage.tabIndex = 0;
+    stage.setAttribute("role", "application");
+    stage.setAttribute("aria-label", "Image annotation canvas");
+    const image = element("img");
+    image.alt = "Uploaded feedback image";
+    const svg = annotationSvgElement("svg", { viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true" });
+    stage.append(image, svg);
+    feedback.append(uploadLabel, attachmentList, toolbar, stage);
+    view.feedback = feedback;
+    view.attachmentUpload = upload;
+    view.attachmentList = attachmentList;
+    view.annotationToolButtons = toolButtons;
+    view.annotationColor = color;
+    view.annotationText = text;
+    view.annotationUndo = undo;
+    view.annotationRedo = redo;
+    view.annotationClear = clear;
+    view.annotationStage = stage;
+    view.annotationImage = image;
+    view.annotationSvg = svg;
+    view.annotationPast = [];
+    view.annotationFuture = [];
+    view.annotationPreview = null;
+    upload.addEventListener("change", () => {
+      const files = [...upload.files];
+      for (const file of files) {
+        if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type) || file.size > 2 * 1024 * 1024) {
+          view.message.hidden = false;
+          view.message.dataset.state = "error";
+          view.message.textContent = "Only PNG, JPEG, GIF, and WebP images up to 2 MB can be attached.";
+          continue;
+        }
+        const reader = new FileReader();
+        reader.addEventListener("load", () => {
+          const previewUrl = String(reader.result);
+          const data = previewUrl.split(",", 2)[1] || "";
+          const id = `attachment-${++view.draft.attachmentSequence}`;
+          view.draft.attachments.push({ id, name: file.name, mimeType: file.type, data, previewUrl });
+          view.draft.activeAttachmentId = id;
+          renderAnnotationEditor(view);
+        });
+        reader.readAsDataURL(file);
+      }
+      upload.value = "";
+    });
+    stage.addEventListener("pointerdown", (event) => {
+      const active = view.draft.attachments.find((item) => item.id === view.draft.activeAttachmentId);
+      if (stage.dataset.disabled === "true" || !active) return;
+      const point = annotationPoint(event, stage);
+      view.annotationPreview = { attachmentId: active.id, tool: view.draft.annotationTool, points: [point], text: text.value.trim(), color: color.value, width: 3 };
+      stage.setPointerCapture(event.pointerId);
+      renderAnnotationEditor(view);
+    });
+    stage.addEventListener("pointermove", (event) => {
+      if (!view.annotationPreview) return;
+      view.annotationPreview.points.push(annotationPoint(event, stage));
+      renderAnnotationEditor(view);
+    });
+    stage.addEventListener("pointerup", () => {
+      if (!view.annotationPreview) return;
+      const mark = view.annotationPreview;
+      view.annotationPreview = null;
+      if (mark.tool === "text") mark.points = [mark.points[0]];
+      if (mark.points.length < 2 && mark.tool !== "text") return renderAnnotationEditor(view);
+      setAnnotations(view, [...view.draft.annotations, mark]);
+    });
+    undo.addEventListener("click", () => {
+      if (!view.annotationPast.length) return;
+      view.annotationFuture.unshift(JSON.stringify(view.draft.annotations));
+      view.draft.annotations = JSON.parse(view.annotationPast.pop());
+      renderAnnotationEditor(view);
+    });
+    redo.addEventListener("click", () => {
+      if (!view.annotationFuture.length) return;
+      view.annotationPast.push(JSON.stringify(view.draft.annotations));
+      view.draft.annotations = JSON.parse(view.annotationFuture.shift());
+      renderAnnotationEditor(view);
+    });
+    clear.addEventListener("click", () => setAnnotations(view, view.draft.annotations.filter((item) => item.attachmentId !== view.draft.activeAttachmentId)));
+    renderAnnotationEditor(view);
+    return feedback;
+  }
+
   function createApprovalView(request) {
     const prefix = `approval-${++approvalSequence}`;
     const card = element("article", "approval-card");
@@ -603,7 +852,7 @@
     const outcomes = element("fieldset");
     outcomes.append(element("legend", "", "2. Choose the decision outcome"));
     const outcomesRow = element("div", "approval-outcomes");
-    for (const [value, label] of [["approved", "Approve the selected option"], ["rejected", "Request changes to the selected option"]]) {
+    for (const [value, label] of [["approved", "Approve current artifacts"], ["changes", "Approve with changes"], ["rejected", "Reject and request changes"]]) {
       const row = element("label", "outcome-label");
       const input = element("input");
       input.type = "radio";
@@ -614,14 +863,14 @@
       outcomesRow.append(row);
     }
     outcomes.append(outcomesRow);
-    const rationaleLabel = element("label", "", "3. Explain your decision");
+    const rationaleLabel = element("label", "", "3. Feedback (required for changes or rejection)");
     const rationale = element("textarea");
     rationale.name = "rationale";
-    rationale.required = true;
+    rationale.required = false;
     rationale.rows = 4;
     rationale.id = `${prefix}-rationale`;
     rationaleLabel.htmlFor = rationale.id;
-    rationale.placeholder = "State why this option is approved or what needs to change.";
+    rationale.placeholder = "Optional for approval. Describe required changes or rejection feedback.";
     rationaleLabel.append(rationale);
     const confirmationLabel = element("label", "review-confirmation");
     const confirmation = element("input");
@@ -651,8 +900,12 @@
       form, choices, options, outcomes, rationale, confirmation, stale, staleText,
       useCurrent, submit, availability, message, request, withdrawn: false,
       optionsKey: null, inputsKey: null,
-      draft: { inputsDigest: request.inputsDigest, optionId: "", outcome: "", rationale: "", reviewed: false, submitting: false, conflict: false, result: null },
+      draft: { inputsDigest: request.inputsDigest, optionId: "", outcome: "", rationale: "", reviewed: false,
+        submitting: false, conflict: false, result: null, attachments: [], annotations: [], activeAttachmentId: "",
+        annotationTool: "arrow", attachmentSequence: 0 },
     };
+    const feedback = createAnnotationEditor(view, prefix);
+    form.insertBefore(feedback, confirmationLabel);
     form.addEventListener("input", () => {
       view.draft.rationale = rationale.value;
       rationale.setCustomValidity("");
@@ -751,7 +1004,7 @@
     const request = view.request;
     const draft = view.draft;
     const guided = state.snapshot.run.mode === "guided";
-    const terminal = ["approved", "rejected"].includes(request.status);
+    const terminal = ["approved", "changes", "rejected"].includes(request.status);
     const recorded = draft.result?.inputsDigest === request.inputsDigest;
     const changed = request.inputsDigest !== draft.inputsDigest;
     const stale = request.status === "stale" || changed || draft.conflict || view.withdrawn;
@@ -768,6 +1021,15 @@
     view.choices.disabled = draft.submitting || terminal || !guided || view.withdrawn;
     view.outcomes.disabled = draft.submitting || terminal || !guided || view.withdrawn;
     view.rationale.readOnly = draft.submitting || terminal || !guided || view.withdrawn;
+    const feedbackDisabled = draft.submitting || stale || terminal || !guided || view.withdrawn;
+    view.attachmentUpload.disabled = feedbackDisabled;
+    view.annotationToolButtons.forEach((button) => { button.disabled = feedbackDisabled; });
+    view.annotationColor.disabled = feedbackDisabled;
+    view.annotationText.readOnly = feedbackDisabled;
+    view.annotationUndo.disabled = feedbackDisabled || !view.annotationPast.length;
+    view.annotationRedo.disabled = feedbackDisabled || !view.annotationFuture.length;
+    view.annotationClear.disabled = feedbackDisabled || !draft.annotations.some((item) => item.attachmentId === draft.activeAttachmentId);
+    view.annotationStage.dataset.disabled = String(feedbackDisabled);
     view.confirmation.disabled = draft.submitting || stale || terminal || !guided;
     if (stale && draft.reviewed) {
       draft.reviewed = false;
@@ -797,24 +1059,29 @@
   function renderApprovals(snapshot) {
     const guided = snapshot.run.mode === "guided";
     byId("approval-mode").textContent = guided
-      ? "Guided mode. Inspect the actual retained versions, choose an option, and record your reason. Changed inputs invalidate old approvals."
+      ? "Guided mode. Inspect retained versions, then approve, request changes, or reject each live item."
       : snapshot.run.mode === "yolo"
-        ? "Autonomous yolo mode. The director records its decisions and continues without waiting for user approval. Pending gates remain pending until evidence passes."
+        ? "Autonomous yolo mode. The director records its decisions and continues without waiting for user approval."
         : "Run mode is unverified. No user approval can be submitted.";
-    const pending = snapshot.approvals.filter((request) => request.status === "pending").length;
+    const approvals = snapshot.approvals.slice().sort((left, right) => (right.createdAt || "").localeCompare(left.createdAt || "")
+      || right.id.localeCompare(left.id));
+    const pending = approvals.filter((request) => request.status === "pending").length;
     byId("approval-count").hidden = !guided || pending === 0;
     byId("approval-count").textContent = String(pending);
     byId("approval-count").setAttribute("aria-label", `${pending} pending requests`);
-    const list = byId("approval-list");
-    if (!state.approvalViews.size) list.replaceChildren();
+    const lists = {
+      live: byId("live-approval-list"),
+      completed: byId("completed-approval-list"),
+      stale: byId("stale-approval-list"),
+    };
+    for (const root of Object.values(lists)) root.replaceChildren();
     const present = new Set();
-    for (const request of snapshot.approvals) {
+    for (const request of approvals) {
       present.add(request.id);
       let view = state.approvalViews.get(request.id);
       if (!view) {
         view = createApprovalView(request);
         state.approvalViews.set(request.id, view);
-        list.append(view.card);
       }
       view.request = request;
       view.withdrawn = false;
@@ -831,6 +1098,8 @@
       }
       updateApprovalOptions(view);
       updateApprovalAvailability(view);
+      const group = request.status === "pending" ? "live" : request.status === "stale" ? "stale" : "completed";
+      lists[group].append(view.card);
     }
     for (const [id, view] of state.approvalViews) {
       if (!present.has(id)) {
@@ -838,9 +1107,20 @@
         view.status.textContent = "Not in current snapshot";
         view.status.dataset.state = "stale";
         updateApprovalAvailability(view);
+        lists.stale.append(view.card);
       }
     }
-    if (!state.approvalViews.size) list.append(element("p", "empty-state", guided ? "No approval requests have been published. The dashboard does not create or assume an approval." : snapshot.run.mode === "yolo" ? "No approval requests are recorded. This autonomous run does not wait for user approvals." : "Approval requests are unavailable while run mode is unverified."));
+    const counts = {
+      live: lists.live.querySelectorAll(".approval-card").length,
+      completed: lists.completed.querySelectorAll(".approval-card").length,
+      stale: lists.stale.querySelectorAll(".approval-card").length,
+    };
+    byId("live-approval-count").textContent = `${counts.live} live`;
+    byId("completed-approval-count").textContent = String(counts.completed);
+    byId("stale-approval-count").textContent = String(counts.stale);
+    for (const [name, root] of Object.entries(lists)) {
+      if (!root.children.length) root.append(element("p", "empty-state", name === "live" ? "No live approvals." : name === "completed" ? "No completed approvals." : "No stale approvals."));
+    }
   }
 
   function renderDecisions(snapshot) {
@@ -876,6 +1156,12 @@
         meta.append(element("span", "", decision.recordedAt ? `Recorded time ${decision.recordedAt}` : "Timestamp not recorded"));
       }
       item.append(heading, meta, element("p", "decision-rationale", decision.rationale || "No rationale recorded."));
+      if (Array.isArray(decision.attachments) && decision.attachments.length) {
+        item.append(element("p", "decision-feedback-meta", `${decision.attachments.length} image attachment${decision.attachments.length === 1 ? "" : "s"} submitted`));
+      }
+      if (Array.isArray(decision.annotations) && decision.annotations.length) {
+        item.append(element("p", "decision-feedback-meta", `${decision.annotations.length} annotation${decision.annotations.length === 1 ? "" : "s"} submitted`));
+      }
       if (decision.optionId !== undefined) item.append(element("p", "monospace", `Chosen option ${decision.optionId}`));
       if (decision.inputsDigest !== undefined) {
         const details = element("details");
@@ -891,17 +1177,23 @@
     if (view.submit.disabled) return;
     const draft = view.draft;
     const request = view.request;
+    const needsFeedback = ["changes", "rejected"].includes(draft.outcome);
     const rationale = view.rationale.value.trim();
-    view.rationale.setCustomValidity(rationale ? "" : "Explain the decision before submitting.");
+    view.rationale.required = needsFeedback;
+    view.rationale.setCustomValidity(needsFeedback && !rationale ? "Explain what needs to change before submitting." : "");
     if (!view.form.reportValidity()) return;
     const option = request.options.find((item) => item.id === draft.optionId);
-    if (!option || !request.inputs.length || !draft.inputsDigest || !draft.reviewed || !["approved", "rejected"].includes(draft.outcome)) {
+    if (!option || !request.inputs.length || !draft.inputsDigest || !draft.reviewed || !["approved", "changes", "rejected"].includes(draft.outcome)) {
       view.message.hidden = false;
       view.message.dataset.state = "error";
       view.message.textContent = "A listed input digest, an available option, an outcome, and your review confirmation are required. No decision was submitted.";
       return;
     }
-    const payload = { id: request.id, inputsDigest: draft.inputsDigest, optionId: option.id, outcome: draft.outcome, rationale };
+    const payload = {
+      id: request.id, inputsDigest: draft.inputsDigest, optionId: option.id, outcome: draft.outcome, rationale,
+      attachments: draft.attachments.map(({ id, name, mimeType, data }) => ({ id, name, mimeType, data })),
+      annotations: draft.annotations,
+    };
     draft.submitting = true;
     view.message.hidden = false;
     view.message.dataset.state = "pending";
@@ -930,7 +1222,9 @@
         view.message.dataset.state = payload.outcome;
         view.message.textContent = payload.outcome === "approved"
           ? "Decision recorded as approved for the reviewed digest. Acceptance gates still require their own evidence."
-          : "Decision recorded as rejected for the reviewed digest. Your request for changes was saved.";
+          : payload.outcome === "changes"
+            ? "Approval-with-changes recorded for the reviewed digest. The requested feedback was saved."
+            : "Decision recorded as rejected for the reviewed digest. Your request for changes was saved.";
       }
     } catch (error) {
       view.message.dataset.state = "error";
@@ -1169,6 +1463,9 @@
     clearTimeout(state.pollTimer);
     clearInterval(ageTimer);
     state.requestController?.abort();
+    state.requestController = null;
+    state.inFlight = false;
+    state.refreshQueued = false;
     previewObserver?.disconnect();
     previewResize?.disconnect();
     viewerResize?.disconnect();

@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import tempfile
 import subprocess
 import sys
 
@@ -86,6 +87,11 @@ def install(home: Path) -> tuple[Path, Path]:
         except BaseException:
             shutil.rmtree(prefix)
             raise
+    rollback = None
+    if owned:
+        rollback = Path(tempfile.mkdtemp(prefix=".ui-design-mcp-backup-", dir=prefix.parent))
+        rollback.rmdir()
+        shutil.copytree(prefix, rollback, symlinks=True)
     try:
         preflight(prefix, user_bin)
         subprocess.run([str(prefix / "bin/python"), "-m", "pip", "--isolated", "install", "--upgrade", str(PACKAGE)],
@@ -107,7 +113,17 @@ def install(home: Path) -> tuple[Path, Path]:
                 if link.is_symlink() and os.readlink(link) == str(prefix / "bin" / name):
                     link.unlink()
             shutil.rmtree(prefix)
+        elif rollback is not None:
+            try:
+                shutil.rmtree(prefix)
+                os.replace(rollback, prefix)
+                rollback = None
+            except BaseException as restore_error:
+                raise InstallError("Owned MCP upgrade failed and rollback failed") from restore_error
         raise
+    finally:
+        if rollback is not None:
+            shutil.rmtree(rollback, ignore_errors=True)
     return prefix, user_bin
 
 

@@ -185,6 +185,21 @@ class GlobalMCPInstallerTests(unittest.TestCase):
             self.install()
         self.assertEqual((snapshot(self.home), snapshot(outside)), before)
 
+    def test_failed_owned_upgrade_restores_previous_environment(self):
+        self.install()
+        before = snapshot(self.home)
+
+        def fail_upgrade(command, **kwargs):
+            if command[1:3] == ["-m", "pip"]:
+                (self.prefix / "mutated-by-failed-upgrade").write_text("must be removed\n", encoding="utf-8")
+                raise subprocess.CalledProcessError(1, command)
+            return self.external_install(command, **kwargs)
+
+        with mock.patch.object(installer.subprocess, "run", side_effect=fail_upgrade):
+            with self.assertRaises(subprocess.CalledProcessError):
+                installer.install(self.home)
+        self.assertEqual(snapshot(self.home), before)
+
     def test_failed_new_environment_or_pip_removes_owned_prefix(self):
         for failing_stage in ("venv", "pip"):
             with self.subTest(stage=failing_stage):

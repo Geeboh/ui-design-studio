@@ -381,9 +381,109 @@ class DesignServerTests(unittest.TestCase):
         self.assertTrue(decision["recordedAt"])
         self.assertEqual(self.request(server, "/api/approval", "POST", self.payload(request))[0], 409)
         snapshot = self.request(server)[2]
+
         self.assertEqual(snapshot["approvals"][0]["status"], "approved")
         self.assertEqual(snapshot["decisions"][-1]["actor"], "user")
         self.assertNotEqual(next(g for g in snapshot["gates"] if g["id"] == "finalize")["status"], "passed")
+
+    def test_approval_status_is_persisted_for_other_consumers(self):
+        request = self.plan("shared-review")
+        server = self.start()
+        self.assertEqual(self.request(server, "/api/approval", "POST", self.payload(request))[0], 200)
+        self.assertEqual(studio.read_json(self.root / "approval-requests/shared-review.json")["status"], "approved")
+    def test_rejected_approval_status_is_persisted_for_other_consumers(self):
+        request = self.plan("rejected-review")
+        server = self.start()
+        payload = self.payload(request, "request-changes", "rejected")
+        self.assertEqual(self.request(server, "/api/approval", "POST", payload)[0], 200)
+        self.assertEqual(studio.read_json(self.root / "approval-requests/rejected-review.json")["status"], "rejected")
+
+    def test_changes_approval_accepts_feedback_and_persists_terminal_status(self):
+        request = self.plan("changes-review")
+        server = self.start()
+        payload = self.payload(request, "approve", "changes")
+        payload["rationale"] = "Adjust spacing in the reviewed board."
+        self.assertEqual(self.request(server, "/api/approval", "POST", payload)[0], 200)
+        self.assertEqual(studio.read_json(self.root / "approval-requests/changes-review.json")["status"], "changes")
+        self.assertEqual(studio.read_json(self.root / "decisions.json")["decisions"][-1]["outcome"], "changes")
+    def test_approval_persists_image_attachment_and_annotations(self):
+        request = self.plan("annotated-review")
+        server = self.start()
+        payload = self.payload(request)
+        payload["attachments"] = [{
+            "id": "attachment-one",
+            "name": "feedback.png",
+            "mimeType": "image/png",
+            "data": base64.b64encode(PNG).decode("ascii"),
+        }]
+        payload["annotations"] = [{
+            "attachmentId": "attachment-one",
+            "tool": "arrow",
+            "points": [[0.1, 0.2], [0.8, 0.9]],
+            "color": "#ff5c7a",
+            "width": 3,
+        }]
+        code, unused, result = self.request(server, "/api/approval", "POST", payload)
+        self.assertEqual(code, 200)
+        decision = result["decision"]
+        self.assertEqual(decision["attachments"][0]["name"], "feedback.png")
+        self.assertEqual(decision["annotations"][0]["tool"], "arrow")
+        attachment = self.root / decision["attachments"][0]["path"]
+        self.assertEqual(attachment.read_bytes(), PNG)
+
+
+    def test_approval_order_uses_full_timestamp_before_id(self):
+        older = self.plan("z-review")
+        newer = self.plan("a-review")
+        for request, created_at in ((older, "2026-01-01T00:00:00.000001+00:00"),
+                                    (newer, "2026-01-01T00:00:00.000002+00:00")):
+            path = self.root / "approval-requests" / f"{request['id']}.json"
+            record = studio.read_json(path)
+            record["createdAt"] = created_at
+            write_json(path, record)
+        server = self.start()
+        approvals = self.request(server)[2]["approvals"]
+        self.assertEqual([item["id"] for item in approvals], ["a-review", "z-review"])
+
+    def test_approval_persistence_rolls_back_partial_write(self):
+        request = self.plan("transactional-review")
+        request_path = self.root / "approval-requests/transactional-review.json"
+        original_atomic = studio.atomic_json
+        failed = False
+
+        def fail_request_once(path, value):
+            nonlocal failed
+            if Path(path) == request_path and not failed:
+                failed = True
+                raise OSError("Synthetic request status write failure")
+            return original_atomic(path, value)
+
+        with mock.patch.object(studio, "atomic_json", side_effect=fail_request_once):
+            with self.assertRaises(OSError):
+                backend.approve(studio, self.root, self.payload(request))
+        self.assertEqual(studio.read_json(self.root / "decisions.json")["decisions"], [])
+        self.assertEqual(studio.read_json(request_path)["status"], "pending")
+        self.assertEqual(backend.approve(studio, self.root, self.payload(request))["status"], "PASS")
+
+    def test_approval_requests_are_newest_first(self):
+        older = self.plan("a-review")
+        newer = self.plan("z-review")
+        server = self.start()
+        approvals = self.request(server)[2]["approvals"]
+        self.assertEqual([item["id"] for item in approvals], [newer["id"], older["id"]])
+
+    def test_svg_preview_has_browser_renderable_media_type(self):
+        (self.root / "diagram.svg").write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
+            encoding="utf-8",
+        )
+        backend.publish_artwork(studio, self.root, "diagram.svg", "Synthetic SVG preview.")
+        server = self.start()
+        artwork = next(item for item in self.request(server)[2]["artworks"] if item["path"] == "diagram.svg")
+        code, headers, content = self.request(server, artwork["url"], authenticated=False)
+        self.assertEqual(code, 200)
+        self.assertEqual(headers["Content-Type"], "image/svg+xml")
+        self.assertIn(b"<svg", content)
 
     def test_html_css_image_and_font_changes_make_approval_stale(self):
         (self.root / "board.css").write_text('@import "palette.css"; @font-face{font-family:test;src:url(font.woff2)}', encoding="utf-8")

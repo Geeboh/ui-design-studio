@@ -22,3 +22,7 @@ The current remediation branch is `feature-freeze/2026-11-16-audit-unique` in `/
 | [Security evidence](SECURITY-EVIDENCE.json) | Current scan, dependency records and 77 source identities |
 
 `decisions.tsv` records material decisions. No default-branch merge, deployment or publication occurred during the original freeze audit. The later explicit ShipIt request authorizes one independently verified PR merge; package publication and deployment remain excluded.
+
+## Current checkout note
+
+Current revalidation runs on `main` at `5a3c603e4f95c884d5b0535eb4aa52c2a7ff62c4` (`v1.4.2`). The historical audit branch named above is not the active checkout. See [CONTINUATION](CONTINUATION.md), [MODEL-ROUTING](MODEL-ROUTING.md), [MODEL-ESCALATIONS](MODEL-ESCALATIONS.md), and [MODEL-USAGE](MODEL-USAGE.md) for current state.

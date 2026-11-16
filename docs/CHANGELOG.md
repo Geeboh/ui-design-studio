@@ -2,6 +2,15 @@
 
 ## 1.4.2 · 15 November 2026
 
+- Fixed SVG artwork previews by preserving the SVG namespace and serving an explicit `image/svg+xml` response.
+- Persisted terminal approval status for shared browser/console observers and displayed approval requests newest-first.
+- Added atomic rollback for shared approval/request persistence and failed owned global MCP upgrades.
+- Excluded dashboard runtime secrets from source archives and hardened release manifest publication.
+
+- Added explicit Build / Produce progress phase, clearer empty worker/task states, and stepped progress history.
+- Defaulted the library to Latest per path and grouped approvals into live, completed, and stale newest-first sections.
+- Added per-request approve, approve-with-changes, and reject outcomes; feedback is required only for changes or rejection.
+- Added digest-bound image attachments and non-destructive browser annotations with arrow, line, curve, rectangle, ellipse, text, undo, redo, and clear controls.
 - Blocked full-theme finalization and registration for bounded workflow scopes.
 - Required an applicable viewport for every declared critical coverage state.
 - Preserved explicitly empty worker-action allowlists.
@@ -23,7 +32,7 @@
 - Rejected whitespace self-review and unchecked quoted or variable CSS image sources.
 - Corrected shared-file resume consumers and transitive invalidation; legacy incomplete manifests require reviewed refresh.
 - Exercised real Chromium Back navigation and continued run polling while preserving authenticated no-store responses; recorded actual BFCache exclusion rather than claiming a persisted restore.
-- Added fresh redacted candidate dashboard, recorded approval, and retained artwork screenshots in [the release notes](RELEASE-v1.4.2.md).
+- Added fresh redacted candidate dashboard, recorded approval, retained artwork, and browser annotation screenshots in [the release notes](RELEASE-v1.4.2.md).
 
 ## 1.4.1 · 14 November 2026
 

@@ -18,9 +18,9 @@ There is no database, application migration framework, container deployment, or 
 
 ## Current tracked membership
 
-The final candidate source set has 140 paths, including four newly authored evidence and regression files.
-The original 116-path ledger omitted 17 audit records and three remediation regression modules.
-Those 20 paths and the four current additions now have explicit entries in [inspection.tsv](inspection.tsv).
+The current source set has 149 tracked or authored paths, excluding user-provided `AGENTS.md`.
+The original 116-path ledger omitted 17 audit records, three remediation regression modules, and four v1.4.2 release entries.
+Those 24 paths and the five current feature-freeze reports now have explicit entries in [inspection.tsv](inspection.tsv).
 This corrects FF-022 without changing the earlier baseline count.
 Current review partitions are engine/run server, adapter/landing server, distribution/installers, and workflow/documentation.
 The parent additionally read the complete dashboard and extension code and every new regression module.

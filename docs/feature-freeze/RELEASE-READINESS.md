@@ -39,3 +39,17 @@ Archive/checksum publication is recoverable after ordinary reported errors but n
 ## Shipping follow-up
 
 The user explicitly requested “Finish your work and ShipIt” after the audit. Shipping uses one normal GitHub PR into `main`, gated by an independent non-author parent/head consumer verdict. That PR records the exact verified head and final merge state. This authorization does not include force-push, package publication, production deployment or integration of the original checkout's separate user edits.
+
+## Current checkout revalidation
+
+This section supersedes historical branch/worktree identity claims for the active checkout only. Current HEAD is `5a3c603e4f95c884d5b0535eb4aa52c2a7ff62c4` on `main`, with current remediation changes for SVG previews, shared approval terminal state, newest-first approval ordering, installer rollback, release privacy and package integrity.
+
+Observed current checks:
+
+- Python: `312 passed, 212 subtests passed` with `.venv/bin/python -m pytest -q` and cached Chromium selected.
+- Node: `52 passed` with `node --experimental-strip-types --test tests/test_progress_extension.mjs`.
+- Browser: `8 passed` in the direct Python Playwright Chromium suite.
+- Ruff correctness subset, compile/syntax checks, benchmark and dependency/security scans passed.
+- Source ZIP: 137 archive entries, 136 source hashes, archive checksum, wheel and sdist passed.
+
+Playwright Fast returned `PLAN_NOT_READY`, `qaStatus=NOT_RUN`, and `runnable=false`: this Python project has no application Playwright config or Playwright test CLI. Firefox/WebKit, Windows/macOS, native devices, production deployment and human UAT remain unverified or deferred. This is not an unconditional release approval.

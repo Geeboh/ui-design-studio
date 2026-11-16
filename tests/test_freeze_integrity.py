@@ -94,6 +94,22 @@ class FreezeIntegrityTests(unittest.TestCase):
         self.assertEqual(resumed["changedDependencies"], [])
         self.assertEqual(resumed["staleNodes"], [])
         return manifest
+    def test_project_requirement_sources_invalidate_resume(self):
+        root = fixture_run(self.repo, self.theme)
+        source = self.repo / "requirements.md"
+        source.write_text("Synthetic project requirement source\n", encoding="utf-8")
+        record = studio.read_json(root / "run.json")
+        record["projectContext"]["sources"] = ["requirements.md"]
+        write_json(root / "run.json", record)
+        self._approve_current_run(root)
+        manifest = studio.write_resume_manifest(root, self.repo)
+        self.assertIn("requirements.md", {entry["path"] for entry in manifest["sources"]})
+        source.write_text("Changed synthetic project requirement source\n", encoding="utf-8")
+        resumed = studio.resume_check(root, current_environment=self.environment)
+        self.assertEqual(resumed["status"], "BLOCKED")
+        self.assertEqual({entry["path"] for entry in resumed["changedDependencies"]}, {"requirements.md"})
+        self.assertIn("project-context", resumed["staleNodes"])
+
 
     def _assert_changed_consumers(self, root, relative, expected_categories):
         stored_manifest = (root / "manifest.json").read_bytes()

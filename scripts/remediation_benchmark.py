@@ -165,6 +165,36 @@ def validate_workload_measurements(value):
     assert len({item["id"] for item in workloads}) == 6
     assert all(item["expectedAcceptance"] for item in workloads)
     return value
+def stable_contract(value):
+    return {
+        "schemaVersion": value["schemaVersion"],
+        "status": value["status"],
+        "mode": value["mode"],
+        "fixture": value["fixture"],
+        "compactStatus": [{"items": item["items"]} for item in value["compactStatus"]],
+        "validationHashReuse": {
+            "baseline": {"shaCalls": value["validationHashReuse"]["baseline"]["shaCalls"]},
+            "changed": {"shaCalls": value["validationHashReuse"]["changed"]["shaCalls"]},
+            "fixture": value["validationHashReuse"]["fixture"],
+        },
+        "phaseContext": {
+            "baseline": {"description": value["phaseContext"]["baseline"]["description"]},
+            "changed": {"description": value["phaseContext"]["changed"]["description"]},
+            "caveat": value["phaseContext"]["caveat"],
+        },
+        "scopedWorkflow": value["scopedWorkflow"],
+        "workloadSuite": value["workloadSuite"],
+        "limitations": value["limitations"],
+    }
+
+
+def validate_committed_result(value):
+    committed = ROOT / "docs/remediation/v1.4.0/benchmarks.json"
+    if committed.is_file():
+        expected = json.loads(committed.read_text(encoding="utf-8"))
+        assert stable_contract(value) == stable_contract(expected), "Committed benchmark contract is stale"
+    return value
+
 
 
 def workload_suite():
@@ -180,6 +210,7 @@ def main():
               "limitations": ["No live provider, browser, device, or user data was used.",
                               "Timing values are local synthetic measurements, not field performance.",
                               "Workload suite values are deterministic orchestration-shape simulations."]}
+    validate_committed_result(result)
     print(json.dumps(result, indent=2, sort_keys=True))
 
 
