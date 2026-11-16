@@ -32,7 +32,7 @@
 - Rejected whitespace self-review and unchecked quoted or variable CSS image sources.
 - Corrected shared-file resume consumers and transitive invalidation; legacy incomplete manifests require reviewed refresh.
 - Exercised real Chromium Back navigation and continued run polling while preserving authenticated no-store responses; recorded actual BFCache exclusion rather than claiming a persisted restore.
-- Added fresh redacted candidate dashboard, recorded approval, and retained artwork screenshots in [the release notes](RELEASE-v1.4.2.md).
+- Added fresh redacted candidate dashboard, recorded approval, retained artwork, and browser annotation screenshots in [the release notes](RELEASE-v1.4.2.md).
 
 ## 1.4.1 · 14 November 2026
 
