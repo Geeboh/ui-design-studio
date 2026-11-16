@@ -19,6 +19,22 @@ The retained [feature-freeze records](feature-freeze/) describe the earlier merg
 
 Screenshot timestamps use the browser's local timezone. The candidate date above uses UTC. See [release notes and screenshots](RELEASE-v1.4.2.md).
 
+## Final remediation revalidation · 16 November 2026 UTC
+
+This release revalidation covers the approval API, attachments, browser annotations, SVG rendering, approval ordering, release packaging, and captured screenshots. It uses synthetic fixtures and Chromium on Linux.
+
+| Check | Observed result | Scope |
+| --- | --- | --- |
+| Full Python suite | 310 tests passed | Repository suite |
+| Approval/server focused suite | 85 tests passed | Approval persistence, rollback, attachments, annotations, SVG, and ordering |
+| Browser approval suite | 9 tests passed | Chromium approval flow, image upload, annotation editing, undo/redo, and reload state |
+| Static checks | PASS | Python compilation, dashboard Node syntax, and `git diff --check` |
+| Source ZIP | PASS; 138 archive entries | Includes changelog, release notes, and annotation screenshot |
+| Manifest and archive verification | PASS; 137 source hashes verified | `sha256sum -c MANIFEST.sha256`, ZIP CRC, and ZIP sidecar |
+| Python distributions | PASS | Wheel and sdist built |
+
+The annotation screenshot is a synthetic browser capture, not recipient-application acceptance evidence. Firefox, WebKit, native Windows/macOS, physical devices, and human recipient-application testing remain unverified.
+
 ## Current main revalidation · 16 November 2026 UTC
 
 This revalidation covers checkout `main` at `5a3c603e4f95c884d5b0535eb4aa52c2a7ff62c4` plus the current remediation changes. It uses disposable local artifacts and synthetic fixtures. No hosted release, deployment, or human UAT was performed.
