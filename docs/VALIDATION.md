@@ -1,5 +1,24 @@
 # Release validation
 
+## Version 1.4.2 candidate · 15 November 2026 UTC
+
+This local candidate builds merged main `8ca4c9e9795839181005c9df82563e4a42e8fc83` with a patch-version update, release documentation, and fresh screenshots. No tag, hosted release, or deployment was created. Uncommitted changes in the original checkout are excluded.
+
+| Check | Observed result | Scope |
+| --- | --- | --- |
+| Python distributions | Wheel and sdist built successfully | Existing builder; wheel built from the sdist |
+| Full Python suite | 299 tests and 212 subtests passed | Linux, Python 3.12.3, actual candidate wheel, Chromium 159 |
+| Minimum-Python installed package suite | Five tests and four subtests passed | Python 3.10.22; installed CLI, MCP identity, and payload behavior |
+| Fresh screenshots | Three inspected captures | Actual 1.4.2 connection dashboard, durable guided approval, and retained sandboxed specimen |
+| Approval capture | Exact review digest matched; decision survived reload | Synthetic browser form submission, not recipient-application acceptance |
+| Screenshot privacy | Bearer URLs, connection identity, and private absolute paths masked or cropped out | No fabricated UI state |
+
+The source ZIP builder regenerates `MANIFEST.sha256`, checks archived bytes against current sources, and verifies ZIP integrity before producing a checksum sidecar. The local `dist/RELEASE-VERIFICATION-v1.4.2.json` records final artifact identities and content comparisons; `dist/SHA256SUMS-v1.4.2.txt` covers the handoff files. Checksums are not signatures.
+
+The retained [feature-freeze records](feature-freeze/) describe the earlier merged engine audit. They are not a new audit of this version-only candidate. No new repository-wide security scan or Node suite was run for the release metadata update. Native Windows/macOS, other browser engines, a second physical LAN device, and human recipient-application testing remain unverified.
+
+Screenshot timestamps use the browser's local timezone. The candidate date above uses UTC. See [release notes and screenshots](RELEASE-v1.4.2.md).
+
 ## Version 1.4.1 Cortex remediation · 14 November 2026
 
 The release checks cover the remediation changes on Linux with Python 3.12.3 and Node 24.22.2. They use synthetic fixtures and do not establish recipient-application design evidence.
