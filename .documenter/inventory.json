@@ -1,0 +1,1400 @@
+{
+  "version": 1,
+  "generatedAt": "2026-11-16T08:16:28.730Z",
+  "snapshot": "40f3ff4151dfb62aa2f79001641057c0d7e4305bcdd7a66646a1f62af8280213",
+  "documentSnapshot": "62eac72d8a78bcb59f88df47366a8f34398573ef8a919cea61f2bb51dc0021c6",
+  "git": {
+    "available": true,
+    "head": "1694a00381f1a78f65d0f5e0f82460d02f7da43f",
+    "branch": "main"
+  },
+  "files": [
+    {
+      "path": ".gitattributes",
+      "eligible": true,
+      "sha256": "d60f352d0db1404c70afb4bb8b2ca3fd1c610572aa40720e8a0b7baa7885418c",
+      "bytes": 19,
+      "lines": 1,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".gitignore",
+      "eligible": true,
+      "sha256": "01d4af52384e29045dd2f6db72cb5dbfaacabaa6dbe4d44cd979ebaa8e6dc34a",
+      "bytes": 362,
+      "lines": 24,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".omp/agents/ui-art-director.md",
+      "eligible": true,
+      "sha256": "311344680b30644d359b8ed579be82e312cc61799d3ec95c3e54fce0441db02a",
+      "bytes": 2165,
+      "lines": 20,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/agents/ui-implementer.md",
+      "eligible": true,
+      "sha256": "2e4470f71419fcd1bb60ac2f30c2ce7408a0ee6c91db6d5d376a44e8d9f69638",
+      "bytes": 2286,
+      "lines": 20,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/agents/ui-page-designer.md",
+      "eligible": true,
+      "sha256": "9078aa27a1155c480ff4aa484c0be896d205f548a374736fd86c768292bf142f",
+      "bytes": 2166,
+      "lines": 20,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/agents/ui-performance-reviewer.md",
+      "eligible": true,
+      "sha256": "bfde5c50645dfadb452d93c464db1b47e0c618073dfbc2f3bd38aa28d14b3d83",
+      "bytes": 2663,
+      "lines": 22,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/agents/ui-quality-reviewer.md",
+      "eligible": true,
+      "sha256": "db46ef81795732a2f3ff11ec6135ed7d126d20fef5d6d642f375d984dd19d438",
+      "bytes": 2234,
+      "lines": 20,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/agents/ui-theme-engineer.md",
+      "eligible": true,
+      "sha256": "61fcdb5a9a0c7caa2fad5d6b3abe952b6bffe090e257164920a5c6226803e5e9",
+      "bytes": 2390,
+      "lines": 22,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/agents/ui-ux-researcher.md",
+      "eligible": true,
+      "sha256": "d3bea1f0b6906aea9f987c3f43312ce2d23f177a337385b123a3d71505cad58c",
+      "bytes": 2159,
+      "lines": 20,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/commands/ui-design.md",
+      "eligible": true,
+      "sha256": "1dae8f8a26912367940f0c96f12a3f3331832974d8bda730b353fa94da116ba2",
+      "bytes": 1411,
+      "lines": 15,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/commands/ui-yolo.md",
+      "eligible": true,
+      "sha256": "9d39003b7f5e4406d1ad34721ddb2efb5f4ef12444120f4e55bc25b94bcb84e3",
+      "bytes": 1316,
+      "lines": 15,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/extensions/ui-design-progress.ts",
+      "eligible": true,
+      "sha256": "ba2cdf0a2335e592fb7fc2d4200ac195e57bea1f2e162fed66383a8dd9676e01",
+      "bytes": 55437,
+      "lines": 1229,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".omp/skills/ui-assess/SKILL.md",
+      "eligible": true,
+      "sha256": "03db44b591875aaed8c180241eebdd4c6ac0c5caabde954f50596f38940f32c5",
+      "bytes": 3119,
+      "lines": 30,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/assets/example-theme/CHANGELOG.md",
+      "eligible": true,
+      "sha256": "37e49ebde00cc165e87d13175376a9f3ae0fdfd61de50f78e15013986fdcd9e8",
+      "bytes": 214,
+      "lines": 5,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/assets/example-theme/icons.svg",
+      "eligible": true,
+      "sha256": "07785c5fbf83eb6f4fbccdc109fc527430a22723e9f7cdb7ef6803f35a206298",
+      "bytes": 1100,
+      "lines": 10,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/assets/example-theme/LICENSE.txt",
+      "eligible": true,
+      "sha256": "cc8b93d3107d259c5c55d4e4a20e17c4232518f0e715d4bf191162031b49b38b",
+      "bytes": 1086,
+      "lines": 21,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/assets/example-theme/preview.html",
+      "eligible": true,
+      "sha256": "c2deaca074e19273f57c49bd325ba72da1c8c620b69f398dd0972494f8c297e6",
+      "bytes": 7402,
+      "lines": 45,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/assets/example-theme/README.md",
+      "eligible": true,
+      "sha256": "2c21d5fb7073c367769da342786307c29c326e054d330a0a64a708e767b6cbab",
+      "bytes": 2154,
+      "lines": 25,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/assets/example-theme/theme.css",
+      "eligible": true,
+      "sha256": "c7a4c8acbf997f369ca43b1f4cc2d98fad4e36c3ccfe45a4a3929f07abc67444",
+      "bytes": 8821,
+      "lines": 75,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/assets/example-theme/theme.json",
+      "eligible": true,
+      "sha256": "9b897b417bc73c2b633b8607cfeaa8ab6e517a9b17ea9391f24399fc6b6517f7",
+      "bytes": 1422,
+      "lines": 66,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/assets/example-theme/tokens.css",
+      "eligible": true,
+      "sha256": "461d3d657a0bf1ac1b0baa603d631f1224afc533e21c971365e26ecfadc0d9c5",
+      "bytes": 1099,
+      "lines": 26,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/assets/example-theme/tokens.json",
+      "eligible": true,
+      "sha256": "227262c29ccf9803c32fc42b1167242ea542a4e8f9b65c1394db074587ef6195",
+      "bytes": 4313,
+      "lines": 237,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/dashboard/dashboard.css",
+      "eligible": true,
+      "sha256": "f974060aa048791b0b22a7f08969e15ffdc628757d7fa5a5f2c59125a7241e7d",
+      "bytes": 26696,
+      "lines": 318,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/dashboard/dashboard.js",
+      "eligible": true,
+      "sha256": "81f2cf91997778ccd795cecb1c2a137032a97d168f30c7a6adf9b8b2f496f17f",
+      "bytes": 80253,
+      "lines": 1485,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/dashboard/index.html",
+      "eligible": true,
+      "sha256": "3d965640b21cac344de027e685df3dae98af5415ad5dc76aa933947785840fda",
+      "bytes": 15726,
+      "lines": 200,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/dashboard/landing.html",
+      "eligible": true,
+      "sha256": "9ebceac67c044fddd96c5aec2862ad623d8af58868aea24577e0b4fe136356b1",
+      "bytes": 2842,
+      "lines": 51,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/dashboard/landing.js",
+      "eligible": true,
+      "sha256": "a3d6c0c6e05edf8336c76ea51f68a8abeabda41b7c4fc5bcd81499c1572657bd",
+      "bytes": 11883,
+      "lines": 291,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/references/assessment.md",
+      "eligible": true,
+      "sha256": "73e7fbcbae053dc0803d7797dfbfbb7b9fde2ad16bd779ebf5f7dbc7760575b7",
+      "bytes": 6037,
+      "lines": 63,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/references/decisions.md",
+      "eligible": true,
+      "sha256": "826cdbb43012ae71d9c28c04bf5732b594011302c0b66a3168991d447fa44e47",
+      "bytes": 5805,
+      "lines": 55,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/references/model-routing.md",
+      "eligible": true,
+      "sha256": "096796baa05eae0e2e5571ee95e772807edead7e129ed3c5af69c3091c067735",
+      "bytes": 14002,
+      "lines": 139,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/references/multi-agent.md",
+      "eligible": true,
+      "sha256": "f875b1688552cf3903f02b0f46ce80609ac721dc6b7437623a91f6226fd53f12",
+      "bytes": 6117,
+      "lines": 56,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/references/project-context.md",
+      "eligible": true,
+      "sha256": "bf05a8bb999d3df3807f38fdb00e8293e03f5794fe370fdbc73c9c94d2ac7dca",
+      "bytes": 6568,
+      "lines": 61,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/references/quality-gates.md",
+      "eligible": true,
+      "sha256": "758bff28e783b92cfc0f33d744ebe11d985b497ddc195e8be5c725e1c3f1b223",
+      "bytes": 7731,
+      "lines": 55,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/references/run-records.md",
+      "eligible": true,
+      "sha256": "d3b5e93725815a0a61694b51f7b91d97838160ecd83f89f13e76991a79c5733f",
+      "bytes": 25153,
+      "lines": 266,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/references/tada-profile.md",
+      "eligible": true,
+      "sha256": "029c4e2ef97766a1696e6ead1756d2e0670656b150117869e2e0b56a12493f2a",
+      "bytes": 848,
+      "lines": 7,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/references/theme-module.md",
+      "eligible": true,
+      "sha256": "5fc7b8e1ccac9e498d4d951642ef87f60098055433d8768a5ab79803ca94875b",
+      "bytes": 13691,
+      "lines": 121,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/references/visual-system.md",
+      "eligible": true,
+      "sha256": "d9d7eb33b05f80a8295c0c6bb87c07bc565de0c8ab52eaf2a7ddea40a4efb1c5",
+      "bytes": 6271,
+      "lines": 43,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/references/workflow.md",
+      "eligible": true,
+      "sha256": "e320ad53e7fdf62d9e1c63d9b43ba3cb8d85046901a74c99188d4cd7a4ea4e2c",
+      "bytes": 15486,
+      "lines": 109,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/schemas/theme.schema.json",
+      "eligible": true,
+      "sha256": "41c45babfedfc2e94b162f43e24e7467fe54bdd7368fc07957b71ecfa7bd7d7b",
+      "bytes": 2546,
+      "lines": 125,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/scripts/design_server.py",
+      "eligible": true,
+      "sha256": "2700f261211ac7856db8d84a87438e21b8bfc92a399f9a95b37fdaa0c276eda8",
+      "bytes": 103193,
+      "lines": 1919,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/scripts/studio.py",
+      "eligible": true,
+      "sha256": "aafde950150b4d2b2f3fb755560d7dfb982a9c714ad4db60e641bdcb8574f81f",
+      "bytes": 109133,
+      "lines": 1856,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/SKILL.md",
+      "eligible": true,
+      "sha256": "160b32a330f17774bf8b1c24583f8e2931586644652a83c3c3e767d0f66245ad",
+      "bytes": 5918,
+      "lines": 92,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-design/SKILL.md",
+      "eligible": true,
+      "sha256": "bdcd4629584e0a599dda28d01fcefd65202ebba7f0f0646138e44fca3756828c",
+      "bytes": 3251,
+      "lines": 29,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-finalize/SKILL.md",
+      "eligible": true,
+      "sha256": "e478f35aff4164742d32d83c63ab14c217f538ee86421ebf72fcd568e0d4a047",
+      "bytes": 4031,
+      "lines": 30,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-plan/SKILL.md",
+      "eligible": true,
+      "sha256": "ffb7265abeeaa1afec3699ac5bfa1d82162e02f1957776452607429eebef92dd",
+      "bytes": 3007,
+      "lines": 29,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-produce/SKILL.md",
+      "eligible": true,
+      "sha256": "f3e52006272ce3e819d03dba3bc598b58b413d4770d61b034887a44864c2d1ce",
+      "bytes": 3358,
+      "lines": 29,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-review/SKILL.md",
+      "eligible": true,
+      "sha256": "939961ef505a5a4b91449f2e5611f06e18af88b09f4011207bed11d8346183c7",
+      "bytes": 3344,
+      "lines": 31,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-theme/SKILL.md",
+      "eligible": true,
+      "sha256": "099cfbb0486cb0cae55e9a2eba5c1caaaebdb03edd2efdeb52379e99ac3b6e7c",
+      "bytes": 3430,
+      "lines": 29,
+      "kind": "documentation"
+    },
+    {
+      "path": ".omp/skills/ui-yolo/SKILL.md",
+      "eligible": true,
+      "sha256": "aec70eb414815468a0583ff4832d9bc1abb800a40b383400d3742d635d68d674",
+      "bytes": 2786,
+      "lines": 46,
+      "kind": "documentation"
+    },
+    {
+      "path": "AGENTS.md",
+      "eligible": true,
+      "sha256": "42fe441c59371d1817876a96aa644eae02c5ce17dcc42a350d5e73c519cc5e05",
+      "bytes": 1080,
+      "lines": 2,
+      "kind": "documentation"
+    },
+    {
+      "path": "dist/RELEASE-NOTES-v1.2.0.md",
+      "eligible": true,
+      "sha256": "5d76dd4cf66bf5783a9e0cc380ebea95539a1348f31f9e46d66638d507e04b6f",
+      "bytes": 2177,
+      "lines": 35,
+      "kind": "documentation"
+    },
+    {
+      "path": "dist/RELEASE-NOTES-v1.3.0.md",
+      "eligible": true,
+      "sha256": "4a7a259c4c39275252a35d8bf3c829fab22c51932ec0a650de3327c6947e73e5",
+      "bytes": 6157,
+      "lines": 99,
+      "kind": "documentation"
+    },
+    {
+      "path": "dist/RELEASE-NOTES-v1.4.0.md",
+      "eligible": true,
+      "sha256": "88e8c2780493bdc91f4150c596d3ee9840fe3608e51f1887cc312d67dff80ca1",
+      "bytes": 9173,
+      "lines": 139,
+      "kind": "documentation"
+    },
+    {
+      "path": "dist/UI-Design-Studio-OMP-v1.2.0.zip",
+      "eligible": false,
+      "reason": "binary-or-non-utf8",
+      "bytes": 256025
+    },
+    {
+      "path": "dist/UI-Design-Studio-OMP-v1.2.0.zip.sha256",
+      "eligible": true,
+      "sha256": "d5f1087791cb6075f850f12e718e530f0ce72b1ef79495cb27410934c034285f",
+      "bytes": 98,
+      "lines": 1,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "dist/UI-Design-Studio-OMP-v1.3.0.zip",
+      "eligible": false,
+      "reason": "binary-or-non-utf8",
+      "bytes": 856612
+    },
+    {
+      "path": "dist/UI-Design-Studio-OMP-v1.3.0.zip.sha256",
+      "eligible": true,
+      "sha256": "82eb85072b4b23b54bdf5e0c1fc83fcd603793a638a999dd8fff8a180c20eb32",
+      "bytes": 98,
+      "lines": 1,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "dist/UI-Design-Studio-OMP-v1.4.0.zip",
+      "eligible": false,
+      "reason": "binary-or-non-utf8",
+      "bytes": 907910
+    },
+    {
+      "path": "dist/UI-Design-Studio-OMP-v1.4.0.zip.sha256",
+      "eligible": true,
+      "sha256": "8cfcb516d789fd85284d3274c88e8222e4796f83dc50c640a878de86bf50b69b",
+      "bytes": 98,
+      "lines": 1,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "docs/CHANGELOG.md",
+      "eligible": true,
+      "sha256": "2a75d0e4888baa0e9795a602cd254d0f23866f708034c9fb67bd029ef788be08",
+      "bytes": 11047,
+      "lines": 116,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/DISTRIBUTION.md",
+      "eligible": true,
+      "sha256": "d2c27ce52333b74bf88fd16015190464d0592c4726c1098ed9587e657c668929",
+      "bytes": 5819,
+      "lines": 62,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/ARCHITECTURE-REVIEW.md",
+      "eligible": true,
+      "sha256": "41d04338561003e4cb5e20a5b8017b11814bd4a55c83ec659f1ec8b765fe965d",
+      "bytes": 4872,
+      "lines": 45,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/AUDIT.md",
+      "eligible": true,
+      "sha256": "2a75470545ef01a00edae2f990d470bd073a1f745a175ba2c140bd517f279300",
+      "bytes": 4498,
+      "lines": 32,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/BASELINE.md",
+      "eligible": true,
+      "sha256": "e2e92f48383636badc9c3145a8815b9430115e470bdde49810ca72ddf2ac6ddc",
+      "bytes": 6206,
+      "lines": 90,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/BLOCKERS.md",
+      "eligible": true,
+      "sha256": "68348b4c88a02648dc47b2306639bf335a4da6f9a540b30268e98a93a38aea93",
+      "bytes": 3412,
+      "lines": 27,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/CHANGELOG.md",
+      "eligible": true,
+      "sha256": "422cb794703fb4f43a409793a43949648d4a6b9f1c525ed6ef41e0542cb492ab",
+      "bytes": 2324,
+      "lines": 23,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/CONTINUATION.md",
+      "eligible": true,
+      "sha256": "db8ca719210afe7f787d262c4dc5530f10f09c9cd2b7a56dc360d8a9d10557a4",
+      "bytes": 1253,
+      "lines": 25,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/decisions.tsv",
+      "eligible": true,
+      "sha256": "b593dd4bdcfa27ec62b1bc44b2ff4f6090210d8d56a05206a00589dcc8eae75b",
+      "bytes": 9468,
+      "lines": 36,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "docs/feature-freeze/DEFECT-REGISTER.md",
+      "eligible": true,
+      "sha256": "39f64d62041f96a7a32928eedd3d2157f2e2f0b1edcbc8bf54119d32bc904065",
+      "bytes": 29452,
+      "lines": 280,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/inspection.tsv",
+      "eligible": true,
+      "sha256": "bf06355adb3de041091073c22df04b9f99a33c1070522a3646bed5e8776c2346",
+      "bytes": 13906,
+      "lines": 150,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "docs/feature-freeze/INVENTORY.md",
+      "eligible": true,
+      "sha256": "d266b941bd78dcc88dd235dfeca96e8d0d17f1b6ac78de8c99d93775577bdf5e",
+      "bytes": 2731,
+      "lines": 27,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/MODEL-ESCALATIONS.md",
+      "eligible": true,
+      "sha256": "6ed024bf315aa1e5170eccc3866d5f7dc86d8a82468cb1386d7aa10de794067b",
+      "bytes": 1079,
+      "lines": 12,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/MODEL-ROUTING.md",
+      "eligible": true,
+      "sha256": "321f6d2008dafc853ad5fe660165b4a38a5e320f6e96074082071af9c92381ef",
+      "bytes": 1502,
+      "lines": 21,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/MODEL-USAGE.md",
+      "eligible": true,
+      "sha256": "c16408b7a2717623a0c18784b4bfdfd94eb5bc0ed2ebfe539668af6bb0ded679",
+      "bytes": 1032,
+      "lines": 14,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/PERFORMANCE.md",
+      "eligible": true,
+      "sha256": "bd7419951266ebd3e4db4757d7ce3ab780e6381caf7710fffa5a9904978c5128",
+      "bytes": 2481,
+      "lines": 34,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/QUALITY-GATES.md",
+      "eligible": true,
+      "sha256": "c923661509b85dfdcfcfc45ddf4540fa99e83c0be7bd36cd716602a75c9db8f5",
+      "bytes": 1459,
+      "lines": 18,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/README.md",
+      "eligible": true,
+      "sha256": "f743ad7c57bbcab8002944bf925269d031f8e5ec9beba29fe5636f3b9ee9cbf1",
+      "bytes": 2403,
+      "lines": 28,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/RELEASE-READINESS.md",
+      "eligible": true,
+      "sha256": "d85e0392d4eedf1033b92ad2dc067faffc30bcbeb72b0771e45563e444c5d082",
+      "bytes": 6959,
+      "lines": 55,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/REMEDIATION-PLAN.md",
+      "eligible": true,
+      "sha256": "7bab3eafae0940a1753c15982e0296d2791301e253b7ef82388f19f6d9ce9e3e",
+      "bytes": 3447,
+      "lines": 29,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/REVIEW-EVIDENCE.json",
+      "eligible": true,
+      "sha256": "1ce4a300b7cb97c391f5e46920e1a11a4a0e950d537254fd4c78956642a58919",
+      "bytes": 121700,
+      "lines": 114,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "docs/feature-freeze/REVIEWS.md",
+      "eligible": true,
+      "sha256": "dea2790e18fb5de7745f0b3a4f44ee3bd9d49efff0cadcd7ef7baab136edd532",
+      "bytes": 6342,
+      "lines": 51,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/SECURITY-EVIDENCE.json",
+      "eligible": true,
+      "sha256": "7f645719981d33539fdf98798feb047883f40640c0a4e1b3123dca6cc2545495",
+      "bytes": 38928,
+      "lines": 1334,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "docs/feature-freeze/SECURITY-REVIEW.md",
+      "eligible": true,
+      "sha256": "4aa2fd460a34bdba441800aa3f22ebfa4600b8b4577545eead152624a1526923",
+      "bytes": 3368,
+      "lines": 29,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/TEST-MATRIX.md",
+      "eligible": true,
+      "sha256": "59272f943c0ec90bfdd590cfd38677381a707c374ab9aa3752317d7ab12f7c9e",
+      "bytes": 13928,
+      "lines": 167,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/feature-freeze/WORKFLOW-REVIEW.md",
+      "eligible": true,
+      "sha256": "ae55f763cd04f8552204477c4ba943f9c29a9ab411363d5ca94e636633c68c4f",
+      "bytes": 1658,
+      "lines": 13,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/INSTALLATION.md",
+      "eligible": true,
+      "sha256": "e028ee714644db18c5bb83f646cfab296efbaa0eca11c3a6b9b32380f831cd7f",
+      "bytes": 16791,
+      "lines": 260,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/MCP.md",
+      "eligible": true,
+      "sha256": "6a52fe0d8a360ba87adcab1f539535fa03adc1ea6940c7c53f37ca7acaed4cea",
+      "bytes": 8821,
+      "lines": 113,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/RELEASE-v1.3.0.md",
+      "eligible": true,
+      "sha256": "5fd6e6de4d6dd74d8ea6bc55a272916f2ad15d874fbb5438f6bead29afdb4f20",
+      "bytes": 5767,
+      "lines": 99,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/RELEASE-v1.4.0.md",
+      "eligible": true,
+      "sha256": "eb8de5172e06ab5f9f09189cc40e1101749d21b283b9e0eebc1cbc795fcc63f7",
+      "bytes": 8723,
+      "lines": 139,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/RELEASE-v1.4.1.md",
+      "eligible": true,
+      "sha256": "7b1707b90959715b6d919d8e1e58b6cae009bacab63d2063eca661ccf024e667",
+      "bytes": 2316,
+      "lines": 39,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/RELEASE-v1.4.2.md",
+      "eligible": true,
+      "sha256": "00bf47d9d4353b0e10ef3eb7f0e2bcd2305e899f26bd273fc5bb9edd1e019063",
+      "bytes": 4069,
+      "lines": 60,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/remediation/v1.4.0/benchmarks.json",
+      "eligible": true,
+      "sha256": "b8935887f470d2cc3de1ebcf1084c31559892599dffbd654811c732272913228",
+      "bytes": 6288,
+      "lines": 240,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "docs/remediation/v1.4.0/BENCHMARKS.md",
+      "eligible": true,
+      "sha256": "8f52607a78ea6302425871a421a947ffb9ab5554657d0058cd2f89c3b50506b6",
+      "bytes": 2501,
+      "lines": 33,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/remediation/v1.4.0/COMPATIBILITY.md",
+      "eligible": true,
+      "sha256": "a66c5e03db4260572e3ec1c474c22a7fd0b49b1cbf2a1da97c90872bbdbc506e",
+      "bytes": 3979,
+      "lines": 30,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/remediation/v1.4.0/HANDOFF.md",
+      "eligible": true,
+      "sha256": "f8e612e3845a7d232bbed448bc3e28cb12f833554fe376c465884269ca877b3e",
+      "bytes": 4062,
+      "lines": 45,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/remediation/v1.4.0/LEDGER.md",
+      "eligible": true,
+      "sha256": "b55d9611d122b908ee218af966b60bbca03438cf0d0a6a4234adcdf98d2ce08c",
+      "bytes": 4896,
+      "lines": 36,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/remediation/v1.4.0/TEST-REPORT.md",
+      "eligible": true,
+      "sha256": "82a336e782a752f1b17e287a753857c06fe1309863d544fd4fd1351692d7ddc8",
+      "bytes": 2532,
+      "lines": 31,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/remediation/v1.4.0/UAT-DEFERRED.md",
+      "eligible": true,
+      "sha256": "e9652de2a662f8ace342b4aa3ec1d6dc0263d3250934202241b19a0160a766d9",
+      "bytes": 1313,
+      "lines": 20,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/RUN-TYPES.md",
+      "eligible": true,
+      "sha256": "359b030512f2e9b629e80568e251e724f1f8471235c024a2a705f480edb9c22c",
+      "bytes": 27791,
+      "lines": 412,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/screenshots/mcp-connection.png",
+      "eligible": false,
+      "reason": "binary-or-non-utf8",
+      "bytes": 132589
+    },
+    {
+      "path": "docs/screenshots/pending-run-progress.png",
+      "eligible": false,
+      "reason": "binary-or-non-utf8",
+      "bytes": 280512
+    },
+    {
+      "path": "docs/screenshots/retained-artwork-preview.png",
+      "eligible": false,
+      "reason": "binary-or-non-utf8",
+      "bytes": 132265
+    },
+    {
+      "path": "docs/screenshots/v1.4.2-approval-annotations.png",
+      "eligible": false,
+      "reason": "binary-or-non-utf8",
+      "bytes": 213303
+    },
+    {
+      "path": "docs/screenshots/v1.4.2-approval.png",
+      "eligible": false,
+      "reason": "binary-or-non-utf8",
+      "bytes": 183116
+    },
+    {
+      "path": "docs/screenshots/v1.4.2-artwork.png",
+      "eligible": false,
+      "reason": "binary-or-non-utf8",
+      "bytes": 144977
+    },
+    {
+      "path": "docs/screenshots/v1.4.2-connection.png",
+      "eligible": false,
+      "reason": "binary-or-non-utf8",
+      "bytes": 78061
+    },
+    {
+      "path": "docs/SOURCES.md",
+      "eligible": true,
+      "sha256": "b35bdfffdd7441430ee5f813c051103e4f6fc07ee506c5eee55a3c2aaa6996ca",
+      "bytes": 5599,
+      "lines": 63,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/VALIDATION.md",
+      "eligible": true,
+      "sha256": "1be0f9c0b2ed3e05910c0c2fa2dfba4c4fa466507e077b3aa9356c9853619cf7",
+      "bytes": 24760,
+      "lines": 256,
+      "kind": "documentation"
+    },
+    {
+      "path": "examples/studio-showcase.html",
+      "eligible": true,
+      "sha256": "3a7393e6228171fd3cdb25ffcaacacc2da510b066b03c5451a24672d4c1d017c",
+      "bytes": 18336,
+      "lines": 157,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "hatch_build.py",
+      "eligible": true,
+      "sha256": "516cc00579b40d69fbdf03c0e226602e62ec6dd223a7d9e0f2c495881a3835db",
+      "bytes": 1333,
+      "lines": 24,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "install.sh",
+      "eligible": true,
+      "sha256": "039f025be3c862a8b19e7558d5c7f74ffef2b78d2c292a9b19331c4b61b82660",
+      "bytes": 891,
+      "lines": 23,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "LICENSE.txt",
+      "eligible": true,
+      "sha256": "cc8b93d3107d259c5c55d4e4a20e17c4232518f0e715d4bf191162031b49b38b",
+      "bytes": 1086,
+      "lines": 21,
+      "kind": "documentation"
+    },
+    {
+      "path": "MANIFEST.sha256",
+      "eligible": true,
+      "sha256": "0357bf32b5e90b1bdaa6c88b4c6e640147deb893ab50cbb76aa135adf6a94896",
+      "bytes": 13889,
+      "lines": 137,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "prompts/ASSESS-ONLY.md",
+      "eligible": true,
+      "sha256": "1b6ccd45abaf3d69e3e914976634a80e561ea540197025a3c109c060388ed1bf",
+      "bytes": 1271,
+      "lines": 13,
+      "kind": "documentation"
+    },
+    {
+      "path": "prompts/DESIGN-ONLY.md",
+      "eligible": true,
+      "sha256": "cee04ec23637baa9a1ea2c882994308ee92f2307687644c93c1c190971fb1ddc",
+      "bytes": 1349,
+      "lines": 13,
+      "kind": "documentation"
+    },
+    {
+      "path": "prompts/README.md",
+      "eligible": true,
+      "sha256": "ec97d6ad69a2c903599b354e706dadc75589c850cdd154cae28bb25d790e7dc0",
+      "bytes": 1694,
+      "lines": 19,
+      "kind": "documentation"
+    },
+    {
+      "path": "prompts/RESUME-GOAL.md",
+      "eligible": true,
+      "sha256": "d6560d18bc37f8efe3cf6debeaf1c1a3efc8ba26e5fbaa3666dfa3fc1c7654dd",
+      "bytes": 2022,
+      "lines": 15,
+      "kind": "documentation"
+    },
+    {
+      "path": "prompts/RESUME.md",
+      "eligible": true,
+      "sha256": "4b648ea6a6fbf29c2a2918b8e93ec18c114f4230411f449610bb6c6f9c93483d",
+      "bytes": 1914,
+      "lines": 15,
+      "kind": "documentation"
+    },
+    {
+      "path": "prompts/START-GOAL-YOLO.md",
+      "eligible": true,
+      "sha256": "ea3e51f2fa1f99992acc26b3ca5f626a7f7b0fe64fb05ade5d008f64d022665c",
+      "bytes": 3173,
+      "lines": 23,
+      "kind": "documentation"
+    },
+    {
+      "path": "prompts/START-GUIDED.md",
+      "eligible": true,
+      "sha256": "9c65ed09582a96859fae1cb07d2cef7a2430c3527254cac1512266ea66e4beb0",
+      "bytes": 2940,
+      "lines": 23,
+      "kind": "documentation"
+    },
+    {
+      "path": "prompts/START-YOLO.md",
+      "eligible": true,
+      "sha256": "69adbece9c108b33396c47544513faae20aea98aa3c37abb9555e4fecfc47773",
+      "bytes": 2925,
+      "lines": 23,
+      "kind": "documentation"
+    },
+    {
+      "path": "pyproject.toml",
+      "eligible": true,
+      "sha256": "97501a0070b4b6bf05561131f0dc9088cc3f662b8aaf6911fd9fa4a01848f308",
+      "bytes": 1143,
+      "lines": 33,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "README.md",
+      "eligible": true,
+      "sha256": "6ff3368a453eb0db512cc4dfaf1cfee40f99ea762b0169652b129a3b36c07855",
+      "bytes": 16325,
+      "lines": 194,
+      "kind": "documentation"
+    },
+    {
+      "path": "release.json",
+      "eligible": true,
+      "sha256": "66f4a8c13fc03d38592a82888d0265a1d2240ee6e70ae3e1b5f37316d1e74ec8",
+      "bytes": 1277,
+      "lines": 28,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "scripts/install_mcp.py",
+      "eligible": true,
+      "sha256": "9e09cea73dff896d8143affbeca7f7abb735bfa2f79165c958c8cd2dbd42608b",
+      "bytes": 6692,
+      "lines": 155,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "scripts/install.py",
+      "eligible": true,
+      "sha256": "7468e6e861eeced5fdd809e4cbc5c629c64a6d12f88f9237b4c77cf78208b374",
+      "bytes": 26872,
+      "lines": 563,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "scripts/package_release.py",
+      "eligible": true,
+      "sha256": "0de0fc37e0af3e076c56ba38b1dd4158e985c4b31cc298c49ab6d2021727fce5",
+      "bytes": 10086,
+      "lines": 211,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "scripts/remediation_benchmark.py",
+      "eligible": true,
+      "sha256": "fcb3314648a3552c177d62d7c7c20f3043a1af2c269f37f753682c99c2d641ca",
+      "bytes": 9884,
+      "lines": 220,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "src/ui_design_studio/__init__.py",
+      "eligible": true,
+      "sha256": "06e013fd5df61dfe4e584cfcfbd63a9a6752b152be21f269cf9b6140e9a3e12e",
+      "bytes": 92,
+      "lines": 3,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "src/ui_design_studio/cli.py",
+      "eligible": true,
+      "sha256": "5b86e8cea89e9d5919317499c2503d3021bc91159c6fb41c28b76a5b1b958f56",
+      "bytes": 11876,
+      "lines": 285,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "src/ui_design_studio/dashboard.py",
+      "eligible": true,
+      "sha256": "f1e1ef6e5a87596a0cc9c2e713bd53c35083d77830a3c6af0bf59dde48e7adbb",
+      "bytes": 37986,
+      "lines": 825,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "src/ui_design_studio/mcp-guide.md",
+      "eligible": true,
+      "sha256": "febbe2caa846f44a2c6e59f931e9e5db3d670ccd8c4369d3445ba70b7a9e2235",
+      "bytes": 4554,
+      "lines": 36,
+      "kind": "documentation"
+    },
+    {
+      "path": "src/ui_design_studio/runtime.py",
+      "eligible": true,
+      "sha256": "a791c65167983bce31826769ef864bb2656be5a739c24bf581a65bda631a2e0c",
+      "bytes": 943,
+      "lines": 33,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "src/ui_design_studio/server.py",
+      "eligible": true,
+      "sha256": "cf5de45e8b47746e28bd119bd4c1ba3f6c339e5e86a65ddde1fac1601eff1ea7",
+      "bytes": 21796,
+      "lines": 413,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "tests/test_dashboard_browser.py",
+      "eligible": true,
+      "sha256": "c1fe055ce50945775d508c5b8a694b4412287d3e6264a1ec5edfdb70aa48b4dd",
+      "bytes": 19768,
+      "lines": 357,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "tests/test_design_server.py",
+      "eligible": true,
+      "sha256": "d62ceb875f260f083b496da3e816def5b6c7ef62e4777942dd86e1c3c0ad4bae",
+      "bytes": 97605,
+      "lines": 1488,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "tests/test_feature_freeze.py",
+      "eligible": true,
+      "sha256": "a7e5dea52bdce29e280906ff68ee695e50a4c451173819ffefde1ce5c26fb92d",
+      "bytes": 6544,
+      "lines": 111,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "tests/test_freeze_acceptance.py",
+      "eligible": true,
+      "sha256": "8ef0f104624e75d063ae62dfc92a74933a92a0b3adb68dfb55cf29c29cf2ad42",
+      "bytes": 6082,
+      "lines": 107,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "tests/test_freeze_integrity.py",
+      "eligible": true,
+      "sha256": "1571f15527b6cb88392f35c533222f60705db28e3becf19d4c59ba48cfdd609f",
+      "bytes": 20004,
+      "lines": 356,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "tests/test_global_mcp_install.py",
+      "eligible": true,
+      "sha256": "efd14123d7d9d52879298bbb8d1667935d1617928b1527d0984805f9d2a4c3c2",
+      "bytes": 13286,
+      "lines": 258,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "tests/test_install.py",
+      "eligible": true,
+      "sha256": "15898380f78f481e329c771585542d357ee2d07340ed9c062e09f79b5acee488",
+      "bytes": 16654,
+      "lines": 310,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "tests/test_mcp_dashboard.py",
+      "eligible": true,
+      "sha256": "30f66b654b8ea27e626eff7422e07ba4b9550d6b575d87559be9fd2865f0b3d2",
+      "bytes": 63485,
+      "lines": 1149,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "tests/test_mcp_package.py",
+      "eligible": true,
+      "sha256": "4ccbe8ae0843fd237867b1f4b29fe30e3ef0200b5794cb66d1f08b803ee7077e",
+      "bytes": 13733,
+      "lines": 241,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "tests/test_mcp.py",
+      "eligible": true,
+      "sha256": "701cc7626190b7b40349030aa865f6551eb0c92340f15dc90f0f44667dd12b54",
+      "bytes": 48020,
+      "lines": 738,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "tests/test_progress_extension.mjs",
+      "eligible": true,
+      "sha256": "e7e4cad48d021d6f1bef9a9420f40894c1fa49217d0e9babe21013d0e94fd9bf",
+      "bytes": 62787,
+      "lines": 1334,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "tests/test_progress_extension.py",
+      "eligible": true,
+      "sha256": "d88b375201197c5a5ac717282c0c37965d1abadfd924ba85dc5eb9de3c422ce1",
+      "bytes": 4154,
+      "lines": 91,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "tests/test_release_builder.py",
+      "eligible": true,
+      "sha256": "878f81f2790de0805795404211dca8371da03a1e7ddbbddb576b4ba15f9b6df3",
+      "bytes": 13173,
+      "lines": 260,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "tests/test_remediation_contract.py",
+      "eligible": true,
+      "sha256": "f1bb579f3d5da803c27d90265864c519766f7b08e6f67bdfbd1230349cf619c4",
+      "bytes": 2610,
+      "lines": 62,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "tests/test_studio.py",
+      "eligible": true,
+      "sha256": "d1d8b175bfd18d6b1849807d09d46857525d39d2261d9c9325f6945337df9287",
+      "bytes": 56386,
+      "lines": 938,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "tools/ui-design",
+      "eligible": true,
+      "sha256": "7b77bac0615532821ad9164308cade333827611601cca9432b89953debc7c0c9",
+      "bytes": 489,
+      "lines": 12,
+      "kind": "source-or-configuration"
+    },
+    {
+      "path": "UI-Design-Studio-v1.4.0-Cortex-Remediation.md",
+      "eligible": true,
+      "sha256": "e1699fad4c67f0ac3b635245c52f9ad15fa0dc35993721aae7802a866163353e",
+      "bytes": 30436,
+      "lines": 187,
+      "kind": "documentation"
+    }
+  ],
+  "documents": [
+    {
+      "path": "docs/documenter/00-index.md",
+      "eligible": true,
+      "sha256": "b847cb8ef15ffdabe26dcab7b26c8186b773884137b496787b093f665e3eee86",
+      "bytes": 1108,
+      "lines": 27,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/documenter/01-overview.md",
+      "eligible": true,
+      "sha256": "19419af300be66e33a82d18a6c6b566784340bbe558d56e41d31bf4463ec366c",
+      "bytes": 1802,
+      "lines": 30,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/documenter/02-setup.md",
+      "eligible": true,
+      "sha256": "fd3621c5725c8d2a231ce653fb7cc43d53c99c434b516ad0ad4194ce2c339f43",
+      "bytes": 1828,
+      "lines": 35,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/documenter/03-configuration.md",
+      "eligible": true,
+      "sha256": "9c622cf081786827acd7b2851f7a9c3a6a90c236a03c1f366d3cf9d9d5889b61",
+      "bytes": 1878,
+      "lines": 36,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/documenter/04-architecture.md",
+      "eligible": true,
+      "sha256": "928081f2fdfb48d0c31e0c8b4caabb5d9b49619abcbf72f378ab98390f87a23e",
+      "bytes": 1505,
+      "lines": 19,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/documenter/05-workflows.md",
+      "eligible": true,
+      "sha256": "26d7a9a2d3df80ca45edb192be4673a4b19f97c3a96371b8cb32367f79696378",
+      "bytes": 1839,
+      "lines": 26,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/documenter/06-reference.md",
+      "eligible": true,
+      "sha256": "8d40737f0a6cabb72bdee26cabe32bb83520391b26e9c2a845bc601dcf36de25",
+      "bytes": 1743,
+      "lines": 31,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/documenter/07-operations.md",
+      "eligible": true,
+      "sha256": "75b6ed1683debd74dc2ecbadcc4b9e557d6763a7bcd32fc1ac20cf30afec6305",
+      "bytes": 1630,
+      "lines": 21,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/documenter/08-security.md",
+      "eligible": true,
+      "sha256": "b1ccb00b116651a7aa1799371822b86b323afc5b4284941b942362412188ce67",
+      "bytes": 1737,
+      "lines": 19,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/documenter/09-troubleshooting.md",
+      "eligible": true,
+      "sha256": "b5b781cc32f57c3fa6f409da62a66648b0ae26d1770f1970c9c6bb0637c6b3b5",
+      "bytes": 1623,
+      "lines": 19,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/documenter/10-testing.md",
+      "eligible": true,
+      "sha256": "9ebf9c32bd89a7dfac0de29e23d840c5df5b37fcff56b1d7298302d4599120a8",
+      "bytes": 1477,
+      "lines": 17,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/documenter/11-contributing.md",
+      "eligible": true,
+      "sha256": "c4d8636c3c6a91ff6eeb7b146e10473e1a4d2d9c8c4cd4fdecf2040a93f04d67",
+      "bytes": 1334,
+      "lines": 21,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/documenter/12-glossary.md",
+      "eligible": true,
+      "sha256": "13893efda641f0e20e6f8d8e067bd525e8d17aa76d9645479b26c2aa0291dec6",
+      "bytes": 1204,
+      "lines": 17,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/documenter/coverage.md",
+      "eligible": true,
+      "sha256": "93f0ab3b5226856fa39d1257dfe8feefaaf25c9525edb1498d8946fce3b56809",
+      "bytes": 1428,
+      "lines": 27,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/documenter/evidence.md",
+      "eligible": true,
+      "sha256": "2532e0d1aad021fca34731185fc1b0b02201750df92665fbefb5f979ca1d5475",
+      "bytes": 1174,
+      "lines": 19,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/documenter/unknowns.md",
+      "eligible": true,
+      "sha256": "9bdad0633ddad8cd339f869d353db940df4c972cf4d5aa483743c09d1c7bca53",
+      "bytes": 1734,
+      "lines": 33,
+      "kind": "documentation"
+    }
+  ],
+  "exclusions": [
+    {
+      "path": "__pycache__",
+      "reason": "dependency-cache-or-vcs",
+      "acknowledged": true
+    },
+    {
+      "path": ".omp/skills/ui-design-studio/scripts/__pycache__",
+      "reason": "dependency-cache-or-vcs",
+      "acknowledged": true
+    },
+    {
+      "path": ".pytest_cache",
+      "reason": "git-ignored",
+      "acknowledged": true
+    },
+    {
+      "path": ".ruff_cache",
+      "reason": "git-ignored",
+      "acknowledged": true
+    },
+    {
+      "path": ".ruff_cache/.gitignore",
+      "reason": "git-ignored",
+      "acknowledged": true
+    },
+    {
+      "path": ".ruff_cache/0.17.5",
+      "reason": "git-ignored",
+      "acknowledged": true
+    },
+    {
+      "path": ".ruff_cache/CACHEDIR.TAG",
+      "reason": "git-ignored",
+      "acknowledged": true
+    },
+    {
+      "path": ".ui-design-studio",
+      "reason": "git-ignored",
+      "acknowledged": true
+    },
+    {
+      "path": ".venv",
+      "reason": "dependency-cache-or-vcs",
+      "acknowledged": true
+    },
+    {
+      "path": "scripts/__pycache__",
+      "reason": "dependency-cache-or-vcs",
+      "acknowledged": true
+    },
+    {
+      "path": "src/ui_design_studio/__pycache__",
+      "reason": "dependency-cache-or-vcs",
+      "acknowledged": true
+    },
+    {
+      "path": "tests/__pycache__",
+      "reason": "dependency-cache-or-vcs",
+      "acknowledged": true
+    }
+  ],
+  "boundaries": [],
+  "scope": {
+    "docsRoot": "docs/documenter",
+    "exclude": [],
+    "maxFileBytes": 2097152,
+    "note": "Git inventories tracked and nonignored untracked files; ignored paths are disclosed separately. Non-Git inventories walk local files. Markdown below docsRoot has a separate audit inventory and does not change the source snapshot. Symbol counts are agent-declared, not parser-complete."
+  }
+}

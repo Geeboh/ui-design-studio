@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "docsRoot": "docs/documenter",
+  "exclude": [],
+  "maxFileBytes": 2097152,
+  "gitPolicy": {
+    "branchMode": "manual",
+    "branchPrefix": "docs/"
+  },
+  "parallel": {
+    "mode": "auto",
+    "maxWorkers": 3
+  }
+}
