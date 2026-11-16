@@ -7,6 +7,10 @@
 - Added atomic rollback for shared approval/request persistence and failed owned global MCP upgrades.
 - Excluded dashboard runtime secrets from source archives and hardened release manifest publication.
 
+- Added explicit Build / Produce progress phase, clearer empty worker/task states, and stepped progress history.
+- Defaulted the library to Latest per path and grouped approvals into live, completed, and stale newest-first sections.
+- Added per-request approve, approve-with-changes, and reject outcomes; feedback is required only for changes or rejection.
+
 - Blocked full-theme finalization and registration for bounded workflow scopes.
 - Required an applicable viewport for every declared critical coverage state.
 - Preserved explicitly empty worker-action allowlists.

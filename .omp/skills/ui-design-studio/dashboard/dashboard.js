@@ -113,7 +113,7 @@
     requireValue(Array.isArray(data.history) && data.history.every((point) => record(point) && date(point.at) && ["verified", "required", "passedGates"].every((key) => count(point[key]))), "History records are invalid.");
     requireValue(Array.isArray(data.artworks) && data.artworks.every((artwork) => record(artwork) && ["id", "path", "title", "context", "version", "url"].every((key) => text(artwork[key])) && ["image", "html", "pdf"].includes(artwork.kind) && date(artwork.createdAt)), "Artwork records are invalid.");
     requireValue(new Set(data.artworks.map((artwork) => artwork.id)).size === data.artworks.length, "Artwork IDs must identify unique retained versions.");
-    requireValue(Array.isArray(data.approvals) && data.approvals.every((request) => record(request) && ["id", "title", "context", "inputsDigest"].every((key) => text(request[key])) && (request.createdAt === undefined || date(request.createdAt)) && ["plan", "design"].includes(request.stage) && strings(request.inputs) && ["pending", "approved", "rejected", "stale"].includes(request.status) && Array.isArray(request.options) && request.options.every((option) => record(option) && text(option.id) && text(option.label) && strings(option.artworkIds)) && new Set(request.options.map((option) => option.id)).size === request.options.length), "Approval requests are invalid.");
+    requireValue(Array.isArray(data.approvals) && data.approvals.every((request) => record(request) && ["id", "title", "context", "inputsDigest"].every((key) => text(request[key])) && (request.createdAt === undefined || date(request.createdAt)) && ["plan", "design"].includes(request.stage) && strings(request.inputs) && ["pending", "approved", "changes", "rejected", "stale"].includes(request.status) && Array.isArray(request.options) && request.options.every((option) => record(option) && text(option.id) && text(option.label) && strings(option.artworkIds)) && new Set(request.options.map((option) => option.id)).size === request.options.length), "Approval requests are invalid.");
     requireValue(new Set(data.approvals.map((request) => request.id)).size === data.approvals.length, "Approval request IDs are duplicated.");
     requireValue(data.decisions === undefined || (Array.isArray(data.decisions) && data.decisions.every((decision) => record(decision) && ["stage", "actor", "outcome", "rationale"].every((key) => text(decision[key])) && ["recordedAt", "optionId", "inputsDigest"].every((key) => decision[key] === undefined || text(decision[key])))), "Recorded decisions are invalid.");
     return data;
@@ -275,7 +275,25 @@
     progress.setAttribute("aria-valuetext", `${numberFormat.format(value)} of ${numberFormat.format(required)} required cases`);
   }
 
+  function renderPhaseProgress(snapshot) {
+    const phases = ["assessment", "plan", "design", "produce", "finalize"];
+    const labels = ["Assessment", "Plan", "Design", "Build / Produce", "Finalize"];
+    const current = phases.indexOf(snapshot.run.phase);
+    const completed = snapshot.run.status === "passed" ? phases.length : Math.max(0, current);
+    const list = phases.map((phase, index) => {
+      const item = element("li", index < completed ? "phase-done" : index === current ? "phase-active" : "phase-pending");
+      item.append(element("span", "phase-label", labels[index]), badge(index < completed ? "passed" : index === current ? "active" : "pending"));
+      return item;
+    });
+    byId("phase-list").replaceChildren(...list);
+    byId("phase-progress").hidden = false;
+    byId("phase-progress").value = snapshot.run.status === "passed" ? phases.length : Math.max(0, current + 1);
+    byId("phase-progress").setAttribute("aria-valuetext", `${labels[Math.max(0, current)] || "Unknown"} phase; ${completed} of ${phases.length} phases completed`);
+    byId("phase-summary").textContent = current < 0 ? "Phase unverified" : `${labels[current]} active · ${completed} of ${phases.length} complete`;
+  }
+
   function renderProgress(snapshot) {
+    renderPhaseProgress(snapshot);
     const coverage = snapshot.coverage;
     renderCoverage("mockup", coverage.mockups, coverage.required);
     renderCoverage("verified", coverage.verified, coverage.required);
@@ -375,7 +393,13 @@
     svg.append(svgElement("text", { x: 48, y: 211, "text-anchor": "end", class: "history-label" }, "0"));
     svg.append(svgElement("text", { x: 48, y: 41, "text-anchor": "end", class: "history-label" }, numberFormat.format(maximum)));
     for (const [field, className] of [["required", "history-required"], ["verified", "history-verified"]]) {
-      if (points.length > 1) svg.append(svgElement("polyline", { points: points.map((point) => `${x(point)},${y(point[field])}`).join(" "), class: className }));
+      if (points.length > 1) {
+        const path = points.map((point, index) => {
+          if (index === 0) return `M ${x(point)} ${y(point[field])}`;
+          return `H ${x(point)} V ${y(point[field])}`;
+        }).join(" ");
+        svg.append(svgElement("path", { d: path, class: `${className} history-line` }));
+      }
       for (const point of points) {
         const mark = svgElement("circle", { cx: x(point), cy: y(point[field]), r: field === "verified" ? 3.5 : 2.5, class: field === "verified" ? "history-point" : "history-required" });
         mark.append(svgElement("title", {}, `${formatTime(point.at)} · ${field} ${point[field]}`));
@@ -604,7 +628,7 @@
     const outcomes = element("fieldset");
     outcomes.append(element("legend", "", "2. Choose the decision outcome"));
     const outcomesRow = element("div", "approval-outcomes");
-    for (const [value, label] of [["approved", "Approve the selected option"], ["rejected", "Request changes to the selected option"]]) {
+    for (const [value, label] of [["approved", "Approve current artifacts"], ["changes", "Approve with changes"], ["rejected", "Reject and request changes"]]) {
       const row = element("label", "outcome-label");
       const input = element("input");
       input.type = "radio";
@@ -615,14 +639,14 @@
       outcomesRow.append(row);
     }
     outcomes.append(outcomesRow);
-    const rationaleLabel = element("label", "", "3. Explain your decision");
+    const rationaleLabel = element("label", "", "3. Feedback (required for changes or rejection)");
     const rationale = element("textarea");
     rationale.name = "rationale";
-    rationale.required = true;
+    rationale.required = false;
     rationale.rows = 4;
     rationale.id = `${prefix}-rationale`;
     rationaleLabel.htmlFor = rationale.id;
-    rationale.placeholder = "State why this option is approved or what needs to change.";
+    rationale.placeholder = "Optional for approval. Describe required changes or rejection feedback.";
     rationaleLabel.append(rationale);
     const confirmationLabel = element("label", "review-confirmation");
     const confirmation = element("input");
@@ -752,7 +776,7 @@
     const request = view.request;
     const draft = view.draft;
     const guided = state.snapshot.run.mode === "guided";
-    const terminal = ["approved", "rejected"].includes(request.status);
+    const terminal = ["approved", "changes", "rejected"].includes(request.status);
     const recorded = draft.result?.inputsDigest === request.inputsDigest;
     const changed = request.inputsDigest !== draft.inputsDigest;
     const stale = request.status === "stale" || changed || draft.conflict || view.withdrawn;
@@ -798,9 +822,9 @@
   function renderApprovals(snapshot) {
     const guided = snapshot.run.mode === "guided";
     byId("approval-mode").textContent = guided
-      ? "Guided mode. Inspect the actual retained versions, choose an option, and record your reason. Changed inputs invalidate old approvals."
+      ? "Guided mode. Inspect retained versions, then approve, request changes, or reject each live item."
       : snapshot.run.mode === "yolo"
-        ? "Autonomous yolo mode. The director records its decisions and continues without waiting for user approval. Pending gates remain pending until evidence passes."
+        ? "Autonomous yolo mode. The director records its decisions and continues without waiting for user approval."
         : "Run mode is unverified. No user approval can be submitted.";
     const approvals = snapshot.approvals.slice().sort((left, right) => (right.createdAt || "").localeCompare(left.createdAt || "")
       || right.id.localeCompare(left.id));
@@ -808,8 +832,12 @@
     byId("approval-count").hidden = !guided || pending === 0;
     byId("approval-count").textContent = String(pending);
     byId("approval-count").setAttribute("aria-label", `${pending} pending requests`);
-    const list = byId("approval-list");
-    if (!state.approvalViews.size) list.replaceChildren();
+    const lists = {
+      live: byId("live-approval-list"),
+      completed: byId("completed-approval-list"),
+      stale: byId("stale-approval-list"),
+    };
+    for (const root of Object.values(lists)) root.replaceChildren();
     const present = new Set();
     for (const request of approvals) {
       present.add(request.id);
@@ -817,7 +845,6 @@
       if (!view) {
         view = createApprovalView(request);
         state.approvalViews.set(request.id, view);
-        list.append(view.card);
       }
       view.request = request;
       view.withdrawn = false;
@@ -834,7 +861,8 @@
       }
       updateApprovalOptions(view);
       updateApprovalAvailability(view);
-      list.append(view.card);
+      const group = request.status === "pending" ? "live" : request.status === "stale" ? "stale" : "completed";
+      lists[group].append(view.card);
     }
     for (const [id, view] of state.approvalViews) {
       if (!present.has(id)) {
@@ -842,9 +870,20 @@
         view.status.textContent = "Not in current snapshot";
         view.status.dataset.state = "stale";
         updateApprovalAvailability(view);
+        lists.stale.append(view.card);
       }
     }
-    if (!state.approvalViews.size) list.append(element("p", "empty-state", guided ? "No approval requests have been published. The dashboard does not create or assume an approval." : snapshot.run.mode === "yolo" ? "No approval requests are recorded. This autonomous run does not wait for user approvals." : "Approval requests are unavailable while run mode is unverified."));
+    const counts = {
+      live: lists.live.querySelectorAll(".approval-card").length,
+      completed: lists.completed.querySelectorAll(".approval-card").length,
+      stale: lists.stale.querySelectorAll(".approval-card").length,
+    };
+    byId("live-approval-count").textContent = `${counts.live} live`;
+    byId("completed-approval-count").textContent = String(counts.completed);
+    byId("stale-approval-count").textContent = String(counts.stale);
+    for (const [name, root] of Object.entries(lists)) {
+      if (!root.children.length) root.append(element("p", "empty-state", name === "live" ? "No live approvals." : name === "completed" ? "No completed approvals." : "No stale approvals."));
+    }
   }
 
   function renderDecisions(snapshot) {
@@ -895,11 +934,13 @@
     if (view.submit.disabled) return;
     const draft = view.draft;
     const request = view.request;
+    const needsFeedback = ["changes", "rejected"].includes(draft.outcome);
     const rationale = view.rationale.value.trim();
-    view.rationale.setCustomValidity(rationale ? "" : "Explain the decision before submitting.");
+    view.rationale.required = needsFeedback;
+    view.rationale.setCustomValidity(needsFeedback && !rationale ? "Explain what needs to change before submitting." : "");
     if (!view.form.reportValidity()) return;
     const option = request.options.find((item) => item.id === draft.optionId);
-    if (!option || !request.inputs.length || !draft.inputsDigest || !draft.reviewed || !["approved", "rejected"].includes(draft.outcome)) {
+    if (!option || !request.inputs.length || !draft.inputsDigest || !draft.reviewed || !["approved", "changes", "rejected"].includes(draft.outcome)) {
       view.message.hidden = false;
       view.message.dataset.state = "error";
       view.message.textContent = "A listed input digest, an available option, an outcome, and your review confirmation are required. No decision was submitted.";
@@ -934,7 +975,9 @@
         view.message.dataset.state = payload.outcome;
         view.message.textContent = payload.outcome === "approved"
           ? "Decision recorded as approved for the reviewed digest. Acceptance gates still require their own evidence."
-          : "Decision recorded as rejected for the reviewed digest. Your request for changes was saved.";
+          : payload.outcome === "changes"
+            ? "Approval-with-changes recorded for the reviewed digest. The requested feedback was saved."
+            : "Decision recorded as rejected for the reviewed digest. Your request for changes was saved.";
       }
     } catch (error) {
       view.message.dataset.state = "error";

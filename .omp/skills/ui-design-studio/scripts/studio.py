@@ -1111,7 +1111,7 @@ def check_run(path):
         require(decision.get("actor") in ("user", "agent-yolo", "director"), "Decision actor must be user, agent-yolo, or director")
         require(decision["actor"] != "director" or stage == "finalize", "Director approval is only valid at finalize")
         require(not (run["mode"] == "guided" and decision["actor"] == "agent-yolo"), "Guided runs cannot record agent-yolo approval")
-        require(decision.get("outcome") in ("approved", "rejected", "pending", "superseded"), "Decision outcome must be approved, rejected, pending or superseded")
+        require(decision.get("outcome") in ("approved", "changes", "rejected", "pending", "superseded"), "Decision outcome must be approved, changes, rejected, pending or superseded")
         latest[stage] = decision
     review_inputs["approvals"] = {stage: latest.get(stage) for stage in ("plan", "design")}
     review_digest = digest_bytes(canonical(review_inputs))

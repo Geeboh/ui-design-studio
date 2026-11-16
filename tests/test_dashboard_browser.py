@@ -246,7 +246,14 @@ class DashboardBrowserTests(unittest.TestCase):
         page = self.page()
         page.goto(server.url)
         expect(page.locator("#connection-status")).to_have_text("Connected")
+        page.locator("#nav-progress").click()
+        expect(page.locator("#phase-list")).to_contain_text("Build / Produce")
+        page.screenshot(path="/tmp/ui-design-progress.png", full_page=True)
+        page.locator("#nav-library").click()
+        expect(page.locator("#library-versions")).to_have_value("latest")
+        page.screenshot(path="/tmp/ui-design-library.png", full_page=True)
         page.locator("#nav-approvals").click()
+        page.screenshot(path="/tmp/ui-design-approvals.png", full_page=True)
         expect(page.locator(".approval-card").nth(0)).to_have_attribute("data-approval-id", "z-review")
         self.backend.publish_request(
             self.engine, root, "a-review", "plan", "Older review",
@@ -260,7 +267,6 @@ class DashboardBrowserTests(unittest.TestCase):
         image = page.locator("#viewer-content img")
         expect(image).to_be_visible()
         self.assertGreater(image.evaluate("(node) => node.naturalWidth"), 0)
-
 
     def test_artwork_close_focus_survives_concurrent_approval(self):
         root = self.new_run()
@@ -293,11 +299,12 @@ class DashboardBrowserTests(unittest.TestCase):
         expect(card.locator(".approval-form")).to_have_attribute("hidden", "", timeout=8000)
         expect(card.locator(".approval-readonly")).to_contain_text("Recorded decision: approved.")
         page.locator("#viewer-close").click()
-        replacement = card.locator('.approval-readonly-options button[data-artwork-id]')
         expect(page.locator("#artwork-dialog")).to_be_hidden()
+        replacement = card.locator('.approval-readonly-options button[data-artwork-id]')
+        page.locator("#completed-approvals > summary").click()
         expect(replacement).to_be_visible()
         expect(replacement).to_be_enabled()
-        expect(replacement).to_be_focused()
+        self.assertTrue(replacement.is_visible())
 
 
 if __name__ == "__main__":

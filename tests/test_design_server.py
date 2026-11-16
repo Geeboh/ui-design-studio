@@ -394,9 +394,19 @@ class DesignServerTests(unittest.TestCase):
     def test_rejected_approval_status_is_persisted_for_other_consumers(self):
         request = self.plan("rejected-review")
         server = self.start()
-        self.assertEqual(self.request(server, "/api/approval", "POST",
-                                      self.payload(request, "request-changes", "rejected"))[0], 200)
+        payload = self.payload(request, "request-changes", "rejected")
+        self.assertEqual(self.request(server, "/api/approval", "POST", payload)[0], 200)
         self.assertEqual(studio.read_json(self.root / "approval-requests/rejected-review.json")["status"], "rejected")
+
+    def test_changes_approval_accepts_feedback_and_persists_terminal_status(self):
+        request = self.plan("changes-review")
+        server = self.start()
+        payload = self.payload(request, "approve", "changes")
+        payload["rationale"] = "Adjust spacing in the reviewed board."
+        self.assertEqual(self.request(server, "/api/approval", "POST", payload)[0], 200)
+        self.assertEqual(studio.read_json(self.root / "approval-requests/changes-review.json")["status"], "changes")
+        self.assertEqual(studio.read_json(self.root / "decisions.json")["decisions"][-1]["outcome"], "changes")
+
 
     def test_approval_order_uses_full_timestamp_before_id(self):
         older = self.plan("z-review")

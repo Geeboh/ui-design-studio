@@ -449,8 +449,8 @@ def approve(studio, root, payload, repo=None):
             raise ApprovalConflict("Review inputs or decisions changed; refresh the approval request and review again")
         option = next((item for item in request["options"] if item["id"] == payload.get("optionId")), None)
         need(studio, option is not None, "Unknown approval option")
-        need(studio, payload.get("outcome") in ("approved", "rejected"), "Approval outcome must be approved or rejected")
-        need(studio, isinstance(payload.get("rationale"), str) and payload["rationale"].strip(), "A review rationale is required")
+        need(studio, payload.get("outcome") in ("approved", "changes", "rejected"), "Approval outcome must be approved, changes or rejected")
+        need(studio, payload.get("outcome") == "approved" or (isinstance(payload.get("rationale"), str) and payload["rationale"].strip()), "Feedback is required for changes or rejection")
         need(studio, payload.get("optionId") != "request-changes" or payload.get("outcome") == "rejected", "Request changes cannot grant approval")
         if request["stage"] == "design":
             plan = latest.get("plan")
