@@ -1,5 +1,13 @@
 # Release notes
 
+
+## 1.4.3 · 16 November 2026
+
+- Added the initial source-grounded documentation library under `docs/documenter/`.
+- Recorded inventory, coverage, claims, page reviews, and unresolved runtime/platform facts under `.documenter/`.
+- Updated package metadata and installation guidance to 1.4.3.
+- Retained the redacted v1.4.2 dashboard screenshots as relevant release visuals.
+
 ## 1.4.2 · 15 November 2026
 
 - Fixed SVG artwork previews by preserving the SVG namespace and serving an explicit `image/svg+xml` response.

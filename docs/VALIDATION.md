@@ -1,5 +1,19 @@
 # Release validation
 
+## Version 1.4.3 candidate · 16 November 2026 UTC
+
+This patch release publishes the initial source-grounded documentation library and aligns package metadata. It adds no runtime dependency or run-schema migration.
+
+| Check | Observed result | Scope |
+| --- | --- | --- |
+| Focused package tests | 41 passed and 47 subtests passed | `tests/test_release_builder.py`, `tests/test_mcp.py`, and `tests/test_mcp_package.py` |
+| Source ZIP build | PASS; 155 packaged files, 1,648,023 bytes | `dist/UI-Design-Studio-OMP-v1.4.3.zip` |
+| ZIP checksum | PASS | SHA-256 `d091ae4936a8247014255cb42ee1d082a7ffbe3ceab6328859ffc6a1bd9d1085` |
+| Manifest check | PASS; 154 source hashes verified | `scripts/package_release.py --check` |
+| Documenter coverage | 141/141 eligible source files and 16/16 generated pages reviewed | Source snapshot `40f3ff4151dfb62aa2f79001641057c0d7e4305bcdd7a66646a1f62af8280213` |
+
+The four screenshots attached to the release are redacted synthetic v1.4.2 dashboard captures retained as relevant visual references. They are not new recipient-application acceptance evidence. Live OMP/provider execution, native platform checks, other browser engines, and recipient-application testing remain unverified.
+
 ## Version 1.4.2 candidate · 15 November 2026 UTC
 
 This local candidate builds merged main `8ca4c9e9795839181005c9df82563e4a42e8fc83` with a patch-version update, release documentation, and fresh screenshots. No tag, hosted release, or deployment was created. Uncommitted changes in the original checkout are excluded.

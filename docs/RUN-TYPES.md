@@ -1,6 +1,6 @@
 # Run types and practical recipes
 
-**UI Design Studio 1.4.2**
+**UI Design Studio 1.4.3**
 
 Run the commands below in an OMP session whose working directory is the target project root. The package must already be installed in that project. For installation and troubleshooting, see [Installation](INSTALLATION.md).
 
