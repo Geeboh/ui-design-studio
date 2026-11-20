@@ -257,6 +257,22 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("AGENTS.md", result.stderr)
         self.assertEqual(before, snapshot(self.project))
 
+    def test_restore_rejects_malformed_backup_path(self):
+        self.run_install()
+        source = self.pack / ".omp/skills/ui-assess/SKILL.md"
+        source.write_text(source.read_text() + "Updated fixture\n")
+        self.run_install("--update")
+        manifest_path = next(
+            path for path in self.backups()
+            if any(entry["action"] == "replace" for entry in json.loads(path.read_text())["files"])
+        )
+        manifest = json.loads(manifest_path.read_text())
+        entry = next(entry for entry in manifest["files"] if entry["action"] == "replace")
+        entry["backupPath"] = []
+        manifest_path.write_text(json.dumps(manifest))
+        result = self.run_install("--restore", manifest["backupId"], expected=1)
+        self.assertIn("Unsafe relative path", result.stderr)
+
     def test_symlink_and_bad_markers_refused(self):
         outside = self.base / "outside"
         outside.mkdir()

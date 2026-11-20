@@ -21,6 +21,7 @@ The designer learns the project from its own instructions, requirements, source 
 | [Primary sources](docs/SOURCES.md) | Upstream OMP behaviour, accessibility, tokens and performance references |
 
 The installer places this documentation in `docs/ui-design-studio/` inside the target project. Reusable prompts are included in `prompts/` in the archive and `docs/ui-design-studio/prompts/` after installation.
+The repository documentation and `install.sh` belong to the extracted source ZIP workflow. The standalone Python wheel includes only the MCP runtime, bundled guides, dashboard assets, schemas, and specimen theme; it does not include this repository's `docs/`, `prompts/`, or installer scripts.
 
 ## Quick start
 
