@@ -12,7 +12,7 @@ This patch release publishes the initial source-grounded documentation library a
 | Manifest check | PASS; 154 source hashes verified | `scripts/package_release.py --check` |
 | Documenter coverage | 141/141 eligible source files and 16/16 generated pages reviewed | Source snapshot `40f3ff4151dfb62aa2f79001641057c0d7e4305bcdd7a66646a1f62af8280213` |
 
-The four screenshots attached to the release are redacted synthetic v1.4.2 dashboard captures retained as relevant visual references. They are not new recipient-application acceptance evidence. Live OMP/provider execution, native platform checks, other browser engines, and recipient-application testing remain unverified.
+The three screenshots retained in this source release are redacted synthetic v1.4.2 dashboard captures. They are not new v1.4.3 recipient-application acceptance evidence. Hosted release assets are outside this local source verification scope.
 
 ## Version 1.4.2 candidate · 15 November 2026 UTC
 
@@ -43,11 +43,11 @@ This release revalidation covers the approval API, attachments, browser annotati
 | Approval/server focused suite | 85 tests passed | Approval persistence, rollback, attachments, annotations, SVG, and ordering |
 | Browser approval suite | 9 tests passed | Chromium approval flow, image upload, annotation editing, undo/redo, and reload state |
 | Static checks | PASS | Python compilation, dashboard Node syntax, and `git diff --check` |
-| Source ZIP | PASS; 138 archive entries | Includes changelog, release notes, and annotation screenshot |
+| Source ZIP | PASS; 138 archive entries | Includes changelog and release notes |
 | Manifest and archive verification | PASS; 137 source hashes verified | `sha256sum -c MANIFEST.sha256`, ZIP CRC, and ZIP sidecar |
 | Python distributions | PASS | Wheel and sdist built |
 
-The annotation screenshot is a synthetic browser capture, not recipient-application acceptance evidence. Firefox, WebKit, native Windows/macOS, physical devices, and human recipient-application testing remain unverified.
+The retained screenshots are synthetic browser captures, not recipient-application acceptance evidence. Firefox, WebKit, native Windows/macOS, physical devices, and human recipient-application testing remain unverified.
 
 ## Current main revalidation · 16 November 2026 UTC
 

@@ -10,7 +10,7 @@ Project installation creates a backup manifest before applying changes. If appli
 
 ## Release checks
 
-scripts/package_release.py --check compares MANIFEST.sha256 with hashes of reviewed source files. A release build excludes runtime/private files, rejects symlinks, enforces skill/agent counts from release.json, writes deterministic ZIP metadata, tests CRC/content, and publishes archive and sidecar atomically.
+scripts/package_release.py --check compares MANIFEST.sha256 with hashes of reviewed source files. A release build excludes runtime/private files, rejects symlinks, enforces skill/agent counts from release.json, writes deterministic ZIP metadata, tests CRC/content, and publishes the archive, manifest, and sidecar through separate filesystem replacements. Re-run checksum verification after an interruption.
 
 The release script does not upload or publish externally. Existing ZIPs and checksum files under dist/ are repository artifacts; this review did not rebuild them.
 

@@ -32,11 +32,11 @@ Real Chromium Back navigation resumes polling through a reload. It did not resto
 ## Screenshots
 
 Fresh Chromium captures use synthetic projects and the 1.4.2 release candidate. Private paths, connection identities, and bearer URLs are masked. These examples are not recipient-application acceptance evidence.
+The former annotation screenshot is intentionally omitted from this source tree after a privacy review; annotation behavior remains covered by automated tests.
 
 ![Authenticated connection dashboard with two unfinished runs.](screenshots/v1.4.2-connection.png)
 
 ![Durably recorded guided approval.](screenshots/v1.4.2-approval.png)
-![Browser approval with a non-destructive arrow annotation and uploaded feedback image.](screenshots/v1.4.2-approval-annotations.png)
 
 ![Retained sandboxed artwork preview.](screenshots/v1.4.2-artwork.png)
 

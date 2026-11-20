@@ -14,12 +14,12 @@ This patch release publishes the initial repository documentation library and al
 ## Screenshots
 
 These redacted synthetic dashboard captures remain relevant visual references. They originate from v1.4.2 and are not new v1.4.3 recipient-application acceptance evidence.
+The former annotation screenshot is intentionally omitted from this source tree after a privacy review; annotation behavior remains covered by automated tests.
 
 ![Authenticated connection dashboard with two unfinished runs.](screenshots/v1.4.2-connection.png)
 
 ![Durably recorded guided approval.](screenshots/v1.4.2-approval.png)
 
-![Browser approval with a non-destructive annotation and uploaded feedback image.](screenshots/v1.4.2-approval-annotations.png)
 
 ![Retained sandboxed artwork preview.](screenshots/v1.4.2-artwork.png)
 

@@ -68,6 +68,8 @@ def json_bytes(value: object) -> bytes:
 
 
 def safe_relative(raw: str) -> str:
+    if not isinstance(raw, str):
+        raise InstallError(f"Unsafe relative path: {raw!r}")
     path = PurePosixPath(raw)
     if not raw or path.is_absolute() or any(x in ("", ".", "..") for x in raw.split("/")) or "\\" in raw:
         raise InstallError(f"Unsafe relative path: {raw!r}")
