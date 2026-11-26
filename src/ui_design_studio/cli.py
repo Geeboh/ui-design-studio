@@ -21,7 +21,7 @@ from .dashboard import AmbiguousSessions, DashboardSession, DashboardUnavailable
 from .runtime import studio
 from .server import create_server
 from .application import dispatch
-from .storage import StateStore
+from .project_cleanup import CleanupError, cleanup_project
 
 
 def _repo(value: str) -> Path:
@@ -282,9 +282,29 @@ def _command(argv: list[str]) -> int:
     return 0 if result.get("status") in ("PASS", "REJECTED") else 1
 
 
+def _cleanup_project(argv: list[str]) -> int:
+    parser = _DashboardParser(prog="ui-design cleanup-project", description="Remove project-local UI Design Studio files.")
+    parser.add_argument("--repo", required=True, type=_repo)
+    parser.add_argument("--dry-run", action="store_true", help="Report removals without changing the project")
+    parser.add_argument("--yes", action="store_true", help="Apply the cleanup")
+    parser.add_argument("--purge-backups", action="store_true", help="Also remove installer backups")
+    args = parser.parse_args(argv)
+    if not args.dry_run and not args.yes:
+        parser.error("refusing to remove files without --yes; use --dry-run to preview")
+    try:
+        result = cleanup_project(args.repo, apply=args.yes and not args.dry_run, purge_backups=args.purge_backups)
+    except (CleanupError, OSError) as exc:
+        print(json.dumps({"status": "FAIL", "error": str(exc)}))
+        return 1
+    print(json.dumps(result, ensure_ascii=False))
+    return 0 if result["status"] == "PASS" else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """Keep existing engine commands and add dashboard entrypoints."""
     arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments and arguments[0] == "cleanup-project":
+        return _cleanup_project(arguments[1:])
     if arguments and arguments[0] == "command":
         return _command(arguments[1:])
     if arguments and arguments[0] == "dashboard-info":

@@ -118,7 +118,7 @@ def atomic_write(path: Path, data: bytes, mode: int) -> None:
         with os.fdopen(fd, "wb") as stream:
             stream.write(data)
             stream.flush()
-            os.fsync(stream.fileno())
+            (os.fdatasync if hasattr(os, "fdatasync") else os.fsync)(stream.fileno())
         temp.chmod(mode)
         os.replace(temp, path)
     finally:
