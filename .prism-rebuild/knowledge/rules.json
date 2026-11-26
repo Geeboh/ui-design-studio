@@ -86,6 +86,10 @@
       "sourceLocators": {
         "B02": "PDF pp410–411",
         "B05": "PDF pp67,240–268",
+        "P08": "SOURCES.md P08",
+        "P09": "SOURCES.md P09",
+        "P10": "SOURCES.md P10",
+        "P11": "SOURCES.md P11",
         "P06": "Section 2.4"
       },
       "authority": "engineering-proposal"
@@ -109,6 +113,7 @@
       "sourceLocators": {
         "C01": "Study-guide scope",
         "C06": "Cognitive walkthrough and memory discussion",
+        "P15": "SOURCES.md P15",
         "P16": "Memory capacity qualifications"
       },
       "authority": "source-informed-heuristic"
@@ -195,6 +200,8 @@
       ],
       "sourceLocators": {
         "B10": "PDF pp70–73,102–106,142–166",
+        "U07": "SOURCES.md U07",
+        "P01": "SOURCES.md P01",
         "PROJECT": "Theme lifecycle"
       },
       "authority": "engineering-proposal"
@@ -672,6 +679,7 @@
       "sourceLocators": {
         "B08": "PDF pp96–98",
         "B06": "PDF pp74–87,118–124",
+        "P21": "SOURCES.md P21",
         "PROJECT": "Transactional SQLite architecture"
       },
       "authority": "engineering-proposal"
@@ -695,6 +703,7 @@
       "sourceLocators": {
         "B02": "PDF pp25–35",
         "B05": "PDF pp191–215",
+        "P14": "SOURCES.md P14",
         "PROJECT": "Performance fixture protocol"
       },
       "authority": "engineering-proposal"

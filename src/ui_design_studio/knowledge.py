@@ -21,11 +21,12 @@ class KnowledgeRule:
     action: str
     check: str
     authority: str
+    exceptions: tuple[str, ...]
     source_ids: tuple[str, ...]
     source_locators: dict[str, str]
 
     def as_dict(self) -> dict[str, Any]:
-        return {"id": self.rule_id, "topic": self.topic, "principle": self.principle, "appliesWhen": self.applies_when, "action": self.action, "check": self.check, "authority": self.authority, "sourceIds": list(self.source_ids), "sourceLocators": self.source_locators}
+        return {"id": self.rule_id, "topic": self.topic, "principle": self.principle, "appliesWhen": self.applies_when, "action": self.action, "check": self.check, "authority": self.authority, "exceptions": list(self.exceptions), "sourceIds": list(self.source_ids), "sourceLocators": self.source_locators}
 
 
 def load_rules(path: str | Path) -> tuple[KnowledgeRule, ...]:
@@ -38,11 +39,16 @@ def load_rules(path: str | Path) -> tuple[KnowledgeRule, ...]:
             raise KnowledgeError("knowledge rule is incomplete")
         sources = item.get("sourceIds", [])
         locators = item.get("sourceLocators", {})
-        if not isinstance(sources, list) or not isinstance(locators, dict) or any(not isinstance(source, str) or not source.strip() for source in sources):
+        exceptions = item.get("exceptions", [])
+        if not isinstance(sources, list) or not isinstance(locators, dict) or not isinstance(exceptions, list):
             raise KnowledgeError("knowledge provenance is malformed")
+        if any(not isinstance(source, str) or not source.strip() for source in sources) or any(not isinstance(exception, str) or not exception.strip() for exception in exceptions):
+            raise KnowledgeError("knowledge provenance is malformed")
+        if any(source not in locators or not isinstance(locators[source], str) or not locators[source].strip() for source in sources):
+            raise KnowledgeError("knowledge source IDs require matching nonempty locators")
         if not sources and item["authority"] != "engineering-proposal":
             raise KnowledgeError("source-informed knowledge requires provenance")
-        rules.append(KnowledgeRule(item["id"], item["topic"], item["principle"], item["appliesWhen"], item["action"], item["check"], item["authority"], tuple(sources), {str(key): str(value) for key, value in locators.items()}))
+        rules.append(KnowledgeRule(item["id"], item["topic"], item["principle"], item["appliesWhen"], item["action"], item["check"], item["authority"], tuple(exceptions), tuple(sources), {str(key): str(value) for key, value in locators.items()}))
     return tuple(rules)
 
 
