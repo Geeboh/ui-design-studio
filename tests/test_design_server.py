@@ -405,6 +405,13 @@ class DesignServerTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual(result["runStatus"], "reconciling")
         self.assertEqual(result["cancellation"]["remoteOutcome"], "unknown")
+        code, unused, resolved = self.request(server, "/api/reconcile", "POST", {
+            "providerReceiptId": "provider-receipt-1", "remoteOutcome": "completed",
+            "cost": {"status": "observed", "amountMinor": 7, "currencyCode": "USD", "currencyExponent": 2, "source": "fixture", "observedAt": backend.timestamp()},
+        })
+        self.assertEqual(code, 200)
+        self.assertEqual(resolved["runStatus"], "completed")
+        self.assertEqual(resolved["cancellation"]["remoteOutcome"], "completed")
     def test_usage_records_are_idempotent_and_exposed_without_tersio(self):
         server = self.start()
         observed_at = backend.timestamp()

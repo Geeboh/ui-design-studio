@@ -59,12 +59,14 @@ class M6Tests(unittest.TestCase):
             lifecycle = ThemeLifecycle(root / "state")
             (source / "theme.css").write_text("v1", encoding="utf-8")
             lifecycle.install(source, target, theme_id="fixture", scope="dashboard", receipt_id="theme-1")
+            (target / "theme.css").write_text("consumer override", encoding="utf-8")
             (source / "theme.css").write_text("v2", encoding="utf-8")
             second = lifecycle.upgrade(source, target, theme_id="fixture", scope="dashboard", receipt_id="theme-2")
             active = (lifecycle.state_root / "active.json").read_text(encoding="utf-8")
-            self.assertIn(second.receipt_id, active)
+            self.assertIn("theme.css", second.preserved_paths)
+            self.assertEqual((target / "theme.css").read_text(encoding="utf-8"), "consumer override")
             lifecycle.restore(second)
-            self.assertEqual((target / "theme.css").read_text(encoding="utf-8"), "v1")
+            self.assertEqual((target / "theme.css").read_text(encoding="utf-8"), "consumer override")
             self.assertFalse((lifecycle.state_root / "active.json").exists())
 
     def test_theme_restore_refuses_divergent_target(self):

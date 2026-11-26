@@ -623,13 +623,33 @@ def cancel_run(studio, root):
             run["cancellation"] = {"status": "requested", "remoteOutcome": "unknown"}
             studio.atomic_json(run_path, run)
         return {"status": "PASS", "run": run.get("id"), "runStatus": run.get("status"), "remoteOutcome": run.get("cancellation", {}).get("remoteOutcome")}
-def reconcile_run(studio, root):
+def reconcile_run(studio, root, payload=None):
     with records_lock(studio, root):
         run_path = studio.safe_path(root, "run.json")
         run = studio.read_json(run_path)
         cancellation = run.get("cancellation")
         need(studio, isinstance(cancellation, dict), "No cancellation is available for reconciliation")
-        if cancellation.get("remoteOutcome") == "unknown":
+        payload = payload if isinstance(payload, dict) else {}
+        receipt = payload.get("providerReceiptId")
+        if receipt is not None:
+            need(studio, isinstance(receipt, str) and 1 <= len(receipt) <= 256, "Provider receipt ID is invalid")
+            outcome = payload.get("remoteOutcome")
+            need(studio, outcome in {"completed", "cancelled", "failed"}, "Reconciled remote outcome is invalid")
+            billing = payload.get("cost")
+            need(studio, isinstance(billing, dict), "Reconciliation requires a cost observation")
+            billing_status = billing.get("status")
+            need(studio, billing_status in {"observed", "estimated", "unknown", "not_billable"}, "Reconciled cost status is invalid")
+            existing_receipt = cancellation.get("providerReceiptId")
+            if existing_receipt is not None:
+                need(studio, existing_receipt == receipt and cancellation.get("remoteOutcome") == outcome and cancellation.get("billing") == billing,
+                     "Provider receipt was reused with different reconciliation data")
+            else:
+                cancellation = dict(cancellation)
+                cancellation.update({"status": "resolved", "remoteOutcome": outcome, "providerReceiptId": receipt, "billing": billing, "resolvedAt": timestamp()})
+                run["cancellation"] = cancellation
+                run["status"] = "completed" if outcome == "completed" else "failed" if outcome == "failed" else "cancelled"
+                studio.atomic_json(run_path, run)
+        elif cancellation.get("remoteOutcome") == "unknown":
             cancellation = dict(cancellation)
             cancellation["status"] = "reconciling"
             cancellation["requestedAt"] = cancellation.get("requestedAt") or timestamp()
@@ -651,7 +671,7 @@ class ArtworkLibrary:
         for relative in sorted(record.get("files", {})):
             path = self.studio.safe_path(self.root, relative)
             observed = path.stat()
-            signature.append((relative, observed.st_mtime_ns, observed.st_size))
+            signature.append((relative, observed.st_mtime_ns, observed.st_ctime_ns, observed.st_size))
         return tuple(signature)
 
     def publication_index(self):
@@ -1611,7 +1631,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/cancel":
                 self.respond(200, cancel_run(owner.studio, owner.root))
             elif path == "/api/reconcile":
-                self.respond(200, reconcile_run(owner.studio, owner.root))
+                self.respond(200, reconcile_run(owner.studio, owner.root, payload))
             elif path == "/api/usage":
                 self.respond(200, record_usage(owner.studio, owner.root, payload))
             else:

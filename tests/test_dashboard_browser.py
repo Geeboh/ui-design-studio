@@ -375,6 +375,21 @@ class DashboardBrowserTests(unittest.TestCase):
         page.locator('[data-usage-range="7d"]').click()
         expect(page.locator("#usage-status")).to_have_text("Recorded")
 
+    def test_usage_navigation_and_range_controls_work_by_keyboard(self):
+        root = self.new_run()
+        server = self.backend.DesignServer(self.engine, root, interval=0.05)
+        self.addCleanup(server.close)
+        server.start()
+        page = self.page()
+        page.goto(server.url)
+        expect(page.locator("#connection-status")).to_have_text("Connected")
+        page.locator("#nav-usage").focus()
+        page.locator("#nav-usage").press("Enter")
+        expect(page.locator("#usage-heading")).to_be_visible()
+        page.locator('[data-usage-range="7d"]').focus()
+        page.locator('[data-usage-range="7d"]').press("Enter")
+        expect(page.locator('[data-usage-range="7d"]')).to_have_attribute("aria-pressed", "true")
+
     def test_cancel_and_reconcile_render_unknown_remote_outcome(self):
         root = self.new_run()
         server = self.backend.DesignServer(self.engine, root, interval=0.05)
