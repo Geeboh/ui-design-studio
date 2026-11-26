@@ -8,6 +8,8 @@ on:
 jobs:
   core-and-package:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: src
     strategy:
       matrix:
         python: ['3.10', '3.12']
