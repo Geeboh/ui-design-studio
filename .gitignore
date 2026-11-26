@@ -9,8 +9,11 @@ htmlcov/
 # Locally built release artifacts
 /dist/
 
-# Local installation state and backups
-/.ui-design-studio/
+# Local runtime, state, evidence, and installation data
+/.runtime/
+/.prism-state
+/.venv-prism
+/.ui-design-studio
 **/.design-server.json
 **/.design-status.json
 
