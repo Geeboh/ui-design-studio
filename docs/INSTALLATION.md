@@ -222,9 +222,27 @@ Restore checks the affected files' current content and permissions first. It sto
 
 This restores **package installation changes**. Application modifications made by a design run have their own project branch/release and theme rollback procedure. To undo a redesign, use its recorded rollback instructions and the application's previous theme/version; do not assume installer restore reverts the app.
 
-There is no general-purpose `--uninstall` command in this release. If restoring the initial installation, the backup reverses its recorded changes subject to the same conflict checks. It does not recursively delete unrelated project work.
+There is no general-purpose recursive uninstall through `install.sh`. Use the universal MCP cleanup command instead when the package is installed globally:
 
-## 8. Troubleshooting
+```bash
+ui-design cleanup-project --repo /absolute/path/to/project --dry-run
+ui-design cleanup-project --repo /absolute/path/to/project --yes
+```
+
+The command removes installer-owned OMP skills, agents, commands, extension, wrapper, project venv and install state. It removes marked blocks from `AGENTS.md` and `.gitignore`. It preserves the running MCP data under `.ui-design-studio/runtime`, design runs, evidence, themes and `ui-design-studio.json`. Edited managed files cause a conflict instead of deletion.
+
+Add `--purge-backups` only when old installer rollback records are no longer needed:
+
+```bash
+ui-design cleanup-project --repo /absolute/path/to/project --yes --purge-backups
+```
+
+This command does not stop or remove the universal MCP runtime at `~/.local/share/ui-design-studio/mcp`. It is safe to run while that runtime serves the project.
+
+For an update interrupted before this command existed, keep `.ui-design-studio` until the cleanup dry run confirms the paths. Do not use `rm -rf .ui-design-studio`; it can delete active MCP records and design evidence.
+
+## 9. Troubleshooting
+
 
 | Symptom | Check and next action |
 | --- | --- |
