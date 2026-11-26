@@ -20,6 +20,8 @@ from pydantic import Field
 from . import __version__
 from .dashboard import DashboardSession, DashboardUnavailable
 from .runtime import PACKAGE, PAYLOAD, backend, studio
+from .application import dispatch
+from .storage import StateStore
 
 
 Mode = Literal["guided", "yolo"]
@@ -96,7 +98,7 @@ class _Guides:
         return text
 
 
-def create_server(repo: Path | str, dashboard_host: str = "0.0.0.0", dashboard_port: int = 0,
+def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard_port: int = 0,
                   lan_address: str | None = None) -> FastMCP:
     """Create one local MCP connection. Its lifespan owns its dashboard listeners."""
     root = Path(repo)
@@ -107,6 +109,7 @@ def create_server(repo: Path | str, dashboard_host: str = "0.0.0.0", dashboard_p
     design = backend()
     guides = _Guides(engine)
     session = DashboardSession(root, host=dashboard_host, port=dashboard_port, lan_address=lan_address)
+    command_store = StateStore(root / ".ui-design-studio" / "prism" / "state.sqlite3")
 
     @asynccontextmanager
     async def lifespan(_: FastMCP) -> AsyncIterator[DashboardSession]:
@@ -195,6 +198,11 @@ def create_server(repo: Path | str, dashboard_host: str = "0.0.0.0", dashboard_p
         page.update({"run": result["run"], "observedAt": result["observedAt"]})
         page.update(connection_details(run))
         return page
+
+    @tool(destructive=True, idempotent=True)
+    def ui_design_command(envelope: dict[str, Any]) -> dict[str, Any]:
+        """Dispatch one canonical PRISM command envelope through the shared engine."""
+        return dispatch(command_store, envelope)
 
     @tool()
     def ui_design_start_run(theme_id: str, mode: Mode = "guided", theme_action: ThemeAction = "auto",
@@ -307,6 +315,10 @@ def create_server(repo: Path | str, dashboard_host: str = "0.0.0.0", dashboard_p
         _, themes, _ = engine.config_paths(root)
         path_in((themes / theme).relative_to(root).as_posix(), "theme")
         return engine.register_theme(root, theme, path_in(run, "run"), make_default)
+    @tool(destructive=True, idempotent=True)
+    def ui_design_restore_theme(backup: str) -> dict[str, Any]:
+        """Restore a prior theme registry backup and its active-theme selection."""
+        return engine.restore_theme(root, backup)
 
     @tool()
     def ui_design_status(run: str, interval: float = 1.0) -> dict[str, Any]:

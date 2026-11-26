@@ -1,0 +1,84 @@
+{
+  "schemaVersion": "1.0.0",
+  "productVersion": "2.0.0",
+  "targetProfile": "release",
+  "description": "DELIBERATELY INCOMPLETE IMPLEMENTATION TEMPLATE. Empty required command lists and review evidence prevent any product PASS. Replace with reviewed real test bindings after implementation; do not substitute echo/true/dry-run commands.",
+  "source": {
+    "requireCleanTree": true
+  },
+  "review": {
+    "independent": false,
+    "reviewer": "",
+    "evidencePath": ""
+  },
+  "validationPolicy": {
+    "humanParticipantResearch": {
+      "status": "DEFERRED",
+      "blocksAutomatedRelease": false,
+      "reason": "Project policy; never present synthetic personas or automated checks as real participant research."
+    },
+    "requiredWebVerification": "Actual browser interaction and applicable automated accessibility checks remain required; release uses configured Chromium, Firefox, WebKit matrix.",
+    "optionalTargets": {
+      "native": "Required only when explicitly declared as a supported target.",
+      "offline": "Required only when explicitly declared as a supported capability."
+    },
+    "resultStates": [
+      "NOT_RUN",
+      "RUNNING",
+      "PASSED",
+      "FAILED",
+      "BLOCKED",
+      "DEFERRED",
+      "NOT_APPLICABLE",
+      "STALE"
+    ],
+    "packIntegrityIsProductPass": false
+  },
+  "gates": [
+    {
+      "id": "G0",
+      "commands": [],
+      "implementationNote": "Bind actual implemented checks for 2 cases; see contracts/gates.json."
+    },
+    {
+      "id": "G1",
+      "commands": [],
+      "implementationNote": "Bind actual implemented checks for 7 cases; see contracts/gates.json."
+    },
+    {
+      "id": "G2",
+      "commands": [],
+      "implementationNote": "Bind actual implemented checks for 6 cases; see contracts/gates.json."
+    },
+    {
+      "id": "G3",
+      "commands": [],
+      "implementationNote": "Bind actual implemented checks for 15 cases; see contracts/gates.json."
+    },
+    {
+      "id": "G4",
+      "commands": [],
+      "implementationNote": "Bind actual implemented checks for 19 cases; see contracts/gates.json."
+    },
+    {
+      "id": "G5",
+      "commands": [],
+      "implementationNote": "Bind actual implemented checks for 12 cases; see contracts/gates.json."
+    },
+    {
+      "id": "G6",
+      "commands": [],
+      "implementationNote": "Bind actual implemented checks for 11 cases; see contracts/gates.json."
+    },
+    {
+      "id": "G7",
+      "commands": [],
+      "implementationNote": "Bind actual implemented checks for 17 cases; see contracts/gates.json."
+    },
+    {
+      "id": "G8",
+      "commands": [],
+      "implementationNote": "Bind actual implemented checks for 7 cases; see contracts/gates.json."
+    }
+  ]
+}

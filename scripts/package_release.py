@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TREES = (".omp/agents", ".omp/commands", ".omp/extensions", ".omp/skills", "docs", "prompts", "scripts", "tests", "tools", "examples", "src")
 TOP = ("README.md", "LICENSE.txt", "install.sh", "release.json", "pyproject.toml", "hatch_build.py")
 SKIP = {"__pycache__", ".git", ".DS_Store", "node_modules"}
+REBUILD_CONTEXT = Path(".omp/skills/prism-rebuild")
 RUNTIME_DIRECTORIES = {Path("docs/design/runs")}
 RUNTIME_FILES = {".design-server.json", ".design-status.json", ".design-owner.json",
                  ".design-server.lock", ".design-records.lock", ".design-theme-sources.json"}
@@ -39,7 +40,7 @@ def sources() -> list[Path]:
             raise ValueError(f"Missing/plain source tree required: {name}")
         for path in directory.rglob("*"):
             relative = path.relative_to(ROOT)
-            if any(part in SKIP or part.startswith(".venv") for part in relative.parts):
+            if relative == REBUILD_CONTEXT or REBUILD_CONTEXT in relative.parents:
                 continue
             if any(relative == runtime or runtime in relative.parents for runtime in RUNTIME_DIRECTORIES):
                 continue
@@ -69,7 +70,7 @@ def manifest(paths: list[Path]) -> str:
 def build(output: Path, check: bool = False) -> dict:
     release = json.loads((ROOT / "release.json").read_text(encoding="utf-8"))
     paths = sources()
-    if len(list((ROOT / ".omp/skills").glob("*/SKILL.md"))) != release["skillCount"]:
+    if len([path for path in (ROOT / ".omp/skills").glob("*/SKILL.md") if path.parent.name != "prism-rebuild"]) != release["skillCount"]:
         raise ValueError("Skill count does not match release.json")
     if len(list((ROOT / ".omp/agents").glob("ui-*.md"))) != release["agentCount"]:
         raise ValueError("Agent count does not match release.json")

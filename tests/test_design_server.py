@@ -391,6 +391,87 @@ class DesignServerTests(unittest.TestCase):
         server = self.start()
         self.assertEqual(self.request(server, "/api/approval", "POST", self.payload(request))[0], 200)
         self.assertEqual(studio.read_json(self.root / "approval-requests/shared-review.json")["status"], "approved")
+    def test_cancel_records_local_terminal_state_and_unknown_remote_outcome(self):
+        server = self.start()
+        code, unused, result = self.request(server, "/api/cancel", "POST", {})
+        self.assertEqual(code, 200)
+        self.assertEqual(result["runStatus"], "cancelled")
+        self.assertEqual(result["remoteOutcome"], "unknown")
+        self.assertEqual(studio.read_json(self.root / "run.json")["status"], "cancelled")
+    def test_reconcile_records_pending_remote_outcome(self):
+        server = self.start()
+        self.request(server, "/api/cancel", "POST", {})
+        code, unused, result = self.request(server, "/api/reconcile", "POST", {})
+        self.assertEqual(code, 200)
+        self.assertEqual(result["runStatus"], "reconciling")
+        self.assertEqual(result["cancellation"]["remoteOutcome"], "unknown")
+        code, unused, resolved = self.request(server, "/api/reconcile", "POST", {
+            "providerReceiptId": "provider-receipt-1", "remoteOutcome": "completed",
+            "cost": {"status": "observed", "amountMinor": 7, "currencyCode": "USD", "currencyExponent": 2, "source": "fixture", "observedAt": backend.timestamp()},
+        })
+        self.assertEqual(code, 200)
+        self.assertEqual(resolved["runStatus"], "completed")
+        self.assertEqual(resolved["cancellation"]["remoteOutcome"], "completed")
+    def test_usage_records_are_idempotent_and_exposed_without_tersio(self):
+        server = self.start()
+        observed_at = backend.timestamp()
+        payload = {
+            "usageId": "usage-observed", "idempotencyKey": "attempt-1", "sessionId": "session-1",
+            "providerRequested": "fixture-provider", "providerObserved": "fixture-provider",
+            "modelRequested": "fixture-model", "modelObserved": "fixture-model", "agentId": "director",
+            "executionStatus": "completed", "tokens": {"input": 100, "output": 25, "cacheRead": 40, "cacheWrite": 5},
+            "compression": {"before": 20, "after": 12, "source": "fixture-compressor"},
+            "cost": {
+                "actual": {"status": "observed", "amountMinor": 123, "currencyCode": "USD", "currencyExponent": 2, "source": "fixture-meter", "observedAt": observed_at},
+                "estimate": {"status": "estimated", "amountMinor": 200, "currencyCode": "USD", "currencyExponent": 2, "source": "fixture-quote", "observedAt": observed_at},
+                "providerCacheDiscount": {"status": "observed", "amountMinor": 10, "currencyCode": "USD", "currencyExponent": 2, "source": "fixture-cache", "observedAt": observed_at},
+            },
+        }
+        code, unused, first = self.request(server, "/api/usage", "POST", payload)
+        self.assertEqual(code, 200)
+        self.assertFalse(first["replayed"])
+        code, unused, replay = self.request(server, "/api/usage", "POST", payload)
+        self.assertEqual(code, 200)
+        self.assertTrue(replay["replayed"])
+        unknown = {"usageId": "usage-unknown", "idempotencyKey": "attempt-2", "executionStatus": "outcome_unknown", "tokens": {"input": 10}, "cost": {"actual": {"status": "unknown"}}}
+        self.assertEqual(self.request(server, "/api/usage", "POST", unknown)[0], 200)
+        snapshot = self.request(server)[2]
+        usage = snapshot["usage"]
+        self.assertEqual(usage["session"]["requests"], 2)
+        self.assertEqual(usage["session"]["inputTokens"], 110)
+        self.assertIsNone(usage["session"]["outputTokens"])
+        self.assertEqual(usage["session"]["unknownCostRequests"], 1)
+        self.assertEqual(usage["session"]["costs"][0]["actualMinor"], 123)
+        self.assertEqual(usage["session"]["costs"][0]["estimatedMinor"], 200)
+        self.assertEqual(self.request(server, "/api/usage/7d")[2]["range"], "7d")
+        code, headers, exported = self.request(server, "/api/usage/export.csv")
+        self.assertEqual(code, 200)
+        self.assertIn("attachment", headers["Content-Disposition"].lower())
+        self.assertIn(b"usageId", exported)
+    def test_omp_usage_endpoint_reads_native_stats_without_tersio(self):
+        command = self.repo / "omp-stats-fixture"
+        command.write_text(
+            "#!/usr/bin/env python3\nimport json\nprint(json.dumps({'overall': {'totalRequests': 3, 'totalInputTokens': 100, 'totalOutputTokens': 25, 'totalCacheReadTokens': 40, 'totalCost': 1.23}, 'byModel': [{'model': 'fixture-model', 'provider': 'fixture-provider', 'totalRequests': 3, 'totalInputTokens': 100, 'totalOutputTokens': 25, 'totalCost': 1.23}], 'byFolder': [], 'byAgentType': [], 'bySideChannel': [], 'timeSeries': []}))\n",
+            encoding="utf-8",
+        )
+        command.chmod(0o700)
+        with mock.patch.dict(os.environ, {"PRISM_OMP_COMMAND": str(command)}):
+            server = self.start()
+            server.state.omp_usage._refresh()
+            code, unused, content = self.request(server, "/api/usage/omp")
+        self.assertEqual(code, 200)
+        self.assertEqual(content["status"], "ready")
+        self.assertEqual(content["overall"]["totalRequests"], 3)
+        self.assertEqual(content["byModel"][0]["model"], "fixture-model")
+
+    def test_snapshot_reuses_unchanged_artwork_dependencies(self):
+        (self.root / "sample.png").write_bytes(PNG)
+        server = self.start()
+        with mock.patch.object(backend, "dependency_bundle", wraps=backend.dependency_bundle) as bundle:
+            server.state.snapshot()
+            server.state.snapshot()
+        self.assertEqual(bundle.call_count, 0)
+
     def test_rejected_approval_status_is_persisted_for_other_consumers(self):
         request = self.plan("rejected-review")
         server = self.start()
@@ -925,6 +1006,20 @@ class DesignServerTests(unittest.TestCase):
         page = backend.status_page(snapshot, "artworks", 1)
         with self.assertRaisesRegex(ValueError, "stale or invalid"):
             backend.status_page(snapshot, "artworks", 1, "old-revision:0")
+    def test_status_page_cursor_rejects_concurrent_addition(self):
+        root = fixture_run(self.repo, self.theme)
+        (root / "a.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><rect width="1" height="1"/></svg>', encoding="utf-8")
+        backend.publish_artwork(studio, root, "a.svg", "Synthetic paging fixture.")
+        state = backend.DesignState(studio, root)
+        snapshot = state.snapshot()
+        page = backend.status_page(snapshot, "artworks", 1)
+        (root / "b.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><circle r="1"/></svg>', encoding="utf-8")
+        backend.publish_artwork(studio, root, "b.svg", "Concurrent addition fixture.")
+        changed = state.snapshot()
+        self.assertNotEqual(snapshot["revision"], changed["revision"])
+        with self.assertRaisesRegex(ValueError, "stale or invalid"):
+            backend.status_page(changed, "artworks", 1, page["nextCursor"])
+
 
     def test_status_page_rejects_malformed_inputs(self):
         snapshot = backend.DesignState(studio, fixture_run(self.repo, self.theme)).snapshot()

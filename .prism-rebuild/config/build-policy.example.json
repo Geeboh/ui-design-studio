@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0.0",
+  "kind": "prism-rebuild-policy-example",
+  "targetProductVersion": "2.0.0",
+  "completionTarget": "verified-release-candidate",
+  "continueAutonomously": true,
+  "parallelism": {"maxWorkers": 3, "sharedContractWriters": 1, "adaptToObservedCapacity": true},
+  "implementationModels": {
+    "policy": "lowest-cost-qualified",
+    "preserveExplicitCurrentModel": true,
+    "preferred": {"architect": null, "implementer": null, "reviewer": null, "visualReviewer": null},
+    "requireObservedAssignments": true,
+    "priceStatus": "unknown-until-verified"
+  },
+  "spend": {
+    "implementationBudget": {"currency": null, "limitMinor": null, "status": "not-configured"},
+    "externalDesignGenerationDuringRebuild": "disabled-unless-explicitly-authorized",
+    "productDesignBudgetMustRemainSeparate": true,
+    "unknownCostMeansZero": false
+  },
+  "validation": {"humanParticipantTesting": "deferred", "browserChecks": "required-for-web-behavior", "independentReview": "when-available-otherwise-declared-sequential-fallback"},
+  "publication": {"push": "requires-session-authorization", "mergeDefaultBranch": false, "publishRelease": false},
+  "optionalExtensions": {"caveman": "use-only-if-installed-and-lossless-for-critical-data", "rtk": "retain-full-evidence", "ponytail": "discover-before-use", "pstack": "single-orchestrator", "prewalk": "off-unless-intentional-handoff"}
+}

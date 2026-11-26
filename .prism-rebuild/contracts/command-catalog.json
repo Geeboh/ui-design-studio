@@ -1,0 +1,3410 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractVersion": "2.0",
+  "domainSchema": "contracts/domain.schema.json",
+  "status": "proposed_not_implemented",
+  "commonEnvelopeDefinition": "CommandEnvelope",
+  "commonReceiptDefinition": "OperationReceipt",
+  "commonErrorDefinition": "DomainError",
+  "authorityRule": "Intersect host/session/project/task grants. Guided design decisions require human authority; YOLO delegates design choices only. Token presence/tool availability never creates new permission.",
+  "realmRule": "Every command targets exactly one owning SQLite realm: project state or private local profile configuration. Personal settings events have null projectId/runId and a profile-specific databaseEpoch; namespace idempotency by stable profileId. Project exports exclude private profiles. Cross-realm settings reads are resolved into an immutable run snapshot; no distributed transaction is required or claimed.",
+  "batchAtomicity": "Independent per-item semantic outcomes, with all applied local results plus rejected-item outcomes and the batch receipt committed in one SQLite transaction. Unexpected storage failure rolls back the outer transaction.",
+  "externalEffectRule": "Persist intent before dispatch; perform external call outside transaction; record actual result. Unknown remote outcome keeps liability unresolved. Rebuild/replay never reexecutes a paid effect.",
+  "errors": [
+    {
+      "code": "VALIDATION_ERROR",
+      "meaning": "validation error"
+    },
+    {
+      "code": "UNAUTHENTICATED",
+      "meaning": "unauthenticated"
+    },
+    {
+      "code": "FORBIDDEN",
+      "meaning": "forbidden"
+    },
+    {
+      "code": "NOT_FOUND",
+      "meaning": "not found"
+    },
+    {
+      "code": "VERSION_CONFLICT",
+      "meaning": "version conflict"
+    },
+    {
+      "code": "DEPENDENCY_CHANGED",
+      "meaning": "dependency changed"
+    },
+    {
+      "code": "APPROVAL_REQUIRED",
+      "meaning": "approval required"
+    },
+    {
+      "code": "APPROVAL_NOT_APPLICABLE",
+      "meaning": "approval not applicable"
+    },
+    {
+      "code": "CAPABILITY_MISMATCH",
+      "meaning": "capability mismatch"
+    },
+    {
+      "code": "INCOMPATIBLE_CONTRACT",
+      "meaning": "incompatible contract"
+    },
+    {
+      "code": "IDEMPOTENCY_CONFLICT",
+      "meaning": "idempotency conflict"
+    },
+    {
+      "code": "OPERATION_IN_PROGRESS",
+      "meaning": "operation in progress"
+    },
+    {
+      "code": "BUDGET_EXCEEDED",
+      "meaning": "budget exceeded"
+    },
+    {
+      "code": "BUDGET_NOT_CONFIGURED",
+      "meaning": "budget not configured"
+    },
+    {
+      "code": "CURRENCY_MISMATCH",
+      "meaning": "currency mismatch"
+    },
+    {
+      "code": "PRICE_QUOTE_STALE",
+      "meaning": "price quote stale"
+    },
+    {
+      "code": "CHARGE_NOT_BOUNDED",
+      "meaning": "charge not bounded"
+    },
+    {
+      "code": "OUTCOME_UNKNOWN",
+      "meaning": "outcome unknown"
+    },
+    {
+      "code": "RESERVATION_NOT_RELEASABLE",
+      "meaning": "reservation not releasable"
+    },
+    {
+      "code": "PROVIDER_UNAVAILABLE",
+      "meaning": "provider unavailable"
+    },
+    {
+      "code": "PROJECTION_STALE",
+      "meaning": "projection stale"
+    },
+    {
+      "code": "BLOB_MISSING",
+      "meaning": "blob missing"
+    },
+    {
+      "code": "BLOB_CORRUPT",
+      "meaning": "blob corrupt"
+    },
+    {
+      "code": "ARTIFACT_NOT_READY",
+      "meaning": "artifact not ready"
+    },
+    {
+      "code": "PATH_OUT_OF_SCOPE",
+      "meaning": "path out of scope"
+    },
+    {
+      "code": "INSTRUCTION_CHANGED",
+      "meaning": "instruction changed"
+    },
+    {
+      "code": "LEASE_STALE",
+      "meaning": "lease stale"
+    },
+    {
+      "code": "CHECKS_INCOMPLETE",
+      "meaning": "checks incomplete"
+    },
+    {
+      "code": "INVALID_TRANSITION",
+      "meaning": "invalid transition"
+    },
+    {
+      "code": "IMPORT_CONFLICT",
+      "meaning": "import conflict"
+    },
+    {
+      "code": "IMPORT_UNSUPPORTED",
+      "meaning": "import unsupported"
+    },
+    {
+      "code": "MIGRATION_INCOMPLETE",
+      "meaning": "migration incomplete"
+    },
+    {
+      "code": "STORAGE_UNSUPPORTED",
+      "meaning": "storage unsupported"
+    },
+    {
+      "code": "STORAGE_BUSY",
+      "meaning": "storage busy"
+    },
+    {
+      "code": "IO_ERROR",
+      "meaning": "io error"
+    },
+    {
+      "code": "INTERNAL_ERROR",
+      "meaning": "internal error"
+    },
+    {
+      "code": "QUARANTINED_DATA",
+      "meaning": "quarantined data"
+    }
+  ],
+  "operations": [
+    {
+      "name": "metadata.get",
+      "kind": "query",
+      "inputDefinition": "EmptyInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/EmptyInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "metadata.read"
+        ],
+        "scope": "host or project",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": false,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "query has no domain mutation"
+      },
+      "expectedVersions": [],
+      "outputDefinition": "CapabilityDescriptor",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/CapabilityDescriptor"
+      },
+      "events": [],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "INCOMPATIBLE_CONTRACT",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "bounded consistent read; never authorizes from stale projection",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-007"
+      ]
+    },
+    {
+      "name": "project.initialize",
+      "kind": "command",
+      "inputDefinition": "InitializeProjectInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/InitializeProjectInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "project.initialize"
+        ],
+        "scope": "authorized workspace/new project",
+        "actorPolicy": "Initialization creates Project, WorkspaceBinding and versioned default policy/criteria/settings together in a candidate local database, validates it, then publishes its locator with a recovery journal. Never infer consent from an arbitrary source path."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "absent project/binding identity; actual host workspace grant"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ProjectInitialized"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "PATH_OUT_OF_SCOPE",
+        "STORAGE_UNSUPPORTED",
+        "IMPORT_CONFLICT",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "owned local database/blob directory initialization and recoverable locator publication; no source overwrite or provider call",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-MIGRATION-005"
+      ]
+    },
+    {
+      "name": "model.preferences.get",
+      "kind": "query",
+      "inputDefinition": "ModelPreferencesGetInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ModelPreferencesGetInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "model.preferences.read"
+        ],
+        "scope": "authenticated principal personal settings or project",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": false,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "query has no domain mutation"
+      },
+      "expectedVersions": [],
+      "outputDefinition": "ModelPreferenceSet",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/ModelPreferenceSet"
+      },
+      "events": [],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "NOT_FOUND",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "bounded consistent read; never authorizes from stale projection",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-MODEL-002"
+      ]
+    },
+    {
+      "name": "model.preferences.update",
+      "kind": "command",
+      "inputDefinition": "ModelPreferencesUpdateInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ModelPreferencesUpdateInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "model.preferences.write"
+        ],
+        "scope": "authenticated principal personal settings or project",
+        "actorPolicy": "Personal settings reside in the principal local profile database; project defaults in that project database. A command changes one realm atomically, stores an immutable snapshot and never changes existing run policy. Origin fields are core-derived."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "ModelPreferenceSet.revision or absent identity; project defaults pointer for project scope"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ModelPreferencesUpdated"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "INVALID_TRANSITION",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-MODEL-001",
+        "REQ-MODEL-002"
+      ]
+    },
+    {
+      "name": "snapshot.create",
+      "kind": "command",
+      "inputDefinition": "CreateSnapshotInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/CreateSnapshotInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "snapshot.write"
+        ],
+        "scope": "project/run exact requirement/criteria/policy/toolchain scope",
+        "actorPolicy": "Canonical immutable input creation; changing a governing policy also requires its existing authority, regardless of blob write permission."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "previous snapshot version/current selection when replacing an existing selection"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "SnapshotCreated"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "BLOB_MISSING",
+        "BLOB_CORRUPT",
+        "DEPENDENCY_CHANGED",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-CORE-006"
+      ]
+    },
+    {
+      "name": "run.create",
+      "kind": "command",
+      "inputDefinition": "CreateRunInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/CreateRunInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "run.create"
+        ],
+        "scope": "project",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "project defaults snapshot when defaults are used"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "RunCreated"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "PATH_OUT_OF_SCOPE",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004"
+      ]
+    },
+    {
+      "name": "run.get",
+      "kind": "query",
+      "inputDefinition": "GetRunInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/GetRunInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "run.read"
+        ],
+        "scope": "run/scoped presentation",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": false,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "query has no domain mutation"
+      },
+      "expectedVersions": [],
+      "outputDefinition": "RunView",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/RunView"
+      },
+      "events": [],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "NOT_FOUND",
+        "PROJECTION_STALE",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "bounded consistent read; never authorizes from stale projection",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-005",
+        "REQ-APPROVAL-006"
+      ]
+    },
+    {
+      "name": "run.configure",
+      "kind": "command",
+      "inputDefinition": "ConfigureRunInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ConfigureRunInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "run.configure"
+        ],
+        "scope": "run",
+        "actorPolicy": "Mode/permission/budget expansion requires existing explicit authority; the agent cannot self-delegate."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "Run.revision"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "RunConfigured"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "INVALID_TRANSITION",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-MODEL-001",
+        "REQ-APPROVAL-005"
+      ]
+    },
+    {
+      "name": "run.advance",
+      "kind": "command",
+      "inputDefinition": "AdvanceRunInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/AdvanceRunInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "run.advance"
+        ],
+        "scope": "run/current stage",
+        "actorPolicy": "Advance display stage only along the run-type policy. Revalidate the relevant gate; a display-stage change does not approve artifacts or invalidate unrelated approvals."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "Run.revision; current exact-scope gate assessment and fingerprint"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "RunStageAdvanced"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "INVALID_TRANSITION",
+        "CHECKS_INCOMPLETE",
+        "APPROVAL_REQUIRED",
+        "DEPENDENCY_CHANGED",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-APPROVAL-002"
+      ]
+    },
+    {
+      "name": "run.complete",
+      "kind": "command",
+      "inputDefinition": "CompleteRunInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/CompleteRunInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "run.complete"
+        ],
+        "scope": "run agreed handoff scope",
+        "actorPolicy": "All required outputs/gates and dispatch obligations must be resolved or explicitly recorded under a permitted handoff limitation. Unknown billing remains visible and held; completion never treats it as zero or releases it."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "Run.revision; exact final gate assessments and outstanding task states"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "RunCompleted"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "INVALID_TRANSITION",
+        "CHECKS_INCOMPLETE",
+        "OUTCOME_UNKNOWN",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-CORE-005"
+      ]
+    },
+    {
+      "name": "run.pause",
+      "kind": "command",
+      "inputDefinition": "ReasonInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ReasonInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "run.pause"
+        ],
+        "scope": "run",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "Run.revision"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "RunPaused"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "INVALID_TRANSITION",
+        "CHECKS_INCOMPLETE",
+        "OUTCOME_UNKNOWN",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004"
+      ]
+    },
+    {
+      "name": "run.resume",
+      "kind": "command",
+      "inputDefinition": "ReasonInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ReasonInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "run.resume"
+        ],
+        "scope": "run",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "Run.revision"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "RunResumed"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "INVALID_TRANSITION",
+        "CHECKS_INCOMPLETE",
+        "OUTCOME_UNKNOWN",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004"
+      ]
+    },
+    {
+      "name": "run.cancel",
+      "kind": "command",
+      "inputDefinition": "ReasonInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ReasonInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "run.cancel"
+        ],
+        "scope": "run",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "Run.revision"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "RunCancelled"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "INVALID_TRANSITION",
+        "CHECKS_INCOMPLETE",
+        "OUTCOME_UNKNOWN",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004"
+      ]
+    },
+    {
+      "name": "run.archive",
+      "kind": "command",
+      "inputDefinition": "ReasonInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ReasonInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "run.archive"
+        ],
+        "scope": "run",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "Run.revision"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "RunArchived"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "INVALID_TRANSITION",
+        "CHECKS_INCOMPLETE",
+        "OUTCOME_UNKNOWN",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004"
+      ]
+    },
+    {
+      "name": "component.define",
+      "kind": "command",
+      "inputDefinition": "DefineComponentInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/DefineComponentInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "component.write"
+        ],
+        "scope": "run/component",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "Component.revision when updating; missing identity when creating"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ComponentDefined"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "INVALID_TRANSITION",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-REVISION-004"
+      ]
+    },
+    {
+      "name": "component.decompose",
+      "kind": "command",
+      "inputDefinition": "DecomposeInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/DecomposeInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "component.write"
+        ],
+        "scope": "run/composition",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "scope/component revisions; exact base digest"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ComponentsDecomposed"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "DEPENDENCY_CHANGED",
+        "INVALID_TRANSITION",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-REVISION-004"
+      ]
+    },
+    {
+      "name": "artifact.register",
+      "kind": "command",
+      "inputDefinition": "RegisterArtifactInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/RegisterArtifactInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "artifact.write"
+        ],
+        "scope": "run/component",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "artifact head revision for new version; exact dependencies"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ArtifactRegistered"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "BLOB_MISSING",
+        "BLOB_CORRUPT",
+        "PATH_OUT_OF_SCOPE",
+        "DEPENDENCY_CHANGED",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "owned local staged blob verification/install before metadata commit; no provider call",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-CORE-006"
+      ]
+    },
+    {
+      "name": "artifact.get",
+      "kind": "query",
+      "inputDefinition": "GetArtifactInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/GetArtifactInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "artifact.read"
+        ],
+        "scope": "exact run artifact",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": false,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "query has no domain mutation"
+      },
+      "expectedVersions": [],
+      "outputDefinition": "ArtifactVersion",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/ArtifactVersion"
+      },
+      "events": [],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "NOT_FOUND",
+        "BLOB_MISSING",
+        "BLOB_CORRUPT",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "bounded consistent read; never authorizes from stale projection",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-006"
+      ]
+    },
+    {
+      "name": "blob.prepare",
+      "kind": "command",
+      "inputDefinition": "PrepareBlobInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/PrepareBlobInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "blob.stage"
+        ],
+        "scope": "authorized project/run/import/theme scope",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "absent staging identity; capability payload limit"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "BlobStagingPrepared"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "PATH_OUT_OF_SCOPE",
+        "IO_ERROR",
+        "STORAGE_UNSUPPORTED",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "allocate an owned, bounded temporary object; binary transport is specified separately in the catalog",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-CORE-006"
+      ]
+    },
+    {
+      "name": "blob.verify",
+      "kind": "command",
+      "inputDefinition": "VerifyBlobInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/VerifyBlobInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "blob.stage"
+        ],
+        "scope": "same principal and scope as staged object",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "BlobStagingReceipt.revision"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "BlobVerified"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "BLOB_MISSING",
+        "BLOB_CORRUPT",
+        "INVALID_TRANSITION",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "verify exact bytes, hash, length and media constraints; flush staging before the receipt becomes verified",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-CORE-006"
+      ]
+    },
+    {
+      "name": "annotation.save",
+      "kind": "command",
+      "inputDefinition": "SaveAnnotationInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/SaveAnnotationInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "annotation.write"
+        ],
+        "scope": "exact image/component",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "AnnotationSet.revision when present; absent identity on create; exact image digest"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "AnnotationSetSaved"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "DEPENDENCY_CHANGED",
+        "BLOB_CORRUPT",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-REVISION-002"
+      ]
+    },
+    {
+      "name": "approval.request",
+      "kind": "command",
+      "inputDefinition": "RequestApprovalInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/RequestApprovalInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "approval.request"
+        ],
+        "scope": "stage/component",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "scope/current artifact selection revisions; exact manifest"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ApprovalRequested"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "DEPENDENCY_CHANGED",
+        "CHECKS_INCOMPLETE",
+        "APPROVAL_REQUIRED",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-APPROVAL-002"
+      ]
+    },
+    {
+      "name": "approval.get",
+      "kind": "query",
+      "inputDefinition": "GetApprovalInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/GetApprovalInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "approval.read"
+        ],
+        "scope": "request and current exact scope",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": false,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "query has no domain mutation"
+      },
+      "expectedVersions": [],
+      "outputDefinition": "ApprovalView",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/ApprovalView"
+      },
+      "events": [],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "NOT_FOUND",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "bounded consistent read; never authorizes from stale projection",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-005",
+        "REQ-APPROVAL-006"
+      ]
+    },
+    {
+      "name": "approval.batch_request",
+      "kind": "command",
+      "inputDefinition": "BatchReviewInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/BatchReviewInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "approval.request"
+        ],
+        "scope": "batch review manifest",
+        "actorPolicy": "Create or explicitly revise a batch from already-created exact requests; preserve item IDs. Never automatically adopt new artifact versions."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "BatchReview.revision when revising; absent identity on create; each request revision"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "BatchReviewPrepared"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "DEPENDENCY_CHANGED",
+        "INVALID_TRANSITION",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-REVISION-004",
+        "REQ-REVISION-005"
+      ]
+    },
+    {
+      "name": "approval.batch_get",
+      "kind": "query",
+      "inputDefinition": "GetBatchInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/GetBatchInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "approval.read"
+        ],
+        "scope": "batch/component items",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": false,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "query has no domain mutation"
+      },
+      "expectedVersions": [],
+      "outputDefinition": "BatchReviewView",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/BatchReviewView"
+      },
+      "events": [],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "NOT_FOUND",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "bounded consistent read; never authorizes from stale projection",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-REVISION-005",
+        "REQ-CORE-005"
+      ]
+    },
+    {
+      "name": "approval.decide",
+      "kind": "command",
+      "inputDefinition": "SubmitDecisionInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/SubmitDecisionInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "approval.decide"
+        ],
+        "scope": "request/exact artifact",
+        "actorPolicy": "Guided requires a human. YOLO accepts a human or expressly delegated agent. Human Approved feedback is optional; agent decisions need explanation."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "ApprovalRequest.revision in envelope; exact scopeFingerprint in payload"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "DecisionRecorded"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "DEPENDENCY_CHANGED",
+        "APPROVAL_NOT_APPLICABLE",
+        "INVALID_TRANSITION",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-APPROVAL-001",
+        "REQ-APPROVAL-003",
+        "REQ-APPROVAL-004",
+        "REQ-APPROVAL-005"
+      ]
+    },
+    {
+      "name": "approval.batch_decide",
+      "kind": "command",
+      "inputDefinition": "BatchDecisionInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/BatchDecisionInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "approval.decide"
+        ],
+        "scope": "batch/items",
+        "actorPolicy": "Same actor rules as approval.decide. Expected item conflicts are per-item outcomes in one replayable batch receipt; outer transaction commits accepted items and all outcomes together."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "BatchReview.revision; each item expectedRequestRevision; each item fingerprint"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "DecisionRecorded"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "DEPENDENCY_CHANGED",
+        "APPROVAL_NOT_APPLICABLE",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-REVISION-005"
+      ]
+    },
+    {
+      "name": "approval.cancel_request",
+      "kind": "command",
+      "inputDefinition": "CancelApprovalInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/CancelApprovalInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "approval.request.cancel"
+        ],
+        "scope": "request",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "ApprovalRequest.revision"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ApprovalRequestCancelled"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "INVALID_TRANSITION",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-APPROVAL-003"
+      ]
+    },
+    {
+      "name": "approval.revoke",
+      "kind": "command",
+      "inputDefinition": "RevokeDecisionInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/RevokeDecisionInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "approval.revoke"
+        ],
+        "scope": "recorded decision/scope",
+        "actorPolicy": "Explicit authority to withdraw the decision is required; append a revocation fact without editing history."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "current request/scope revision; immutable decision identity"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "DecisionRevoked"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "INVALID_TRANSITION",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-APPROVAL-003"
+      ]
+    },
+    {
+      "name": "revision.request",
+      "kind": "command",
+      "inputDefinition": "RevisionInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/RevisionInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "revision.create"
+        ],
+        "scope": "base artifact/components",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "component selection revisions; base digest; annotation-set revision"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "RevisionRequested"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "DEPENDENCY_CHANGED",
+        "APPROVAL_NOT_APPLICABLE",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-REVISION-001",
+        "REQ-REVISION-003",
+        "REQ-REVISION-006"
+      ]
+    },
+    {
+      "name": "gate.evaluate",
+      "kind": "command",
+      "inputDefinition": "EvaluateGateInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/EvaluateGateInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "gate.evaluate"
+        ],
+        "scope": "stage/exact scope",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "exact manifest/criteria; relevant revisions captured atomically"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "GateEvaluated"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "DEPENDENCY_CHANGED",
+        "CHECKS_INCOMPLETE",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-CORE-005"
+      ]
+    },
+    {
+      "name": "gate.get",
+      "kind": "query",
+      "inputDefinition": "GetGateInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/GetGateInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "gate.read"
+        ],
+        "scope": "gate exact scope",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": false,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "query has no domain mutation"
+      },
+      "expectedVersions": [],
+      "outputDefinition": "StageGateAssessment",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/StageGateAssessment"
+      },
+      "events": [],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "NOT_FOUND",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "bounded consistent read; never authorizes from stale projection",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-005"
+      ]
+    },
+    {
+      "name": "evidence.record",
+      "kind": "command",
+      "inputDefinition": "RecordEvidenceInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/RecordEvidenceInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "evidence.record"
+        ],
+        "scope": "check/subjects exact scope",
+        "actorPolicy": "The core records authenticated observer identity and verifies method/provenance. Imported or agent-written text cannot assert that unperformed human research occurred. A later result appends new evidence rather than changing a prior observation."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "exact observed subject/dependency versions; absent evidence identity"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "EvidenceRecorded"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "DEPENDENCY_CHANGED",
+        "BLOB_MISSING",
+        "INVALID_TRANSITION",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-CORE-005"
+      ]
+    },
+    {
+      "name": "budget.configure",
+      "kind": "command",
+      "inputDefinition": "ConfigureBudgetInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ConfigureBudgetInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "budget.configure"
+        ],
+        "scope": "run design account",
+        "actorPolicy": "Explicit allowance/category authority; hard prerequisites are discovered by the core, never asserted by this payload."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "BudgetAccount.revision when present; absent account on create"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "BudgetConfigured"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "CURRENCY_MISMATCH",
+        "INVALID_TRANSITION",
+        "CHARGE_NOT_BOUNDED",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-BUDGET-001",
+        "REQ-BUDGET-002"
+      ]
+    },
+    {
+      "name": "budget.get",
+      "kind": "query",
+      "inputDefinition": "GetBudgetInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/GetBudgetInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "budget.read"
+        ],
+        "scope": "run design account",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": false,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "query has no domain mutation"
+      },
+      "expectedVersions": [],
+      "outputDefinition": "BudgetSummary",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/BudgetSummary"
+      },
+      "events": [],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "NOT_FOUND",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "bounded consistent read; never authorizes from stale projection",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-BUDGET-004",
+        "REQ-CORE-005"
+      ]
+    },
+    {
+      "name": "budget.reserve",
+      "kind": "command",
+      "inputDefinition": "ReserveBudgetInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ReserveBudgetInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "budget.reserve"
+        ],
+        "scope": "run/account/attempt",
+        "actorPolicy": "Internal dispatcher or specifically granted operator; no public bypass of admission."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "BudgetAccount.revision; provider capability/price quote validity"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "BudgetReserved"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "BUDGET_EXCEEDED",
+        "BUDGET_NOT_CONFIGURED",
+        "CURRENCY_MISMATCH",
+        "PRICE_QUOTE_STALE",
+        "CHARGE_NOT_BOUNDED",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-BUDGET-003"
+      ]
+    },
+    {
+      "name": "budget.release",
+      "kind": "command",
+      "inputDefinition": "ReleaseBudgetInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ReleaseBudgetInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "budget.release"
+        ],
+        "scope": "reservation",
+        "actorPolicy": "Release only undispatched exposure or authoritative no-liability evidence. Timeout/cancel request is insufficient."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "BudgetReservation.revision; attempt state revision"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ReservationReleased"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "RESERVATION_NOT_RELEASABLE",
+        "OUTCOME_UNKNOWN",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-BUDGET-005"
+      ]
+    },
+    {
+      "name": "budget.settle",
+      "kind": "command",
+      "inputDefinition": "SettleBudgetInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/SettleBudgetInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "budget.settle"
+        ],
+        "scope": "attempt/reservation",
+        "actorPolicy": "Trusted adapter/reconciler with verified receipt identity; settle once, preserve real amounts and breaches."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "BudgetReservation.revision when present; ProviderAttempt.revision"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "CostSettled"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "CURRENCY_MISMATCH",
+        "OUTCOME_UNKNOWN",
+        "INVALID_TRANSITION",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-BUDGET-004"
+      ]
+    },
+    {
+      "name": "budget.adjust",
+      "kind": "command",
+      "inputDefinition": "AdjustCostInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/AdjustCostInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "budget.adjust"
+        ],
+        "scope": "linked ledger entries within one run",
+        "actorPolicy": "Append supported refunds/corrections only; never edit or erase a charge. Reclassification is a balanced credit/debit pair in the same currency and amount. Require attributable evidence and category authority, deduplicate provider receipt, reject excess reversal, retain breaches caused by real debit corrections."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "affected BudgetAccount.revision; linked immutable entry identities; unique source receipt"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "CostAdjusted"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "CURRENCY_MISMATCH",
+        "INVALID_TRANSITION",
+        "BUDGET_EXCEEDED",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-BUDGET-004"
+      ]
+    },
+    {
+      "name": "work.plan",
+      "kind": "command",
+      "inputDefinition": "PlanWorkInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/PlanWorkInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "work.plan"
+        ],
+        "scope": "task/components/owned paths",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "scope/component revisions; instruction/dependency versions"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "TaskPlanned"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "PATH_OUT_OF_SCOPE",
+        "INSTRUCTION_CHANGED",
+        "DEPENDENCY_CHANGED",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-WORKER-001",
+        "REQ-WORKER-002"
+      ]
+    },
+    {
+      "name": "provider.prepare",
+      "kind": "command",
+      "inputDefinition": "PrepareProviderInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/PrepareProviderInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "provider.prepare"
+        ],
+        "scope": "planned task/new external attempt",
+        "actorPolicy": "Creates a prepared ProviderAttempt before budget.reserve, with no dispatch. Core derives attempt sequence, resolved model/category and request fingerprint from immutable task inputs. Unknown accountless currency may remain null until observed; a hard design reservation requires the account currency."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "WorkerTask.revision; capabilityRevision; verified price snapshot if needed"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ProviderAttemptPrepared"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "PRICE_QUOTE_STALE",
+        "CHARGE_NOT_BOUNDED",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-MODEL-003",
+        "REQ-MODEL-004",
+        "REQ-BUDGET-003"
+      ]
+    },
+    {
+      "name": "work.dispatch",
+      "kind": "command",
+      "inputDefinition": "DispatchWorkInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/DispatchWorkInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "work.dispatch"
+        ],
+        "scope": "task/attempt",
+        "actorPolicy": "Intersect all inherited grants; require current gate and spend admission before external work."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "WorkerTask.revision; budget reservation if design hard; capabilityRevision"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "TaskDispatchPrepared"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "BUDGET_EXCEEDED",
+        "APPROVAL_REQUIRED",
+        "CHECKS_INCOMPLETE",
+        "CHARGE_NOT_BOUNDED",
+        "INSTRUCTION_CHANGED",
+        "OUTCOME_UNKNOWN",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "durable dispatch intent then external provider/host call outside transaction; uncertain delivery is reconciled, not blindly replayed",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-WORKER-003",
+        "REQ-WORKER-004",
+        "REQ-BUDGET-003"
+      ]
+    },
+    {
+      "name": "work.cancel",
+      "kind": "command",
+      "inputDefinition": "CancelWorkInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/CancelWorkInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "work.cancel"
+        ],
+        "scope": "task/attempt",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "WorkerTask.revision; ProviderAttempt.revision when present"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "TaskCancellationRequested"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "INVALID_TRANSITION",
+        "OUTCOME_UNKNOWN",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "cancellation request after durable transition; provider acknowledgement does not imply zero charge",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-WORKER-004",
+        "REQ-BUDGET-005"
+      ]
+    },
+    {
+      "name": "work.record_outcome",
+      "kind": "command",
+      "inputDefinition": "RecordOutcomeInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/RecordOutcomeInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "work.record_outcome"
+        ],
+        "scope": "owned task/lease",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "WorkerTask.revision; active lease/fencing token; exact output dependencies"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "TaskOutcomeRecorded"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "LEASE_STALE",
+        "DEPENDENCY_CHANGED",
+        "BLOB_CORRUPT",
+        "OUTCOME_UNKNOWN",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-WORKER-005"
+      ]
+    },
+    {
+      "name": "work.heartbeat",
+      "kind": "command",
+      "inputDefinition": "HeartbeatInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/HeartbeatInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "work.heartbeat"
+        ],
+        "scope": "active owned task/lease",
+        "actorPolicy": "Only the active lease owner can renew. Task completion/expiry/revocation wins over a stale heartbeat; renewal never re-dispatches work."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "WorkerLease.revision; fencing token"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "WorkerLeaseRenewed"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "LEASE_STALE",
+        "INVALID_TRANSITION",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-WORKER-004"
+      ]
+    },
+    {
+      "name": "provider.reconcile",
+      "kind": "command",
+      "inputDefinition": "ReconcileProviderInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ReconcileProviderInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "provider.reconcile"
+        ],
+        "scope": "attempt",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "ProviderAttempt.revision; reservation revision if affected"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ProviderOutcomeReconciled"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "PROVIDER_UNAVAILABLE",
+        "OUTCOME_UNKNOWN",
+        "CURRENCY_MISMATCH",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "read-only provider status/receipt lookup outside transaction, followed by version-checked reconciliation; no new generation",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-BUDGET-004"
+      ]
+    },
+    {
+      "name": "events.read",
+      "kind": "query",
+      "inputDefinition": "EventsReadInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/EventsReadInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "run.read"
+        ],
+        "scope": "project/run",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": false,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "query has no domain mutation"
+      },
+      "expectedVersions": [],
+      "outputDefinition": "EventPage",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/EventPage"
+      },
+      "events": [],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "PROJECTION_STALE",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "bounded consistent read; never authorizes from stale projection",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-005"
+      ]
+    },
+    {
+      "name": "operation.get",
+      "kind": "query",
+      "inputDefinition": "GetOperationInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/GetOperationInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "operation.read"
+        ],
+        "scope": "same principal or explicitly delegated operation scope",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": false,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "query has no domain mutation"
+      },
+      "expectedVersions": [],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "NOT_FOUND",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "bounded consistent read; never authorizes from stale projection",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-003",
+        "REQ-CORE-004"
+      ]
+    },
+    {
+      "name": "projection.rebuild",
+      "kind": "command",
+      "inputDefinition": "EmptyInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/EmptyInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "projection.rebuild"
+        ],
+        "scope": "project/run",
+        "actorPolicy": "Authorized maintenance; pure reconstruction, never calls providers."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "source database epoch/watermark"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ProjectionRebuilt"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "BLOB_MISSING",
+        "BLOB_CORRUPT",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "local derived-index replacement only",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-CORE-005"
+      ]
+    },
+    {
+      "name": "state.export",
+      "kind": "command",
+      "inputDefinition": "ExportStateInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ExportStateInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "state.export"
+        ],
+        "scope": "selected project/runs",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "consistent database epoch/watermark snapshot"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ExportCreated"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "BLOB_MISSING",
+        "BLOB_CORRUPT",
+        "IO_ERROR",
+        "STORAGE_UNSUPPORTED",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "local portable archive preparation from pinned snapshot; no secret or active grant export",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-MIGRATION-004"
+      ]
+    },
+    {
+      "name": "state.import_prepare",
+      "kind": "command",
+      "inputDefinition": "PrepareImportInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/PrepareImportInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "state.import"
+        ],
+        "scope": "project/staged input",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "source inventory digest; destination project revision"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ImportPrepared"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "IMPORT_UNSUPPORTED",
+        "IMPORT_CONFLICT",
+        "BLOB_CORRUPT",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "copy-first candidate database/blobs; original untouched; no dispatch",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-MIGRATION-001",
+        "REQ-MIGRATION-002",
+        "REQ-MIGRATION-003"
+      ]
+    },
+    {
+      "name": "state.import_commit",
+      "kind": "command",
+      "inputDefinition": "CommitImportInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/CommitImportInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "state.activate_import"
+        ],
+        "scope": "project/migration",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "MigrationReceipt.revision; source digest; candidate epoch; prior locator binding"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ImportActivated"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "IMPORT_CONFLICT",
+        "MIGRATION_INCOMPLETE",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "journaled atomic locator replacement after validation; recoverable cross-file activation",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-MIGRATION-001",
+        "REQ-MIGRATION-002"
+      ]
+    },
+    {
+      "name": "state.restore",
+      "kind": "command",
+      "inputDefinition": "RestoreMigrationInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/RestoreMigrationInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "state.restore"
+        ],
+        "scope": "project/migration",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "active database epoch/event watermark; migration receipt"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "MigrationRestored"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "IMPORT_CONFLICT",
+        "MIGRATION_INCOMPLETE",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "restore unchanged prior binding or fork while preserving newer writes; no force overwrite",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-MIGRATION-004"
+      ]
+    },
+    {
+      "name": "theme.list",
+      "kind": "query",
+      "inputDefinition": "ThemeListInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ThemeListInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "theme.read"
+        ],
+        "scope": "explicit dashboard/generated_product/omp_host target",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": false,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "query has no domain mutation"
+      },
+      "expectedVersions": [],
+      "outputDefinition": "ThemeInventory",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/ThemeInventory"
+      },
+      "events": [],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "NOT_FOUND",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "bounded consistent read; never authorizes from stale projection",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-005"
+      ]
+    },
+    {
+      "name": "theme.inspect",
+      "kind": "query",
+      "inputDefinition": "ThemeInspectInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ThemeInspectInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "theme.read"
+        ],
+        "scope": "explicit target/theme version",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": false,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "query has no domain mutation"
+      },
+      "expectedVersions": [],
+      "outputDefinition": "ThemeDescriptor",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/ThemeDescriptor"
+      },
+      "events": [],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "NOT_FOUND",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "bounded consistent read; never authorizes from stale projection",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-005"
+      ]
+    },
+    {
+      "name": "theme.preview",
+      "kind": "command",
+      "inputDefinition": "ThemeInspectInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ThemeInspectInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "theme.preview"
+        ],
+        "scope": "explicit target/theme version",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "ThemeDescriptor.version; current observed capability revision rechecked by core"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ThemePreviewed"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "NOT_FOUND",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "prepare a local sandboxed preview blob; does not activate or install a theme",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004"
+      ]
+    },
+    {
+      "name": "theme.install",
+      "kind": "command",
+      "inputDefinition": "ThemeInstallInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ThemeInstallInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "theme.install"
+        ],
+        "scope": "explicit registered host/dashboard target",
+        "actorPolicy": "Requires actual host installation capability and target-specific authority. Generated product tokens are registered artifacts, not host installations."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "capabilityRevision; target install inventory; staged source digest"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ThemeInstalled"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "PATH_OUT_OF_SCOPE",
+        "BLOB_CORRUPT",
+        "INVALID_TRANSITION",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "validated theme package installation with owned backup/rollback receipt; no arbitrary archive extraction or theme activation",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004"
+      ]
+    },
+    {
+      "name": "theme.activate",
+      "kind": "command",
+      "inputDefinition": "ThemeActivateInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ThemeActivateInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "theme.activate"
+        ],
+        "scope": "explicit dashboard/generated_product/omp_host target",
+        "actorPolicy": "Dashboard appearance does not mutate design artifacts. Generated-product selection requires the exact design decision; OMP host activation requires explicit host capability and authorization."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "ThemeSelection.revision; expected target fingerprint; theme version; applicable decision for generated product"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ThemeSelected"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "APPROVAL_REQUIRED",
+        "DEPENDENCY_CHANGED",
+        "PATH_OUT_OF_SCOPE",
+        "INVALID_TRANSITION",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "authorized reversible target switch using owned backup receipt; separate from design approval",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004"
+      ]
+    },
+    {
+      "name": "theme.restore",
+      "kind": "command",
+      "inputDefinition": "ThemeRestoreInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ThemeRestoreInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "theme.restore"
+        ],
+        "scope": "same registered target as original selection",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "ThemeSelection.revision and restore target fingerprint"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ThemeRestored"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "DEPENDENCY_CHANGED",
+        "PATH_OUT_OF_SCOPE",
+        "INVALID_TRANSITION",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "restore only matching owned target; preserve later divergent edits",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004"
+      ]
+    },
+    {
+      "name": "theme.uninstall",
+      "kind": "command",
+      "inputDefinition": "ThemeUninstallInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/ThemeUninstallInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "theme.uninstall"
+        ],
+        "scope": "owned installation on explicit target",
+        "actorPolicy": "An active theme needs a separately authorized replacement/restore before removal. Built-in themes and installations owned by another actor are not removable by this operation."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "theme inventory revision; owned installation receipt; target fingerprint"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "ThemeUninstalled"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "DEPENDENCY_CHANGED",
+        "PATH_OUT_OF_SCOPE",
+        "INVALID_TRANSITION",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "remove only files owned by matching installation receipt; preserve unrelated and divergent files",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004"
+      ]
+    },
+    {
+      "name": "artifact.gc_plan",
+      "kind": "query",
+      "inputDefinition": "GcPlanInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/GcPlanInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "artifact.read"
+        ],
+        "scope": "project",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": false,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "query has no domain mutation"
+      },
+      "expectedVersions": [],
+      "outputDefinition": "GarbageCollectionPlan",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/GarbageCollectionPlan"
+      },
+      "events": [],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "bounded consistent read; never authorizes from stale projection",
+      "externalEffect": "none",
+      "requirementIds": [
+        "REQ-CORE-006"
+      ]
+    },
+    {
+      "name": "artifact.gc_apply",
+      "kind": "command",
+      "inputDefinition": "GcApplyInput",
+      "inputSchema": {
+        "$ref": "domain.schema.json#/$defs/GcApplyInput"
+      },
+      "authorization": {
+        "requiredActions": [
+          "artifact.gc"
+        ],
+        "scope": "owned unreferenced cache/staging only",
+        "actorPolicy": "Authenticated principal within inherited host/session/project/task grants."
+      },
+      "idempotency": {
+        "required": true,
+        "scope": "owning realm (projectId or private profileId) + authenticated principal + command",
+        "requestFingerprint": "normalized scope + expectedVersions + payload; excludes token/transport timestamps",
+        "replay": "return original durable receipt for identical input; conflict on changed input; no replay of external effects"
+      },
+      "expectedVersions": [
+        "plan digest/event watermark; recheck live references"
+      ],
+      "outputDefinition": "OperationReceipt",
+      "successSchema": {
+        "$ref": "domain.schema.json#/$defs/OperationReceipt"
+      },
+      "events": [
+        "GarbageCollectionApplied"
+      ],
+      "errors": [
+        "VALIDATION_ERROR",
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "CAPABILITY_MISMATCH",
+        "IDEMPOTENCY_CONFLICT",
+        "VERSION_CONFLICT",
+        "STORAGE_BUSY",
+        "BLOB_MISSING",
+        "STORAGE_UNSUPPORTED",
+        "IO_ERROR",
+        "INTERNAL_ERROR"
+      ],
+      "transaction": "short authoritative transaction; state, event/outbox and operation receipt commit together",
+      "externalEffect": "owned unreferenced temporary/cache files only; referenced historical evidence excluded",
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-CORE-006"
+      ]
+    }
+  ],
+  "blobTransport": {
+    "prepare": "blob.prepare returns a receipt referring to a principal/scope-bound BlobStagingReceipt and enforces discovered byte limits before allocation.",
+    "upload": "Authenticated streaming PUT to the adapter staging resource, or a scoped CLI/MCP host-file reader, writes only the allocated staging object. Do not put binary bodies, remote URLs, filesystem paths, bearer tokens or signed URLs in the domain envelope. A same-staging-ID replay is a full replacement allowed only before verification and only for the same declared digest/length; concurrent writes acquire an exclusive lease and conflict.",
+    "verify": "blob.verify streams hash/size/media validation and flushes the object before recording verified. artifact.register/import_prepare/theme.install accept only a matching verified receipt in their authorized scope.",
+    "download": "Authenticated digest/version resource reads are separately scoped; no filesystem path traversal or unrestricted URL proxy. Metadata does not itself authorize byte access.",
+    "retention": "Uncommitted staging expires under an owned age policy; no referenced artifact or event snapshot is reclaimed as staging."
+  },
+  "transportPolicy": {
+    "canonicalNames": "Adapter-neutral names above. Existing documented ui-design CLI/MCP/OMP aliases remain translated wrappers; exact new public route/tool aliases are versioned in the implementation API manifest.",
+    "http": "Authenticate first; schema/field errors 400, authenticated forbidden 403, absent scoped entity 404, revision/idempotency/dependency conflicts 409, conditional HTTP header mismatch 412 when used, unavailable 503. Domain codes remain stable.",
+    "mcp": "Report shared structured receipt/error within supported MCP result envelopes; do not invent host capabilities.",
+    "cli": "Machine JSON output contains the same receipt/error; documented exit codes distinguish failure from success. Human text may summarize but cannot change semantics."
+  }
+}

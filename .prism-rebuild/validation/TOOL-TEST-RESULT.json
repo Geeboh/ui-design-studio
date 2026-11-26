@@ -1,0 +1,219 @@
+{
+  "schemaVersion": "1.0.0",
+  "kind": "handoff-helper-test-result",
+  "claimScope": "Handoff helpers in disposable TOOL_HARNESS_ONLY fixtures; not product acceptance or release qualification.",
+  "status": "PASS",
+  "command": [
+    "python3",
+    "tools/test_tools.py",
+    "-v"
+  ],
+  "exitCode": 0,
+  "testMethods": 19,
+  "failures": 0,
+  "errors": 0,
+  "skips": 0,
+  "unittestDurationSeconds": 5.899,
+  "testedManifestSha256": "09cfeeaa77a8b44027ac3df63d81327e00aad6ef6ee21409a29dc7d3cd730b95",
+  "finalizationNote": "Validation report and retained evidence were finalized after this execution. Tested helper and contract inputs are identified below and unchanged; the final full manifest separately verifies all delivered files.",
+  "stdoutBytes": 0,
+  "stderrFile": "validation/tool-tests.log",
+  "stderrSha256": "d5c9c6040477c1205d5632e6cf291103fcdf09ebbda6b14cce0e80d6efdfc357",
+  "environment": {
+    "python": "3.12.14",
+    "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+    "git": "git version 2.56.1",
+    "jsonschema": "4.26.0",
+    "zlib": "1.3.2"
+  },
+  "testedInputs": [
+    {
+      "path": "contracts/acceptance-cases.json",
+      "sha256": "10f7c8923361f223ff467190670789d9b3edb8d3b9d48afb3c3c7c5ab177225f"
+    },
+    {
+      "path": "contracts/command-catalog.json",
+      "sha256": "7e174d7fc0fbaeeeded9f6ac5667cf8e293ea504bb2c4e804eab57012337f00c"
+    },
+    {
+      "path": "contracts/domain.schema.json",
+      "sha256": "67ade6ee0cc4c450827c1c2910efabed89f2de635d8b7cecb663a85e2c3f3c64"
+    },
+    {
+      "path": "contracts/examples/annotations-invalid-freehand-limit.json",
+      "sha256": "1de5668d098ee5131a7c816d6bdf6631fca1ad8903488c329760c8da3e1a6273"
+    },
+    {
+      "path": "contracts/examples/annotations-invalid-shape-points.json",
+      "sha256": "29cd750727e8372f012e03dc94b700e5d72d7e17afe0ee96eef9c5ca54a69c77"
+    },
+    {
+      "path": "contracts/examples/annotations-valid.json",
+      "sha256": "945b9a905929f0289a2b577415368b8a978538e87b3e55bf87199fae12338352"
+    },
+    {
+      "path": "contracts/examples/approve-null-feedback-command-valid.json",
+      "sha256": "f0b118720c1bd37acdf54f50b5e691f1eac22d32ea5a7729f66a8fadabe3ff89"
+    },
+    {
+      "path": "contracts/examples/artifact-invalid-version.json",
+      "sha256": "93c8b0b4853c30534171de97f618e084cc1267816cc7d11e5c7b094dc5680b9f"
+    },
+    {
+      "path": "contracts/examples/artifact-valid.json",
+      "sha256": "fe115cc8d59a40a7c76c0b45a378b12ee8ef52b617f9a876b166cdd4bea2ead6"
+    },
+    {
+      "path": "contracts/examples/budget-hard-unbounded-invalid.json",
+      "sha256": "2d92cdd8258982f122b62fd41a863d7cfe6cb48981e904ca04a0efcced03beb6"
+    },
+    {
+      "path": "contracts/examples/budget-hard-valid.json",
+      "sha256": "67a6de00bb8be09f97ad692fb92165dca989b14627a53ba385cb2df7d8186b1e"
+    },
+    {
+      "path": "contracts/examples/cost-partial-currency-invalid.json",
+      "sha256": "5742d2389e3dde33208b8d731b4cff36878ea3a1bb82847e5f3473a5a9df2365"
+    },
+    {
+      "path": "contracts/examples/cost-unknown-currency-valid.json",
+      "sha256": "9f1baa9891f7f12f06a5d92902fd25d9d898fc68ce30da62e27419813b6c9d19"
+    },
+    {
+      "path": "contracts/examples/cost-unknown-valid.json",
+      "sha256": "3b255eceafbb0acfff3d0e0792ade1f9106e6234fe5762329aef66e81531517c"
+    },
+    {
+      "path": "contracts/examples/cost-unknown-zero-invalid.json",
+      "sha256": "874b7283e87dda5f2cc5b1f335bb2b842e541df1a648a49fbf1ef4a4bd715d2c"
+    },
+    {
+      "path": "contracts/examples/dashboard-theme-input-valid.json",
+      "sha256": "e65cf961c7e5cfa8f575715b1dc56c862f61c2c3b71441ffad892cc64ed8ded9"
+    },
+    {
+      "path": "contracts/examples/decision-agent-cannot-claim-human.json",
+      "sha256": "b7881eaeeb349a69fb39262dcd8df3b1eaa795476489f5461c6d90d2e5d219cd"
+    },
+    {
+      "path": "contracts/examples/decision-empty-feedback-valid.json",
+      "sha256": "22e78a28712fb179c610e92e069cfe5ea6fa67266ec0d66b8579f6462e080aa2"
+    },
+    {
+      "path": "contracts/examples/decision-invalid-revision.json",
+      "sha256": "2c33269e15d42fa242ad24ac3c446f2f51785444aed6dee6d13083e8a25e258e"
+    },
+    {
+      "path": "contracts/examples/disabled-action-valid.json",
+      "sha256": "3da0b47dcf8101ead9887bb9034294d850f8ac011bb7dd00ab0d04c091a4aac2"
+    },
+    {
+      "path": "contracts/examples/disabled-action-without-reason-invalid.json",
+      "sha256": "e5daf021bed43aa346e2f1a4582fa1bef03d8f9fff35c989190b9c81a1ad6ef5"
+    },
+    {
+      "path": "contracts/examples/manifest.json",
+      "sha256": "ca55e8107c9b66f61429fd344bc72be86cb8290cae26cc3a3a7b11cd863b34d1"
+    },
+    {
+      "path": "contracts/examples/money-invalid-fraction.json",
+      "sha256": "69b4af6a61b4db8ee2b0b75580dc032ab9dc66732c63f952d8b977b15896df55"
+    },
+    {
+      "path": "contracts/examples/money-invalid-unsafe-integer.json",
+      "sha256": "0c69de241ae43978059c3d88cf434d035eb92925f5db2f493f8e4c16e0a707ac"
+    },
+    {
+      "path": "contracts/examples/money-valid.json",
+      "sha256": "a6891cf8cbfe357cd66be3c7f41606999c08dffbc377b6e774af7fe499b7b736"
+    },
+    {
+      "path": "contracts/examples/mutation-without-idempotency-invalid.json",
+      "sha256": "d5bc4930b9abe199e10bf4be178548dc2230a293519278431f4576f827ee9f0d"
+    },
+    {
+      "path": "contracts/examples/personal-model-defaults-project-invalid.json",
+      "sha256": "a41e33b923dc3eadc0a5c165cd854246d88c5c3e5c67537dcc54e4656da3802e"
+    },
+    {
+      "path": "contracts/examples/personal-model-defaults-valid.json",
+      "sha256": "24257689c1a92cafc3aa27e6324c4f026f8aa05fa23c26440ffce2ef0aad150c"
+    },
+    {
+      "path": "contracts/examples/product-theme-without-decision-invalid.json",
+      "sha256": "d1aeaca988002db193552b50a9517fca2cd106c3f4ce0ed0acba4e089b881f81"
+    },
+    {
+      "path": "contracts/examples/refund-command-input-valid.json",
+      "sha256": "ec8befcd550d01cfef37bea34f17ac071bff88471e0b43dc82a09bf410b0a00c"
+    },
+    {
+      "path": "contracts/examples/refund-debit-invalid.json",
+      "sha256": "0d8ecc1f86e7a578b7801d4e2ccef942bfe3487428b01eed191ff55425dbaa2f"
+    },
+    {
+      "path": "contracts/examples/reserve-command-valid.json",
+      "sha256": "6275fda5a9722c1ca5d2c09579b79802a33d05b469a9158164f4d16d21d6dc58"
+    },
+    {
+      "path": "contracts/examples/reserve-currency-format-invalid.json",
+      "sha256": "5f79a4fe8cd50abe93aaba49b05ae0d8874f6b3b96c0a9b21e96adc6b917fb94"
+    },
+    {
+      "path": "contracts/examples/rollback-journal-binding-valid.json",
+      "sha256": "63e913e6d4b60db41f3235009daf9b9b27926fc8f5921ee631f109030d2ecfcd"
+    },
+    {
+      "path": "contracts/examples/unqualified-wal-binding-invalid.json",
+      "sha256": "66bc9f4f49f3faf5f595fd160a9a646d9a8639b1efbd773efdb95d90f5d69a12"
+    },
+    {
+      "path": "contracts/gates.json",
+      "sha256": "caf4ec8cac18b11320fd1a00a3a3ae49e9d9c4411c90d6dbb5136db0af52acea"
+    },
+    {
+      "path": "contracts/milestones.json",
+      "sha256": "6c4d2efb05d1a94aed0733086557f13af917e89074c920c1f56c2b6ec4195401"
+    },
+    {
+      "path": "contracts/requirements.json",
+      "sha256": "062181dd4eec0b2018729d695b282b83abcb001fa5b37eae9fa2839909322737"
+    },
+    {
+      "path": "tools/build-pack.py",
+      "sha256": "5caff5e8048edd22b550fde825a466244c292231c5543986d340043c547e2cad"
+    },
+    {
+      "path": "tools/install-rebuild-context.py",
+      "sha256": "175033c33ab6492c3d285966028e466b2f719ced489f85b3ece27498ed14678c"
+    },
+    {
+      "path": "tools/preflight.py",
+      "sha256": "dabf47b2cb86dde45b61b6574c946f6d393c09fd9958e2984b3ee561cead8f66"
+    },
+    {
+      "path": "tools/prepare-worktree.py",
+      "sha256": "9fef4d37e03c2b29ecaca6adbe2a5de4b26a33fc3788279ff6200f24f5d13584"
+    },
+    {
+      "path": "tools/prism_pack.py",
+      "sha256": "ccd254f1ab2b292b26b6a42bd4da33f756bb88bf0500ae2a3a21654b5e9f7ae0"
+    },
+    {
+      "path": "tools/run-gates.py",
+      "sha256": "1ce105082127b2e6e068f7e1619d8ecd7ab6aec8e1f999002f83e41ed8c32190"
+    },
+    {
+      "path": "tools/status.py",
+      "sha256": "4942d08adc54bf29952bfecb230ddaab4f22d8f891aadcb79cc1e5e31154785f"
+    },
+    {
+      "path": "tools/test_tools.py",
+      "sha256": "8f72202b1b17066254a581f6e42fcd91f9630eb01227960e71001a0a647c03a7"
+    },
+    {
+      "path": "tools/verify-pack.py",
+      "sha256": "b316b444ba113e89edbda0707365bbba38d46483a19a214ea56ac499bb3755e6"
+    }
+  ]
+}

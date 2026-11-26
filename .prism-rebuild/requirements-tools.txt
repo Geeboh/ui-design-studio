@@ -1,0 +1,3 @@
+# Optional environment for full handoff JSON Schema validation.
+# Runtime product dependencies are determined and locked during M1/M7.
+jsonschema>=4.18,<5

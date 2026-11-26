@@ -912,6 +912,7 @@ function dashboardProcess(options, eventPath) {
 function installRuntime(f, options = {}, destination = join(f.project, ".venv-ui-design", "bin", "ui-design")) {
 	const eventPath = join(f.base, `${options.label ?? "child"}-events.jsonl`);
 	mkdirSync(dirname(destination), { recursive: true });
+	writeFileSync(join(dirname(dirname(destination)), "package.json"), JSON.stringify({ type: "commonjs" }));
 	writeFileSync(destination, `#!${process.execPath}\n(${dashboardProcess.toString()})(${JSON.stringify(options)}, ${JSON.stringify(eventPath)});\n`);
 	chmodSync(destination, 0o755);
 	return {

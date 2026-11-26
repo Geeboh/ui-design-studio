@@ -29,7 +29,43 @@
     viewer: null,
     historyKey: null,
     decisionKey: null,
+    usage: null,
+    usageRange: "24h",
+    ompUsage: null,
   };
+  const DRAFT_PREFIX = "prism-studio:draft:";
+  function draftKey(request) {
+    return `${DRAFT_PREFIX}${window.location.pathname}:${request.id}:${request.inputsDigest}`;
+  }
+  function restoreDraft(request, fallback) {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(draftKey(request)) || "null");
+      if (!saved || typeof saved !== "object") return fallback;
+      return {
+        ...fallback,
+        optionId: typeof saved.optionId === "string" ? saved.optionId : fallback.optionId,
+        outcome: typeof saved.outcome === "string" ? saved.outcome : fallback.outcome,
+        rationale: typeof saved.rationale === "string" ? saved.rationale : fallback.rationale,
+        attachments: Array.isArray(saved.attachments) ? saved.attachments : fallback.attachments,
+        annotations: Array.isArray(saved.annotations) ? saved.annotations : fallback.annotations,
+        activeAttachmentId: typeof saved.activeAttachmentId === "string" ? saved.activeAttachmentId : fallback.activeAttachmentId,
+        reviewed: false,
+        submitting: false,
+        conflict: false,
+        result: null,
+      };
+    } catch {
+      return fallback;
+    }
+  }
+  function persistDraft(view) {
+    try {
+      const { inputsDigest, optionId, outcome, rationale, attachments, annotations, activeAttachmentId } = view.draft;
+      window.localStorage.setItem(draftKey(view.request), JSON.stringify({ inputsDigest, optionId, outcome, rationale, attachments, annotations, activeAttachmentId }));
+    } catch {
+      // Draft persistence is best effort when browser storage is unavailable or full.
+    }
+  }
   const previewJobs = new Map();
   const gridKeys = new WeakMap();
   let approvalSequence = 0;
@@ -171,6 +207,12 @@
     if (notice.textContent !== message) notice.textContent = message;
     byId("refresh-snapshot").disabled = state.inFlight || !state.token;
     byId("refresh-snapshot").textContent = state.inFlight ? "Refreshing" : "Refresh";
+    const statusValue = state.snapshot?.run.status;
+    const cancellation = state.snapshot?.run.cancellation;
+    const terminal = ["completed", "passed", "cancelled", "reconciling"].includes(statusValue);
+    byId("cancel-run").disabled = !snapshotFresh() || terminal || state.inFlight || !state.token;
+    byId("reconcile-run").hidden = !cancellation;
+    byId("reconcile-run").disabled = !snapshotFresh() || !cancellation || cancellation.remoteOutcome !== "unknown" || state.inFlight || !state.token;
     byId("snapshot-age").textContent = state.snapshot
       ? `Observed ${formatTime(state.snapshot.observedAt)} · received ${formatElapsed(Math.max(0, (performance.now() - state.lastSuccess) / 1000))} ago · revision ${state.snapshot.revision}`
       : "No snapshot received.";
@@ -220,6 +262,8 @@
       const snapshot = validateSnapshot(await response.json());
       if (state.stopped || token !== state.token || state.requestController !== controller) return;
       state.snapshot = snapshot;
+      state.usage = snapshot.usage || null;
+      state.ompUsage = state.usage?.omp || null;
       // Preserve publication order without truncating submillisecond version timestamps.
       state.artworks = snapshot.artworks.slice().reverse();
       state.artworkById = new Map(state.artworks.map((artwork) => [artwork.id, artwork]));
@@ -244,13 +288,292 @@
       if (!state.stopped) state.pollTimer = setTimeout(refreshSnapshot, delay);
     }
   }
+  async function cancelRun() {
+    if (byId("cancel-run").disabled) return;
+    const button = byId("cancel-run");
+    button.disabled = true;
+    try {
+      const response = await fetch(new URL("api/cancel", baseUrl), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${state.token}`, "Content-Type": "application/json", Accept: "application/json" },
+        body: "{}",
+        cache: "no-store",
+        credentials: "omit",
+        redirect: "error",
+      });
+      if (!response.ok) throw new Error(await responseError(response));
+      byId("connection-notice").hidden = false;
+      byId("connection-notice").dataset.state = "pending";
+      byId("connection-notice").textContent = "Cancellation recorded. Remote work remains unresolved until reconciliation.";
+      await refreshSnapshot();
+    } catch (error) {
+      byId("connection-notice").hidden = false;
+      byId("connection-notice").dataset.state = "error";
+      byId("connection-notice").textContent = `Cancellation was not recorded. ${error.message || "Refresh and retry."}`;
+      updateConnection();
+    }
+  }
+  async function reconcileRun() {
+    const button = byId("reconcile-run");
+    if (button.disabled) return;
+    button.disabled = true;
+    try {
+      const response = await fetch(new URL("api/reconcile", baseUrl), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${state.token}`, "Content-Type": "application/json", Accept: "application/json" },
+        body: "{}",
+        cache: "no-store", credentials: "omit", redirect: "error",
+      });
+      if (!response.ok) throw new Error(await responseError(response));
+      byId("connection-notice").hidden = false;
+      byId("connection-notice").dataset.state = "pending";
+      byId("connection-notice").textContent = "Reconciliation requested. Remote completion and billing remain unresolved until authoritative evidence arrives.";
+      await refreshSnapshot();
+    } catch (error) {
+      byId("connection-notice").hidden = false;
+      byId("connection-notice").dataset.state = "error";
+      byId("connection-notice").textContent = `Reconciliation was not requested. ${error.message || "Refresh and retry."}`;
+      updateConnection();
+    }
+  }
+
+  function cancellationDetail(snapshot) {
+    const cancellation = snapshot.run.cancellation;
+    return cancellation ? ` · cancellation ${cancellation.status} · remote outcome ${cancellation.remoteOutcome}` : "";
+  }
+  function formatUsageValue(value) {
+    return value === null || value === undefined ? "Unknown" : numberFormat.format(value);
+  }
+
+  function formatUsageCost(summary, field) {
+    if (!summary || !summary.requests) return "No records";
+    const costs = (summary.costs || []).filter((item) => item[field] !== undefined && (item[field] > 0 || item.unknownRequests > 0));
+    if (!costs.length) return field === "actualMinor" && summary.unknownCostRequests ? "Unknown" : "Not recorded";
+    return costs.map((item) => {
+      const amount = (item[field] / (10 ** item.currencyExponent)).toFixed(item.currencyExponent);
+      return `${item.currencyCode} ${amount}${field === "actualMinor" && item.unknownRequests ? ` + ${numberFormat.format(item.unknownRequests)} unknown` : ""}`;
+    }).join(", ");
+  }
+
+  function usageCell(value, className = "") {
+    return element("td", className, value);
+  }
+
+  function renderUsageBreakdown(root, rows) {
+    root.replaceChildren();
+    if (!rows?.length) {
+      root.append(element("tr", "", ""));
+      root.firstChild.append(element("td", "muted", "No records"));
+      root.firstChild.firstChild.colSpan = 5;
+      return;
+    }
+    for (const row of rows.slice(0, 20)) {
+      const tr = element("tr");
+      tr.append(usageCell(`${row.name}${row.observed ? "" : " (requested)"}`), usageCell(formatUsageValue(row.requests), "usage-number"),
+        usageCell(formatUsageValue(row.inputTokens), "usage-number"), usageCell(formatUsageValue(row.outputTokens), "usage-number"),
+        usageCell(formatUsageCost(row, "actualMinor"), "usage-number"));
+      root.append(tr);
+    }
+  }
+
+  function renderUsageHistory(usage) {
+    const rows = byId("usage-history-rows");
+    const chart = byId("usage-history-chart");
+    rows.replaceChildren();
+    chart.replaceChildren();
+    const points = usage?.history || [];
+    if (!points.length) {
+      chart.append(element("p", "empty-state", "No usage history."));
+      rows.append(element("tr", "", ""));
+      rows.firstChild.append(element("td", "muted", "No records"));
+      rows.firstChild.firstChild.colSpan = 6;
+      return;
+    }
+    const maxRequests = Math.max(1, ...points.map((point) => point.requests || 0));
+    for (const point of points) {
+      const bar = element("span", "usage-history-bar");
+      const day = point.startAt.slice(0, 10);
+      bar.style.height = `${Math.max(4, Math.round((point.requests / maxRequests) * 100))}%`;
+      bar.title = `${day}: ${numberFormat.format(point.requests)} requests`;
+      bar.setAttribute("aria-label", bar.title);
+      chart.append(bar);
+      const tr = element("tr");
+      tr.append(usageCell(day), usageCell(formatUsageValue(point.requests), "usage-number"),
+        usageCell(formatUsageValue(point.inputTokens), "usage-number"), usageCell(formatUsageValue(point.outputTokens), "usage-number"),
+        usageCell(formatUsageValue(point.compressionSavedTokens), "usage-number"), usageCell(formatUsageCost(point, "actualMinor"), "usage-number"));
+      rows.append(tr);
+    }
+  }
+
+  function renderUsageRecent(usage) {
+    const root = byId("usage-recent-rows");
+    root.replaceChildren();
+    const records = usage?.recent || [];
+    if (!records.length) {
+      const tr = element("tr");
+      const cell = usageCell("No records", "muted");
+      cell.colSpan = 7;
+      tr.append(cell);
+      root.append(tr);
+      return;
+    }
+    for (const record of records.slice(0, 200)) {
+      const tr = element("tr");
+      const tokens = record.tokens || {};
+      const cost = record.cost?.actual;
+      tr.append(usageCell(formatTime(record.recordedAt)), usageCell(record.executionStatus), usageCell(record.providerObserved || record.providerRequested || "Unknown"),
+        usageCell(record.modelObserved || record.modelRequested || "Unknown"), usageCell(record.agentId || "Unknown"),
+        usageCell(`${formatUsageValue(tokens.input)} / ${formatUsageValue(tokens.output)}`, "usage-number"),
+        usageCell(cost?.status === "unknown" ? "Unknown" : cost?.status === "not_billable" ? "Not billable" : `${cost.currencyCode} ${(cost.amountMinor / (10 ** cost.currencyExponent)).toFixed(cost.currencyExponent)}`, "usage-number"));
+      root.append(tr);
+    }
+  }
+
+  function renderOmpUsage(omp) {
+    const status = byId("omp-usage-status");
+    status.textContent = omp?.status || "Not requested";
+    status.dataset.state = omp?.status === "ready" ? "passed" : omp?.status === "loading" ? "pending" : "blocked";
+    const overall = omp?.overall || {};
+    byId("omp-usage-note").textContent = omp?.status === "ready"
+      ? `Source: omp stats --json · observed ${formatTime(omp.observedAt)}. These are OMP-native totals, not PRISM run telemetry.`
+      : omp?.reason || "Open Usage to request OMP statistics.";
+    byId("omp-requests").textContent = formatUsageValue(overall.totalRequests);
+    byId("omp-input").textContent = formatUsageValue(overall.totalInputTokens);
+    byId("omp-output").textContent = formatUsageValue(overall.totalOutputTokens);
+    byId("omp-cache-read").textContent = formatUsageValue(overall.totalCacheReadTokens);
+    byId("omp-cost").textContent = overall.totalCost === undefined ? "Unknown" : `USD ${Number(overall.totalCost).toFixed(2)}`;
+    const root = byId("omp-model-rows");
+    root.replaceChildren();
+    const models = omp?.byModel || [];
+    if (!models.length) {
+      const tr = element("tr");
+      const cell = usageCell("No OMP model records", "muted");
+      cell.colSpan = 6;
+      tr.append(cell);
+      root.append(tr);
+    } else {
+      for (const row of models.slice(0, 20)) {
+        const tr = element("tr");
+        tr.append(usageCell(row.model || "Unknown"), usageCell(row.provider || "Unknown"), usageCell(formatUsageValue(row.totalRequests), "usage-number"),
+          usageCell(formatUsageValue(row.totalInputTokens), "usage-number"), usageCell(formatUsageValue(row.totalOutputTokens), "usage-number"),
+          usageCell(row.totalCost === undefined ? "Unknown" : `USD ${Number(row.totalCost).toFixed(2)}`, "usage-number"));
+        root.append(tr);
+      }
+    }
+    const renderOmpRows = (id, rows, emptyText, columns) => {
+      const target = byId(id);
+      target.replaceChildren();
+      if (!rows?.length) {
+        const tr = element("tr");
+        const cell = usageCell(emptyText, "muted");
+        cell.colSpan = columns.length;
+        tr.append(cell);
+        target.append(tr);
+        return;
+      }
+      for (const row of rows.slice(0, 20)) {
+        const tr = element("tr");
+        tr.append(...columns.map((column) => usageCell(column(row), "usage-number")));
+        target.append(tr);
+      }
+    };
+    renderOmpRows("omp-folder-rows", omp?.byFolder, "No OMP project records", [
+      (row) => row.folder || "Unknown",
+      (row) => formatUsageValue(row.totalRequests),
+      (row) => formatUsageValue(row.totalInputTokens == null || row.totalOutputTokens == null ? null : row.totalInputTokens + row.totalOutputTokens),
+      (row) => row.totalCost === undefined ? "Unknown" : `USD ${Number(row.totalCost).toFixed(2)}`,
+    ]);
+    renderOmpRows("omp-agent-rows", omp?.byAgentType, "No OMP agent records", [
+      (row) => row.agentType || "Unknown",
+      (row) => formatUsageValue(row.totalRequests),
+      (row) => formatUsageValue(row.totalInputTokens),
+      (row) => row.totalCost === undefined ? "Unknown" : `USD ${Number(row.totalCost).toFixed(2)}`,
+    ]);
+  }
+
+  function renderUsage(usage = state.usage) {
+    const status = byId("usage-status");
+    const local = usage || {};
+    const summary = local.session || {};
+    const available = local.available === true;
+    status.textContent = available ? "Recorded" : "No local records";
+    status.dataset.state = available ? "passed" : "pending";
+    byId("usage-summary").textContent = available
+      ? `${numberFormat.format(summary.requests || 0)} requests in ${local.range || state.usageRange} · ${numberFormat.format(local.lifetime?.requests || 0)} retained for this run`
+      : "No local usage records have been recorded. OMP-native statistics remain optional.";
+    byId("usage-source-note").textContent = local.warnings?.length ? local.warnings.join(" ") : "Local run telemetry. Unknown values remain unknown.";
+    byId("usage-requests").textContent = formatUsageValue(summary.requests);
+    byId("usage-request-detail").textContent = `${formatUsageValue(summary.completed)} completed · ${formatUsageValue(summary.outcomeUnknown)} outcome unknown`;
+    byId("usage-failed").textContent = formatUsageValue(summary.failed);
+    byId("usage-failure-detail").textContent = `${formatUsageValue(summary.aborted)} aborted`;
+    byId("usage-input").textContent = formatUsageValue(summary.inputTokens);
+    byId("usage-output").textContent = formatUsageValue(summary.outputTokens);
+    byId("usage-cache-read").textContent = formatUsageValue(summary.cacheReadTokens);
+    byId("usage-cache-write").textContent = formatUsageValue(summary.cacheWriteTokens);
+    byId("usage-saved").textContent = formatUsageValue(summary.compressionSavedTokens);
+    byId("usage-actual-cost").textContent = formatUsageCost(summary, "actualMinor");
+    byId("usage-estimated-cost").textContent = formatUsageCost(summary, "estimatedMinor");
+    byId("usage-unknown-cost").textContent = summary.requests ? formatUsageValue(summary.unknownCostRequests) : "No records";
+    byId("usage-cost-detail").textContent = summary.requests ? `${formatUsageValue(summary.unknownTokenRequests)} requests have unknown token input or output` : "Observed costs only";
+    renderUsageHistory(local);
+    renderUsageBreakdown(byId("usage-model-rows"), local.byModel);
+    renderUsageBreakdown(byId("usage-provider-rows"), local.byProvider);
+    renderUsageRecent(local);
+    renderOmpUsage(state.ompUsage || local.omp);
+    for (const button of document.querySelectorAll("[data-usage-range]")) button.setAttribute("aria-pressed", String(button.dataset.usageRange === state.usageRange));
+  }
+
+  async function loadUsageRange(range) {
+    if (!state.token) return;
+    state.usageRange = range;
+    try {
+      const response = await fetch(new URL(`api/usage/${range}`, baseUrl), { headers: { Authorization: `Bearer ${state.token}`, Accept: "application/json" }, cache: "no-store", credentials: "omit", redirect: "error" });
+      if (!response.ok) throw new Error(await responseError(response));
+      state.usage = await response.json();
+      renderUsage(state.usage);
+    } catch (error) {
+      byId("usage-status").textContent = "Usage unavailable";
+      byId("usage-status").dataset.state = "blocked";
+      byId("usage-source-note").textContent = error.message || "Usage range request failed.";
+    }
+  }
+
+  async function refreshOmpUsage() {
+    if (!state.token) return;
+    try {
+      const response = await fetch(new URL("api/usage/omp", baseUrl), { headers: { Authorization: `Bearer ${state.token}`, Accept: "application/json" }, cache: "no-store", credentials: "omit", redirect: "error" });
+      if (!response.ok) throw new Error(await responseError(response));
+      state.ompUsage = await response.json();
+      renderOmpUsage(state.ompUsage);
+      if (state.ompUsage.status === "loading") setTimeout(refreshOmpUsage, 1000);
+    } catch (error) {
+      renderOmpUsage({ status: "unavailable", reason: error.message || "OMP usage request failed." });
+    }
+  }
+
+  async function exportUsage(format) {
+    if (!state.token) return;
+    try {
+      const response = await fetch(new URL(`api/usage/export.${format}`, baseUrl), { headers: { Authorization: `Bearer ${state.token}`, Accept: format === "csv" ? "text/csv" : "application/json" }, cache: "no-store", credentials: "omit", redirect: "error" });
+      if (!response.ok) throw new Error(await responseError(response));
+      const blob = await response.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `prism-usage.${format}`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (error) {
+      byId("usage-source-note").textContent = `Usage export failed. ${error.message || "Retry."}`;
+    }
+  }
+
 
   function renderSnapshot() {
     const snapshot = state.snapshot;
     if (byId("server-url").textContent !== snapshot.server.url) byId("server-url").textContent = snapshot.server.url;
     byId("run-summary").textContent = `${snapshot.run.themeId} · ${snapshot.run.id}`;
     const mode = snapshot.run.mode === "yolo" ? "Autonomous yolo mode" : snapshot.run.mode === "guided" ? "Guided mode" : "Run mode unverified";
-    byId("run-detail").textContent = `Phase ${snapshot.run.phase || "unverified"} · ${mode} · server started ${formatTime(snapshot.server.startedAt)}`;
+    byId("run-detail").textContent = `Phase ${snapshot.run.phase || "unverified"} · ${mode} · server started ${formatTime(snapshot.server.startedAt)}${cancellationDetail(snapshot)}`;
     byId("run-status").textContent = snapshot.run.status;
     byId("run-status").dataset.state = snapshot.run.status;
     document.title = `${snapshot.run.themeId} · Design workspace`;
@@ -259,6 +582,7 @@
     renderApprovals(snapshot);
     renderDecisions(snapshot);
     renderActiveGallery();
+    renderUsage(state.usage);
   }
 
   function renderMessages(root, messages, emptyText) {
@@ -578,7 +902,7 @@
   }
 
   function setView(view, focus = true) {
-    if (!["progress", "feed", "library", "approvals"].includes(view)) return;
+    if (!["progress", "feed", "library", "approvals", "usage"].includes(view)) return;
     if (state.view !== view) {
       if (state.view === "feed") disposeGrid(byId("feed-grid"));
       if (state.view === "library") disposeGrid(byId("library-grid"));
@@ -590,6 +914,9 @@
     }
     for (const panel of document.querySelectorAll("[data-view-panel]")) panel.hidden = panel.dataset.viewPanel !== view;
     renderActiveGallery();
+    if (view === "usage") {
+      renderUsage(state.usage);
+    }
     if (focus) {
       byId(`${view}-heading`).focus({ preventScroll: true });
       window.scrollTo({ top: 0, behavior: "instant" });
@@ -693,6 +1020,7 @@
     view.annotationFuture = [];
     view.draft.annotations = copyAnnotations(annotations);
     renderAnnotationEditor(view);
+    persistDraft(view);
   }
 
   function createAnnotationEditor(view, prefix) {
@@ -736,6 +1064,24 @@
     const clear = element("button", "button button-quiet", "Clear marks");
     for (const button of [undo, redo, clear]) button.type = "button";
     toolbar.append(colorLabel, textLabel, undo, redo, clear);
+    const coordinateFields = element("fieldset", "annotation-coordinates");
+    coordinateFields.append(element("legend", "", "Add a mark without dragging"));
+    const coordinateInputs = {};
+    for (const [name, label] of [["startX", "Start X"], ["startY", "Start Y"], ["endX", "End X"], ["endY", "End Y"]]) {
+      const field = element("label", "", label);
+      const input = element("input");
+      input.type = "number";
+      input.min = "0";
+      input.max = "1";
+      input.step = "0.001";
+      input.inputMode = "decimal";
+      field.append(input);
+      coordinateFields.append(field);
+      coordinateInputs[name] = input;
+    }
+    const coordinateAdd = element("button", "button button-quiet", "Add from coordinates");
+    coordinateAdd.type = "button";
+    coordinateFields.append(coordinateAdd);
     const stage = element("div", "annotation-stage");
     stage.tabIndex = 0;
     stage.setAttribute("role", "application");
@@ -744,7 +1090,7 @@
     image.alt = "Uploaded feedback image";
     const svg = annotationSvgElement("svg", { viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true" });
     stage.append(image, svg);
-    feedback.append(uploadLabel, attachmentList, toolbar, stage);
+    feedback.append(uploadLabel, attachmentList, toolbar, coordinateFields, stage);
     view.feedback = feedback;
     view.attachmentUpload = upload;
     view.attachmentList = attachmentList;
@@ -757,6 +1103,8 @@
     view.annotationStage = stage;
     view.annotationImage = image;
     view.annotationSvg = svg;
+    view.annotationCoordinateInputs = coordinateInputs;
+    view.annotationCoordinateAdd = coordinateAdd;
     view.annotationPast = [];
     view.annotationFuture = [];
     view.annotationPreview = null;
@@ -777,10 +1125,26 @@
           view.draft.attachments.push({ id, name: file.name, mimeType: file.type, data, previewUrl });
           view.draft.activeAttachmentId = id;
           renderAnnotationEditor(view);
+          persistDraft(view);
         });
         reader.readAsDataURL(file);
       }
       upload.value = "";
+    });
+    coordinateAdd.addEventListener("click", () => {
+      const active = view.draft.attachments.find((item) => item.id === view.draft.activeAttachmentId);
+      const values = Object.fromEntries(Object.entries(coordinateInputs).map(([name, input]) => [name, Number(input.value)]));
+      const valid = active && Object.values(values).every((value) => Number.isFinite(value) && value >= 0 && value <= 1);
+      if (!valid) {
+        view.message.hidden = false;
+        view.message.dataset.state = "error";
+        view.message.textContent = "Select an image and enter coordinates from 0 through 1.";
+        return;
+      }
+      const first = [values.startX, values.startY];
+      const second = [values.endX, values.endY];
+      const points = view.draft.annotationTool === "text" ? [first] : [first, second];
+      setAnnotations(view, [...view.draft.annotations, { attachmentId: active.id, tool: view.draft.annotationTool, points, text: text.value.trim(), color: color.value, width: 3 }]);
     });
     stage.addEventListener("pointerdown", (event) => {
       const active = view.draft.attachments.find((item) => item.id === view.draft.activeAttachmentId);
@@ -904,6 +1268,8 @@
         submitting: false, conflict: false, result: null, attachments: [], annotations: [], activeAttachmentId: "",
         annotationTool: "arrow", attachmentSequence: 0 },
     };
+    view.draft = restoreDraft(request, view.draft);
+    rationale.value = view.draft.rationale;
     const feedback = createAnnotationEditor(view, prefix);
     form.insertBefore(feedback, confirmationLabel);
     form.addEventListener("input", () => {
@@ -913,6 +1279,7 @@
       view.draft.optionId = form.querySelector('input[name="optionId"]:checked')?.value || "";
       view.draft.outcome = form.querySelector('input[name="outcome"]:checked')?.value || "";
       updateApprovalAvailability(view);
+      persistDraft(view);
     });
     form.addEventListener("change", (event) => {
       if (event.target.name === "optionId") {
@@ -920,6 +1287,7 @@
         view.draft.reviewed = false;
       }
       updateApprovalAvailability(view);
+      persistDraft(view);
     });
     useCurrent.addEventListener("click", () => {
       if (view.request.status !== "pending" || view.request.inputsDigest === view.draft.inputsDigest) return;
@@ -1030,6 +1398,8 @@
     view.annotationRedo.disabled = feedbackDisabled || !view.annotationFuture.length;
     view.annotationClear.disabled = feedbackDisabled || !draft.annotations.some((item) => item.attachmentId === draft.activeAttachmentId);
     view.annotationStage.dataset.disabled = String(feedbackDisabled);
+    Object.values(view.annotationCoordinateInputs).forEach((input) => { input.disabled = feedbackDisabled; });
+    view.annotationCoordinateAdd.disabled = feedbackDisabled;
     view.confirmation.disabled = draft.submitting || stale || terminal || !guided;
     if (stale && draft.reviewed) {
       draft.reviewed = false;
@@ -1259,44 +1629,80 @@
     byId("viewer-zoom-out").disabled = viewer.scale <= 0.01;
     byId("viewer-zoom-in").disabled = viewer.scale >= 8;
   }
+  function previousArtwork(artwork) {
+    const index = state.artworks.findIndex((candidate) => candidate.id === artwork.id);
+    if (index < 0) return null;
+    return state.artworks.slice(index + 1).find((candidate) => candidate.path === artwork.path) || null;
+  }
 
-  function openArtwork(artwork, returnFocus) {
-    const dialog = byId("artwork-dialog");
+  function buildViewerMedia(artwork) {
     let url;
     try {
       url = artifactUrl(artwork);
     } catch (error) {
-      byId("connection-notice").hidden = false;
-      byId("connection-notice").dataset.state = "error";
-      byId("connection-notice").textContent = error.message;
-      return;
+      return { error };
     }
-    if (state.viewer?.node) state.viewer.node.removeAttribute("src");
-    const content = byId("viewer-content");
-    content.replaceChildren();
-    dialog.classList.remove("is-expanded");
-    byId("viewer-expand").setAttribute("aria-pressed", "false");
-    byId("viewer-title").textContent = artwork.title;
-    byId("viewer-context").textContent = artwork.context;
-    byId("viewer-metadata").textContent = `${artwork.path} · version ${artwork.version} · retained ${formatTime(artwork.createdAt)}`;
-    byId("viewer-download").href = url;
-    byId("viewer-download").download = artwork.path.split("/").pop() || "artwork";
-    byId("viewer-scale").textContent = "Loading";
-    byId("viewer-dimensions").textContent = artwork.kind === "image" ? "Natural image dimensions will be read from this retained file." : `Preview viewport ${DOCUMENT_WIDTH} × ${DOCUMENT_HEIGHT} CSS pixels. This is a viewer size, not the document's source dimensions.`;
-    byId("viewer-policy").textContent = artwork.kind === "image"
-      ? "Image-only display. Natural size shows one image pixel per CSS pixel."
-      : artwork.kind === "html" ? "Sandboxed static HTML. Scripts, forms, and navigation are disabled. Script-rendered content needs a published screenshot."
-        : "Sandboxed PDF. Browser PDF support varies. Save the retained PDF if this preview is blank or unavailable.";
-    byId("viewer-load-status").textContent = "Loading the retained artifact.";
-    byId("viewer-natural").textContent = artwork.kind === "image" ? "Natural size" : "100% scale";
-    for (const id of ["viewer-fit", "viewer-natural", "viewer-zoom-in", "viewer-zoom-out"]) byId(id).disabled = true;
-    const viewer = { artwork, returnFocus, node: null, wrapper: null, width: 0, height: 0, scale: 1, mode: "fit", ready: false };
-    state.viewer = viewer;
     const media = document.createElement(artwork.kind === "image" ? "img" : "iframe");
-    viewer.node = media;
     media.referrerPolicy = "no-referrer";
     if (artwork.kind === "image") {
       media.alt = artwork.title;
+    } else {
+      media.setAttribute("sandbox", "");
+      media.title = `${artwork.title}, sandboxed ${artwork.kind.toUpperCase()} with scripts disabled`;
+      media.style.width = `${DOCUMENT_WIDTH}px`;
+      media.style.height = `${DOCUMENT_HEIGHT}px`;
+    }
+    return { media, url };
+  }
+
+  function renderViewer(viewer) {
+    if (viewer.node) viewer.node.removeAttribute("src");
+    const content = byId("viewer-content");
+    content.replaceChildren();
+    viewer.node = null;
+    viewer.wrapper = null;
+    viewer.width = 0;
+    viewer.height = 0;
+    viewer.ready = false;
+    if (viewer.comparing && viewer.previous) {
+      const comparison = element("div", "viewer-comparison");
+      for (const [label, artwork] of [["Previous", viewer.previous], ["Current", viewer.artwork]]) {
+        const figure = element("figure", "viewer-comparison-item");
+        figure.append(element("figcaption", "viewer-comparison-label", `${label}: ${artwork.title} · version ${artwork.version}`));
+        const frame = element("div", "viewer-comparison-media");
+        const built = buildViewerMedia(artwork);
+        if (built.error) {
+          frame.append(element("p", "preview-error", built.error.message));
+        } else {
+          if (artwork.kind !== "image") {
+            built.media.style.width = "100%";
+            built.media.style.height = "32rem";
+          }
+          built.media.addEventListener("error", () => {
+            frame.append(element("p", "preview-error", "Preview unavailable. Save the retained artifact to inspect it."));
+          }, { once: true });
+          frame.append(built.media);
+          built.media.src = built.url;
+        }
+        figure.append(frame);
+        comparison.append(figure);
+      }
+      content.append(comparison);
+      byId("viewer-scale").textContent = "Before / after";
+      byId("viewer-dimensions").textContent = "Previous and current retained versions are shown side by side.";
+      byId("viewer-load-status").textContent = "Comparison loaded from retained artifacts.";
+      for (const id of ["viewer-fit", "viewer-natural", "viewer-zoom-in", "viewer-zoom-out"]) byId(id).disabled = true;
+      return;
+    }
+    const built = buildViewerMedia(viewer.artwork);
+    if (built.error) {
+      byId("viewer-load-status").textContent = built.error.message;
+      for (const id of ["viewer-fit", "viewer-natural", "viewer-zoom-in", "viewer-zoom-out"]) byId(id).disabled = true;
+      return;
+    }
+    const media = built.media;
+    viewer.node = media;
+    if (viewer.artwork.kind === "image") {
       media.addEventListener("load", () => {
         if (state.viewer !== viewer) return;
         viewer.width = media.naturalWidth;
@@ -1313,30 +1719,73 @@
       viewer.height = DOCUMENT_HEIGHT;
       viewer.ready = true;
       viewer.wrapper = element("div", "viewer-document");
-      media.setAttribute("sandbox", "");
-      media.title = `${artwork.title}, sandboxed ${artwork.kind.toUpperCase()} with scripts disabled`;
-      media.style.width = `${DOCUMENT_WIDTH}px`;
-      media.style.height = `${DOCUMENT_HEIGHT}px`;
-      media.addEventListener("load", () => {
-        if (state.viewer !== viewer) return;
-        byId("viewer-load-status").textContent = artwork.kind === "html"
-          ? "The sandboxed document response loaded. Blank script-rendered content needs a published screenshot."
-          : "The sandboxed PDF response loaded. If the browser cannot display it, save the retained PDF.";
-      }, { once: true });
       viewer.wrapper.append(media);
       content.append(viewer.wrapper);
       for (const id of ["viewer-fit", "viewer-natural"]) byId(id).disabled = false;
+      media.addEventListener("load", () => {
+        if (state.viewer !== viewer) return;
+        byId("viewer-load-status").textContent = viewer.artwork.kind === "html"
+          ? "The sandboxed document response loaded. Blank script-rendered content needs a published screenshot."
+          : "The sandboxed PDF response loaded. If the browser cannot display it, save the retained PDF.";
+      }, { once: true });
     }
     media.addEventListener("error", () => {
       if (state.viewer !== viewer) return;
       byId("viewer-load-status").textContent = "The preview could not be loaded. Save the retained artifact or refresh the server snapshot.";
     }, { once: true });
+    media.src = built.url;
+    applyViewerScale();
+  }
+
+  function toggleViewerComparison() {
+    const viewer = state.viewer;
+    if (!viewer?.previous) return;
+    viewer.comparing = !viewer.comparing;
+    const button = byId("viewer-compare");
+    button.setAttribute("aria-pressed", String(viewer.comparing));
+    button.textContent = viewer.comparing ? "Show current" : "Compare previous";
+    renderViewer(viewer);
+  }
+
+  function openArtwork(artwork, returnFocus) {
+    const dialog = byId("artwork-dialog");
+    let url;
+    try {
+      url = artifactUrl(artwork);
+    } catch (error) {
+      byId("connection-notice").hidden = false;
+      byId("connection-notice").dataset.state = "error";
+      byId("connection-notice").textContent = error.message;
+      return;
+    }
+    if (state.viewer?.node) state.viewer.node.removeAttribute("src");
+    dialog.classList.remove("is-expanded");
+    byId("viewer-expand").setAttribute("aria-pressed", "false");
+    byId("viewer-title").textContent = artwork.title;
+    byId("viewer-context").textContent = artwork.context;
+    byId("viewer-metadata").textContent = `${artwork.path} · version ${artwork.version} · retained ${formatTime(artwork.createdAt)}`;
+    byId("viewer-download").href = url;
+    byId("viewer-download").download = artwork.path.split("/").pop() || "artwork";
+    byId("viewer-scale").textContent = "Loading";
+    byId("viewer-dimensions").textContent = artwork.kind === "image" ? "Natural image dimensions will be read from this retained file." : `Preview viewport ${DOCUMENT_WIDTH} × ${DOCUMENT_HEIGHT} CSS pixels. This is a viewer size, not the document's source dimensions.`;
+    byId("viewer-policy").textContent = artwork.kind === "image"
+      ? "Image-only display. Natural size shows one image pixel per CSS pixel."
+      : artwork.kind === "html" ? "Sandboxed static HTML. Scripts, forms, and navigation are disabled. Script-rendered content needs a published screenshot."
+        : "Sandboxed PDF. Browser PDF support varies. Save the retained PDF if this preview is blank or unavailable.";
+    byId("viewer-load-status").textContent = "Loading the retained artifact.";
+    byId("viewer-natural").textContent = artwork.kind === "image" ? "Natural size" : "100% scale";
+    const viewer = { artwork, previous: previousArtwork(artwork), comparing: false, returnFocus, node: null, wrapper: null, width: 0, height: 0, scale: 1, mode: "fit", ready: false };
+    state.viewer = viewer;
+    const compare = byId("viewer-compare");
+    compare.hidden = !viewer.previous;
+    compare.disabled = !viewer.previous;
+    compare.setAttribute("aria-pressed", "false");
+    compare.textContent = "Compare previous";
     dialog.showModal();
     byId("viewer-close").focus();
     byId("viewer-stage").scrollTo(0, 0);
     viewerResize?.observe(byId("viewer-stage"));
-    media.src = url;
-    applyViewerScale();
+    renderViewer(viewer);
   }
 
   function closeArtwork() {
@@ -1350,7 +1799,15 @@
     byId("workspace-main").focus();
   });
   byId("refresh-snapshot").addEventListener("click", refreshSnapshot);
+  byId("cancel-run").addEventListener("click", cancelRun);
+  byId("reconcile-run").addEventListener("click", reconcileRun);
+  byId("viewer-compare").addEventListener("click", toggleViewerComparison);
+  for (const button of document.querySelectorAll("[data-usage-range]")) button.addEventListener("click", () => loadUsageRange(button.dataset.usageRange));
+  byId("usage-omp-refresh").addEventListener("click", refreshOmpUsage);
+  byId("usage-export-json").addEventListener("click", () => exportUsage("json"));
+  byId("usage-export-csv").addEventListener("click", () => exportUsage("csv"));
   byId("server-url").textContent = window.location.href;
+
   byId("copy-address").addEventListener("click", async () => {
     const address = byId("server-url").textContent;
     try {

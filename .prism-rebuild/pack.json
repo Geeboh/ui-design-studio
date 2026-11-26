@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0.0",
+  "name": "PRISM Studio Rebuild Pack",
+  "packVersion": "1.0.0",
+  "targetProduct": "UI Design Studio",
+  "targetProductVersion": "2.0.0",
+  "workingProductName": "PRISM Studio",
+  "preparedDate": "2026-11-26",
+  "preparedTimezone": "Australia/Hobart",
+  "baseline": {
+    "repository": "https://github.com/Geeboh/ui-design-studio",
+    "commit": "60307ef31fd6e2bad1d39620fc507b0b822e281a",
+    "version": "1.4.3"
+  },
+  "entrypoints": {
+    "start": "START-HERE.md",
+    "masterPrompt": "prompts/MASTER-REBUILD.md",
+    "context": "AGENTS.md",
+    "validation": "validation/PACK-VALIDATION.md"
+  },
+  "defaultCompletionTarget": "verified-release-candidate",
+  "humanParticipantValidation": "deferred",
+  "runtimeImplementedByPack": false,
+  "sourceDocumentsRedistributed": false,
+  "externalPublicationPerformed": false
+}

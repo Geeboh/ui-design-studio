@@ -1,0 +1,28 @@
+---
+name: ui-design
+description: "Create, compare or revise real UI design artifacts, including pinned focused revisions and component decomposition. Use for the design stage and design-only requests."
+---
+
+# Design and revise artifacts
+
+Implementation target: activate with compatible Studio commands.
+
+## Inputs and scope
+
+Read the accepted brief/plan, mode, relevant references, model capabilities and design-budget admission state. For revision, require the exact base artifact version/digest, annotation-set revision, component IDs and protected scope.
+
+## Workflow
+
+Produce real inspectable artifacts with versioned identity and provenance. Explain significant alternatives and tradeoffs briefly. Keep display derivatives distinct from authoritative originals; isolate untrusted HTML/SVG previews.
+
+Read the relevant revision/approval sections of `.prism-rebuild/docs/PRODUCT-AND-UX.md`; select only applicable rules. Use the advertised annotation schema and bounds. HTML/PDF annotations bind to an immutable capture and source dependency, not a changing live view.
+
+For focused work, change the requested region/component and compare protected areas. Report spillover rather than promising identical pixels without proof. For decomposition, assign stable IDs and an acyclic versioned graph; preserve accepted independent parts and recheck the composition.
+
+Reserve bounded design cost before controlled dispatch. Unknown charges remain unresolved until reconciled. Do not automatically repeat a paid attempt after an ambiguous timeout.
+
+## Mode, outputs and exit
+
+Return artifacts, version lineage, change summary, relevant evidence, costs and a decision request or recorded decision. Guided presents the concrete result for the appropriate user decision; YOLO may select within delegated scope and budget, labelled as an agent decision. Actual user decisions remain valid in either mode.
+
+Exit when the requested design scope has an applicable decision and handoff, or an explicit blocker remains. Design-only completion does not imply implementation, accessibility conformance or human usability testing passed.

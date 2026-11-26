@@ -33,4 +33,4 @@ Guided approval occurs in the authenticated browser dashboard. No MCP tool submi
 
 Each MCP process owns its landing dashboard and only the run servers it starts. Reused run servers belong to another connection. Disconnecting never stops a borrowed server. Run URLs may change after their owner exits. Explicit resume can start a stopped run.
 
-The default dashboard host is `0.0.0.0` for trusted-LAN access. Bearer fragments protect access, not network confidentiality. HTTP exposes credentials and content to network observers. Use `--dashboard-host 127.0.0.1` to opt out of LAN exposure. Do not share tokenized URLs beyond trusted recipients. MCP itself uses local stdio only.
+The default dashboard host is `127.0.0.1` for loopback-only access. Bearer fragments protect access, not network confidentiality. Use `--dashboard-host 0.0.0.0` only for explicit trusted-LAN access. Do not share tokenized URLs beyond trusted recipients. MCP itself uses local stdio only.

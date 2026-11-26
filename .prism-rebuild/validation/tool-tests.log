@@ -1,0 +1,24 @@
+test_child_cannot_redirect_parent_receipt_or_log_writes (__main__.HandoffToolTests.test_child_cannot_redirect_parent_receipt_or_log_writes) ... ok
+test_context_conflict_blocks_retry_and_restore_before_any_partial_write (__main__.HandoffToolTests.test_context_conflict_blocks_retry_and_restore_before_any_partial_write) ... ok
+test_context_install_is_idempotent_and_restore_preserves_original_bytes (__main__.HandoffToolTests.test_context_install_is_idempotent_and_restore_preserves_original_bytes) ... ok
+test_deterministic_zip_ignores_root_name_and_mtime_and_rejects_in_place_output (__main__.HandoffToolTests.test_deterministic_zip_ignores_root_name_and_mtime_and_rejects_in_place_output) ... ok
+test_git_exclude_leaf_or_parent_symlink_cannot_redirect_context_writes (__main__.HandoffToolTests.test_git_exclude_leaf_or_parent_symlink_cannot_redirect_context_writes) ... ok
+test_invalid_gate_bindings_are_rejected_before_execution (__main__.HandoffToolTests.test_invalid_gate_bindings_are_rejected_before_execution) ... ok
+test_large_command_log_is_retained_without_truncation (__main__.HandoffToolTests.test_large_command_log_is_retained_without_truncation) ... ok
+test_manifest_detects_tampering_missing_and_unexpected_files (__main__.HandoffToolTests.test_manifest_detects_tampering_missing_and_unexpected_files) ... ok
+test_missing_or_damaged_local_pack_does_not_install_context (__main__.HandoffToolTests.test_missing_or_damaged_local_pack_does_not_install_context) ... ok
+test_nonzero_timeout_missing_and_unchanged_artifact_fail (__main__.HandoffToolTests.test_nonzero_timeout_missing_and_unchanged_artifact_fail) ... ok
+test_placeholder_plan_cannot_qualify_a_product (__main__.HandoffToolTests.test_placeholder_plan_cannot_qualify_a_product) ... ok
+test_prepare_preserves_dirty_source_and_activates_only_rebuild_context (__main__.HandoffToolTests.test_prepare_preserves_dirty_source_and_activates_only_rebuild_context) ... ok
+test_private_state_symlinks_block_all_affected_tools_without_external_writes (__main__.HandoffToolTests.test_private_state_symlinks_block_all_affected_tools_without_external_writes) ... ok
+test_release_missing_stale_or_misattributed_review_is_blocked (__main__.HandoffToolTests.test_release_missing_stale_or_misattributed_review_is_blocked) ... ok
+test_safe_child_and_private_state_reject_escape_paths (__main__.HandoffToolTests.test_safe_child_and_private_state_reject_escape_paths) ... ok
+test_selected_g0_success_captures_exact_receipt_and_remains_partial (__main__.HandoffToolTests.test_selected_g0_success_captures_exact_receipt_and_remains_partial) ... ok
+test_source_mutation_invalidates_successful_command (__main__.HandoffToolTests.test_source_mutation_invalidates_successful_command) ... ok
+test_status_invalidates_changed_plan_log_snapshot_or_captured_artifact (__main__.HandoffToolTests.test_status_invalidates_changed_plan_log_snapshot_or_captured_artifact) ... ok
+test_strict_json_rejects_duplicate_keys_and_nonfinite_values (__main__.HandoffToolTests.test_strict_json_rejects_duplicate_keys_and_nonfinite_values) ... ok
+
+----------------------------------------------------------------------
+Ran 19 tests in 5.899s
+
+OK

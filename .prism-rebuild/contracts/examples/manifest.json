@@ -1,0 +1,191 @@
+{
+  "schemaVersion": "1.0.0",
+  "fixtures": [
+    {
+      "path": "contracts/examples/artifact-valid.json",
+      "definition": "ArtifactVersion",
+      "valid": true,
+      "note": "Shape-valid immutable image metadata; bytes/digest/ownership must be checked by the engine."
+    },
+    {
+      "path": "contracts/examples/artifact-invalid-version.json",
+      "definition": "ArtifactVersion",
+      "valid": false,
+      "note": "Version zero is not a valid artifact version."
+    },
+    {
+      "path": "contracts/examples/decision-empty-feedback-valid.json",
+      "definition": "ApprovalDecision",
+      "valid": true,
+      "note": "An ordinary human Approved decision permits empty normalized feedback; actual authority is a semantic check."
+    },
+    {
+      "path": "contracts/examples/decision-invalid-revision.json",
+      "definition": "ApprovalDecision",
+      "valid": false,
+      "note": "Expected/recorded request revision cannot be negative."
+    },
+    {
+      "path": "contracts/examples/decision-agent-cannot-claim-human.json",
+      "definition": "ApprovalDecision",
+      "valid": false,
+      "note": "Explicit-user authority cannot be recorded with an agent actor."
+    },
+    {
+      "path": "contracts/examples/annotations-valid.json",
+      "definition": "AnnotationSet",
+      "valid": true,
+      "note": "Two endpoints bind to normalized coordinates on the exact source image."
+    },
+    {
+      "path": "contracts/examples/annotations-invalid-shape-points.json",
+      "definition": "AnnotationSet",
+      "valid": false,
+      "note": "A rectangle has exactly two endpoints, not a sampled pointer trail."
+    },
+    {
+      "path": "contracts/examples/annotations-invalid-freehand-limit.json",
+      "definition": "AnnotationSet",
+      "valid": false,
+      "note": "The saved freehand contract allows at most128 points; preserve draft and simplify visibly."
+    },
+    {
+      "path": "contracts/examples/money-valid.json",
+      "definition": "Money",
+      "valid": true,
+      "note": "1234 minor units with explicit exponent2 is12.34USD; sample currency, not a default."
+    },
+    {
+      "path": "contracts/examples/money-invalid-fraction.json",
+      "definition": "Money",
+      "valid": false,
+      "note": "Fractional minor units are invalid."
+    },
+    {
+      "path": "contracts/examples/money-invalid-unsafe-integer.json",
+      "definition": "Money",
+      "valid": false,
+      "note": "Above the safe JSON integer ceiling for interoperable exact accounting."
+    },
+    {
+      "path": "contracts/examples/cost-unknown-valid.json",
+      "definition": "CostObservation",
+      "valid": true,
+      "note": "Unavailable cost remains null/unknown."
+    },
+    {
+      "path": "contracts/examples/cost-unknown-zero-invalid.json",
+      "definition": "CostObservation",
+      "valid": false,
+      "note": "Unknown cost must not become zero."
+    },
+    {
+      "path": "contracts/examples/budget-hard-valid.json",
+      "definition": "BudgetAccount",
+      "valid": true,
+      "note": "Hard-cap shape requires a cap and both prerequisites; their truth must be verified by the core."
+    },
+    {
+      "path": "contracts/examples/budget-hard-unbounded-invalid.json",
+      "definition": "BudgetAccount",
+      "valid": false,
+      "note": "A hard label is incompatible with an unbounded-charge declaration."
+    },
+    {
+      "path": "contracts/examples/approve-null-feedback-command-valid.json",
+      "definition": "CommandEnvelope",
+      "valid": true,
+      "note": "Optional input null normalizes to empty stored feedback across transports."
+    },
+    {
+      "path": "contracts/examples/mutation-without-idempotency-invalid.json",
+      "definition": "CommandEnvelope",
+      "valid": false,
+      "note": "Mutation keys are required."
+    },
+    {
+      "path": "contracts/examples/reserve-command-valid.json",
+      "definition": "CommandEnvelope",
+      "valid": true,
+      "note": "Typed reserve request; available balance/currency equality and price bound need transactional semantic checks."
+    },
+    {
+      "path": "contracts/examples/reserve-currency-format-invalid.json",
+      "definition": "CommandEnvelope",
+      "valid": false,
+      "note": "Currency code must be explicit uppercase; runtime also verifies the actual registry/exponent pair."
+    },
+    {
+      "path": "contracts/examples/cost-unknown-currency-valid.json",
+      "definition": "CostObservation",
+      "valid": true,
+      "note": "Accountless unresolved work can have no known currency. It is not a zero-cost or unlimited-spend assertion."
+    },
+    {
+      "path": "contracts/examples/cost-partial-currency-invalid.json",
+      "definition": "CostObservation",
+      "valid": false,
+      "note": "A currency and its exponent are either both known or both unknown."
+    },
+    {
+      "path": "contracts/examples/personal-model-defaults-valid.json",
+      "definition": "ModelPreferenceSet",
+      "valid": true,
+      "note": "Current-model personal defaults persist without claiming a resolved/observed model identity."
+    },
+    {
+      "path": "contracts/examples/personal-model-defaults-project-invalid.json",
+      "definition": "ModelPreferenceSet",
+      "valid": false,
+      "note": "A personal preference set cannot be stored as a project-owned record."
+    },
+    {
+      "path": "contracts/examples/refund-command-input-valid.json",
+      "definition": "AdjustCostInput",
+      "valid": true,
+      "note": "A refund is a linked credit with attributable evidence. Engine checks original balance, currency, authority and receipt uniqueness."
+    },
+    {
+      "path": "contracts/examples/refund-debit-invalid.json",
+      "definition": "AdjustCostInput",
+      "valid": false,
+      "note": "A refund cannot be a debit."
+    },
+    {
+      "path": "contracts/examples/dashboard-theme-input-valid.json",
+      "definition": "ThemeActivateInput",
+      "valid": true,
+      "note": "Dashboard appearance has an explicit target and does not require a generated-product design decision."
+    },
+    {
+      "path": "contracts/examples/product-theme-without-decision-invalid.json",
+      "definition": "ThemeActivateInput",
+      "valid": false,
+      "note": "Generated-product theme activation requires an exact artifact and applicable design decision."
+    },
+    {
+      "path": "contracts/examples/disabled-action-valid.json",
+      "definition": "ActionState",
+      "valid": true,
+      "note": "A disabled control carries a structured explanation and permitted remediation hint."
+    },
+    {
+      "path": "contracts/examples/disabled-action-without-reason-invalid.json",
+      "definition": "ActionState",
+      "valid": false,
+      "note": "Disabled controls must be explained."
+    },
+    {
+      "path": "contracts/examples/rollback-journal-binding-valid.json",
+      "definition": "WorkspaceBinding",
+      "valid": true,
+      "note": "DELETE/FULL serialized-write policy is an explicit supported option; this shape is not runtime qualification or a crash test."
+    },
+    {
+      "path": "contracts/examples/unqualified-wal-binding-invalid.json",
+      "definition": "WorkspaceBinding",
+      "valid": false,
+      "note": "A WAL binding cannot claim an unqualified SQLite runtime."
+    }
+  ]
+}

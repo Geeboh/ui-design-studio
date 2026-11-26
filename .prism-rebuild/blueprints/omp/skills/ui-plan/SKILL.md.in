@@ -1,0 +1,30 @@
+---
+name: ui-plan
+description: "Plan scoped UI work, component dependencies, acceptance and cost-aware execution. Use after assessment or when converting an authorized goal into a reviewable implementation/design plan."
+---
+
+# Plan scoped work
+
+Implementation target: activate with compatible Studio commands.
+
+## Inputs and scope
+
+Read the goal, assessment, existing accepted versions, constraints, mode, model capabilities and design-budget policy. Resolve repository instructions and the shared domain/command contracts before assigning work.
+
+## Workflow
+
+Define the intended outcome and smallest useful scope. Map stable components and exact versioned dependencies; reject cycles. Specify owned files/components, permitted creation, stage outputs, checks, recovery and relevant decision points.
+
+Separate design generation/critique costs from implementation. Record currency, estimates, uncertainty and reservations required before paid dispatch. An unavailable price is unknown, not zero.
+
+For revisions, pin base artifact/digest and annotation revision; list intended changes and protected scope. For decomposition, expose components, dependencies and retained acceptance. Preserve independent accepted work.
+
+Read the relevant section of `.prism-rebuild/docs/PRODUCT-AND-UX.md` and selected rules from `.prism-rebuild/knowledge/rules.json`. Do not require a new framework, database or full design system because a source mentions one.
+
+Size concurrency from actual slots, dependencies, rates and funds. Route capabilities rather than hardcoded model prestige. Keep packets small and complete.
+
+## Mode, outputs and exit
+
+Produce a concrete plan with acceptance conditions, dependency graph, cost assumptions, ownership and checkpoints. Guided obtains the relevant user design/scope decision; YOLO records an authorized agent selection. Neither permits unapproved external publication or budget overrun.
+
+Exit when the plan is executable by available capabilities or when a precise prerequisite is unresolved. Planning records do not claim that artifacts exist, approvals were granted or checks passed.

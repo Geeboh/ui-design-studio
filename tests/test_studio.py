@@ -338,12 +338,18 @@ class StudioTests(unittest.TestCase):
         result = studio.init_run(self.repo, theme_id="fixture", scope="component")
         root = Path(result["run"])
         (root / "component.md").write_text("Owned component artifact\n", encoding="utf-8")
-        packet = studio.worker_packet(root, "ui-implementer", "Fix component state", ["component.md"])
+        catalog = self.repo / ".prism-rebuild/knowledge/rules.json"
+        catalog.parent.mkdir(parents=True)
+        write_json(catalog, {"schemaVersion": "1.0.0", "rules": [{"id": "R-001", "topic": "component", "principle": "Preserve state", "appliesWhen": "Fix component state", "action": "Keep the next action visible", "check": "State is recoverable", "exceptions": ["Existing host behavior may constrain the change."], "sourceIds": ["PROJECT"], "sourceLocators": {"PROJECT": "Synthetic fixture"}, "authority": "engineering-proposal"}]})
+        packet = studio.worker_packet(root, "ui-implementer", "Fix component state", ["component.md"], repo=self.repo)
         self.assertEqual(packet["status"], "PASS")
         self.assertEqual(packet["scope"], "component")
+        self.assertEqual(packet["knowledge"]["status"], "selected")
+        self.assertEqual(packet["knowledge"]["selectedRuleIds"], ["R-001"])
+        self.assertEqual(packet["knowledge"]["rules"][0]["exceptions"], ["Existing host behavior may constrain the change."])
         self.assertTrue(packet["instructions"])
         with self.assertRaisesRegex(studio.StudioError, "original applicable instructions"):
-            studio.worker_packet(root, "ui-implementer", "Fix component state", ["component.md"], ["project-context.md"])
+            studio.worker_packet(root, "ui-implementer", "Fix component state", ["component.md"], ["project-context.md"], repo=self.repo)
 
 
     def test_unresolved_project_context_blocks_complete_fixture(self):
@@ -608,6 +614,7 @@ class StudioTests(unittest.TestCase):
         first_run = fixture_run(self.repo, self.theme)
         first = studio.register_theme(self.repo, "fixture", first_run)
         self.assertEqual(first["defaultTheme"], "fixture")
+        self.assertEqual(first["activeTheme"]["id"], "fixture")
         other = fixture_theme(self.repo, "second")
         second_run = fixture_run(self.repo, other)
         second = studio.register_theme(self.repo, "second", second_run)
@@ -619,6 +626,10 @@ class StudioTests(unittest.TestCase):
         third_run = fixture_run(self.repo, third)
         changed = studio.register_theme(self.repo, "third", third_run, make_default=True)
         self.assertEqual(changed["defaultTheme"], "third")
+        self.assertEqual(changed["activeTheme"]["id"], "third")
+        restored = studio.restore_theme(self.repo, changed["backup"])
+        self.assertEqual(restored["defaultTheme"], "fixture")
+        self.assertEqual(restored["activeTheme"]["id"], "fixture")
         self.assertTrue(Path(changed["backup"]).is_file())
 
     def test_new_registration_collision_is_rechecked_at_finalization(self):

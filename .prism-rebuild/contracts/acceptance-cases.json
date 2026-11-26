@@ -1,0 +1,3211 @@
+{
+  "schemaVersion": "1.0.0",
+  "validationPolicy": {
+    "humanParticipantResearch": {
+      "status": "DEFERRED",
+      "blocksAutomatedRelease": false,
+      "reason": "Project policy; never present synthetic personas or automated checks as real participant research."
+    },
+    "requiredWebVerification": "Actual browser interaction and applicable automated accessibility checks remain required; release uses configured Chromium, Firefox, WebKit matrix.",
+    "optionalTargets": {
+      "native": "Required only when explicitly declared as a supported target.",
+      "offline": "Required only when explicitly declared as a supported capability."
+    },
+    "resultStates": [
+      "NOT_RUN",
+      "RUNNING",
+      "PASSED",
+      "FAILED",
+      "BLOCKED",
+      "DEFERRED",
+      "NOT_APPLICABLE",
+      "STALE"
+    ],
+    "packIntegrityIsProductPass": false
+  },
+  "cases": [
+    {
+      "id": "AC-DOCS-001",
+      "requirementIds": [
+        "REQ-DOCS-001"
+      ],
+      "title": "Record the baseline, target, and capability boundaries",
+      "given": [
+        "A clean disposable checkout and a host with a known set of capabilities; the supplied handoff is present."
+      ],
+      "when": [
+        "Run read-only preflight and reconcile its observations with the implementation decision record."
+      ],
+      "then": [
+        "Baseline and candidate are distinguished; no installed runtime or model capability is inferred from a requested name.",
+        "Web is a declared target; native/offline targets are enabled only when explicitly selected.",
+        "Preflight installs nothing, modifies no user configuration, and does not count as product verification."
+      ],
+      "automation": {
+        "kind": "review",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G0"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-EVIDENCE-001",
+      "requirementIds": [
+        "REQ-EVIDENCE-001"
+      ],
+      "title": "Bind evidence to the exact candidate",
+      "given": [
+        "Two candidates share HEAD but one contains a changed source file or included untracked file."
+      ],
+      "when": [
+        "Fingerprint both candidates and run a check while mutating an included source file between its start and finish."
+      ],
+      "then": [
+        "The two source digests differ; evidence from the first candidate is not accepted for the second.",
+        "The concurrent source change invalidates the check instead of emitting a pass.",
+        "Secrets/private runtime state are excluded from evidence contents while source exclusions are explicit and cannot hide product code."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Before/after fingerprint manifests with hashed paths and exclusion policy.",
+        "Gate receipt showing invalidation when source changes during execution."
+      ],
+      "gates": [
+        "G0"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-CORE-001",
+      "requirementIds": [
+        "REQ-CORE-001"
+      ],
+      "title": "Use one command contract across CLI, MCP, and dashboard",
+      "given": [
+        "Equivalent approval and annotation payloads are available through every supported adapter, including omitted, null, empty, whitespace, and invalid field values."
+      ],
+      "when": [
+        "Submit the same semantic command through CLI, MCP, and HTTP fixtures."
+      ],
+      "then": [
+        "Each adapter reaches the same domain result and persisted state.",
+        "Invalid input produces the same stable domain code and field pointer; human wording is not parsed by clients.",
+        "An adapter cannot bypass validation by calling persistence directly."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G1"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-CORE-002",
+      "requirementIds": [
+        "REQ-CORE-002"
+      ],
+      "title": "Commit state changes atomically with expected revisions",
+      "given": [
+        "Two clients load the same run/component revision and prepare incompatible changes."
+      ],
+      "when": [
+        "Synchronize both writes at a barrier and inject a failure before commit in a separate attempt."
+      ],
+      "then": [
+        "At most one conflicting write commits; the other receives a deterministic version-conflict result.",
+        "A pre-commit crash exposes no partially updated entities or money records.",
+        "Foreign-key and domain invariants remain valid after reopening the database."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G1"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-CORE-003",
+      "requirementIds": [
+        "REQ-CORE-003"
+      ],
+      "title": "Make retried commands idempotent and reject key reuse",
+      "given": [
+        "A state-changing command has a stable operation/idempotency key and a controlled provider fixture."
+      ],
+      "when": [
+        "Drop the response after commit, retry the identical request, then reuse the key with a changed payload."
+      ],
+      "then": [
+        "The replay returns the original result and produces one durable operation and one intended side effect.",
+        "The changed request is rejected as key reuse; it cannot inherit prior authority or cost reservation.",
+        "Concurrency with the same key produces the same result rather than duplicate execution."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G1"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-CORE-004",
+      "requirementIds": [
+        "REQ-CORE-004"
+      ],
+      "title": "Recover committed outbox work without duplicate effects",
+      "given": [
+        "An operation commits and its outbox item has not yet been acknowledged."
+      ],
+      "when": [
+        "Terminate the dispatcher before send, after send before receipt, and after receipt; restart for each fixture."
+      ],
+      "then": [
+        "Committed intent is not lost; acknowledged effects are not repeated.",
+        "An uncertain external outcome enters reconciliation with the original operation identity.",
+        "Recovery does not manufacture a successful artifact or automatically repeat a potentially charged call."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G1"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-CORE-005",
+      "requirementIds": [
+        "REQ-CORE-005"
+      ],
+      "title": "Rebuild projections from authoritative state",
+      "given": [
+        "A run with approvals, revisions, and ledger entries has populated read projections."
+      ],
+      "when": [
+        "Delete or corrupt only projection data, rebuild it, and interrupt one rebuild."
+      ],
+      "then": [
+        "The rebuilt view agrees with authoritative state and totals.",
+        "A partial rebuild is not advertised as current; a previous consistent snapshot or explicit updating state remains available.",
+        "Commands remain correct if a projection is stale."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G1"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-CORE-006",
+      "requirementIds": [
+        "REQ-CORE-006"
+      ],
+      "title": "Verify immutable content-addressed artifacts",
+      "given": [
+        "Two artifact records reference identical bytes and one blob is later deliberately corrupted in a fixture."
+      ],
+      "when": [
+        "Deduplicate the valid imports, then preview, approve, and export the corrupted reference."
+      ],
+      "then": [
+        "Valid identical content has a stable digest and immutable identity.",
+        "Corruption produces an integrity error; it is not silently repaired with different bytes under the same identity.",
+        "No approval can bind to unverified replacement content."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G1"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-CORE-007",
+      "requirementIds": [
+        "REQ-CORE-007"
+      ],
+      "title": "Negotiate capabilities and preserve documented compatibility",
+      "given": [
+        "A compatible runtime pair, an older supported reader, and an incompatible project/global runtime pair."
+      ],
+      "when": [
+        "Connect, read historical data, invoke a retained alias, and request an unsupported capability."
+      ],
+      "then": [
+        "Supported combinations work without reinterpretation of existing fields.",
+        "Incompatible combinations explain the actual versions and a safe upgrade/restore path.",
+        "Unknown enum/required-feature values are rejected or represented as explicitly unsupported according to the contract, never guessed."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G1"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-MIGRATION-001",
+      "requirementIds": [
+        "REQ-MIGRATION-001"
+      ],
+      "title": "Migrate legacy records by copy with an audit map",
+      "given": [
+        "Synthetic legacy 1.0/1.1/1.4.3 runs include artifacts, approvals, annotations, routing data, and partial records."
+      ],
+      "when": [
+        "Perform a migration and interrupt it at selected copy/import/activation boundaries."
+      ],
+      "then": [
+        "Original files remain byte-for-byte intact until an explicit supported cleanup policy is applied.",
+        "The receipt maps every imported or quarantined record and verifies referenced blobs.",
+        "Activation occurs only after integrity checks; interrupted runs remain recoverable."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G2"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-MIGRATION-002",
+      "requirementIds": [
+        "REQ-MIGRATION-002"
+      ],
+      "title": "Make migration repeatable and restartable",
+      "given": [
+        "A migration is partially complete and a second process attempts the same migration."
+      ],
+      "when": [
+        "Resume twice, including concurrent retry, then compare the output with an uninterrupted migration."
+      ],
+      "then": [
+        "One coherent migrated result exists; duplicate records are not created.",
+        "Conflicting source changes are detected and isolated instead of silently merged.",
+        "Receipt totals and IDs are stable across equivalent input."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G2"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-MIGRATION-003",
+      "requirementIds": [
+        "REQ-MIGRATION-003"
+      ],
+      "title": "Preserve uncertainty in incomplete legacy data",
+      "given": [
+        "A legacy run lacks an approval fingerprint, cost receipt, actual model assignment, or referenced artifact."
+      ],
+      "when": [
+        "Migrate and attempt to resume or finalize the affected scope."
+      ],
+      "then": [
+        "Unknown values remain unknown; missing costs are not zero and requested model is not observed model.",
+        "Unaffected readable history remains available.",
+        "Only operations needing the missing fact are blocked or qualified, with a specific repair path."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G2"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-MIGRATION-004",
+      "requirementIds": [
+        "REQ-MIGRATION-004"
+      ],
+      "title": "Provide verified rollback without overwriting later work",
+      "given": [
+        "A successful migration has both an unchanged post-migration fixture and a fixture with subsequent user work."
+      ],
+      "when": [
+        "Attempt rollback in each fixture and reopen the restored legacy state."
+      ],
+      "then": [
+        "The unchanged fixture restores the original data and configuration with verified digests.",
+        "The divergent fixture stops with a conflict and preserves both versions for deliberate reconciliation.",
+        "Failure during rollback leaves a documented recoverable state."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G2"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-MIGRATION-005",
+      "requirementIds": [
+        "REQ-MIGRATION-005"
+      ],
+      "title": "Enforce supported local SQLite storage and backup semantics",
+      "given": [
+        "A supported local directory, a declared network-mounted path, a read-only path, a busy database fixture, and fixed/unfixed SQLite runtime fixtures."
+      ],
+      "when": [
+        "Initialize state, perform a live consistent backup, and exercise the unsupported/locked paths."
+      ],
+      "then": [
+        "Local state and restored backup pass integrity checks.",
+        "Actual sqlite3.sqlite_version and sqlite_source_id() are recorded; a Python version alone is not accepted as patch evidence.",
+        "An unfixed/unknown runtime cannot enable the proposed multi-connection WAL policy without a reviewed safe alternative.",
+        "Known unsupported storage is rejected with an actionable explanation; errors do not fall back to an unsafe path.",
+        "Busy/permission failures are bounded and diagnosable; no stale lock or forced deletion corrupts data."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G2"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-APPROVAL-001",
+      "requirementIds": [
+        "REQ-APPROVAL-001"
+      ],
+      "title": "Keep decision feedback semantics consistent",
+      "given": [
+        "Identical accept/request-changes/reject decisions have omitted, empty, whitespace, and nonempty comments across all adapters."
+      ],
+      "when": [
+        "Submit each allowed combination and run downstream gate/finalization validation."
+      ],
+      "then": [
+        "An accepted decision does not later fail solely because an optional comment is blank.",
+        "Any required explanation is enforced consistently and described beside the relevant field.",
+        "Normalization preserves meaningful text and uses stable validation codes."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G3"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-APPROVAL-002",
+      "requirementIds": [
+        "REQ-APPROVAL-002"
+      ],
+      "title": "Invalidate approvals only for relevant dependencies",
+      "given": [
+        "An approved component has both unrelated run metadata and a dependency in its approval scope."
+      ],
+      "when": [
+        "Advance the run phase and update unrelated metadata, then change the component or required dependency."
+      ],
+      "then": [
+        "Unrelated progress preserves approval validity.",
+        "A relevant change invalidates precisely the affected approval and explains the changed dependency.",
+        "Independent accepted components retain their decisions."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G3"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-APPROVAL-003",
+      "requirementIds": [
+        "REQ-APPROVAL-003"
+      ],
+      "title": "Resolve concurrent terminal decisions deterministically",
+      "given": [
+        "Two browser/agent clients hold the same open decision revision."
+      ],
+      "when": [
+        "Race accept against cancel and race two different decisions; retry the winner."
+      ],
+      "then": [
+        "One terminal transition commits and the loser receives current state/conflict.",
+        "The winner is visible consistently in all surfaces and audit history.",
+        "Replay does not append duplicate decisions or reopen a terminal request."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G3"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-APPROVAL-004",
+      "requirementIds": [
+        "REQ-APPROVAL-004"
+      ],
+      "title": "Reject stale submissions against changed artifacts",
+      "given": [
+        "The user views artifact A while another command replaces its relevant dependency or creates artifact B."
+      ],
+      "when": [
+        "Submit the old form without refreshing."
+      ],
+      "then": [
+        "The decision is rejected as stale and applies to neither unseen content nor a guessed current version.",
+        "The response names the changed scope and provides a review/reload action.",
+        "The user draft is retained for review rather than discarded."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G3"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-APPROVAL-005",
+      "requirementIds": [
+        "REQ-APPROVAL-005"
+      ],
+      "title": "Record truthful decision actors in guided and YOLO modes",
+      "given": [
+        "Equivalent runs use guided and YOLO modes, and a tool action lies outside the current session grants."
+      ],
+      "when": [
+        "Attempt agent acceptance of a guided design gate, agent acceptance within YOLO scope, and the out-of-scope action."
+      ],
+      "then": [
+        "Guided design decisions remain pending until a valid user decision exists.",
+        "YOLO records an agent decision honestly and continues authorized routine work.",
+        "Both modes deny the out-of-scope action; no agent decision is labeled human approval."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G3"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-APPROVAL-006",
+      "requirementIds": [
+        "REQ-APPROVAL-006"
+      ],
+      "title": "Publish authoritative allowed actions and reasons",
+      "given": [
+        "A run is waiting for a required artifact, then becomes reviewable, then becomes terminal."
+      ],
+      "when": [
+        "Request available actions and try an unavailable action through every adapter at each state."
+      ],
+      "then": [
+        "All consumers see the same allowed actions and actionable reasons.",
+        "The backend still enforces policy if a stale client enables a button.",
+        "Routine already-authorized actions do not acquire artificial confirmation gates."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G3"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-REVISION-001",
+      "requirementIds": [
+        "REQ-REVISION-001"
+      ],
+      "title": "Pin focused revision to exact base and annotations",
+      "given": [
+        "Two similar mockups exist and the user annotates a specific revision of the first."
+      ],
+      "when": [
+        "Create a focused revision and later change the UI selection or edit the original draft annotation."
+      ],
+      "then": [
+        "The worker receives the originally selected base and annotation snapshot.",
+        "A missing or corrupt base prevents dispatch with a clear recovery action.",
+        "The revision records its parent and never silently substitutes the newest image."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G3"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-REVISION-002",
+      "requirementIds": [
+        "REQ-REVISION-002"
+      ],
+      "title": "Use consistent annotation geometry and bounded payloads",
+      "given": [
+        "Images render with letterboxing, zoom, and several aspect ratios; a drag contains more than 128 raw samples."
+      ],
+      "when": [
+        "Draw line/rectangle/freehand annotations, resize the viewport, save, reload, and submit invalid/out-of-range points directly."
+      ],
+      "then": [
+        "Saved overlays align with the same image content after scaling; line/rectangle ends use the last pointer point.",
+        "Client output respects the agreed stored-point limit without silently moving endpoints; invalid API input is rejected consistently.",
+        "A nonfinite or huge payload cannot corrupt state or freeze the view."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G3"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-REVISION-003",
+      "requirementIds": [
+        "REQ-REVISION-003"
+      ],
+      "title": "Constrain focused revisions to the requested scope",
+      "given": [
+        "An accepted dashboard contains independent navigation, content, and footer components; only content spacing is requested."
+      ],
+      "when": [
+        "Produce a revision that changes the footer or global token unexpectedly."
+      ],
+      "then": [
+        "The scope violation is detected before acceptance.",
+        "Unchanged accepted assets remain pinned and are not regenerated or billed as a full redesign.",
+        "A necessary broader change is surfaced with affected dependencies and a scoped follow-up."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G3"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-REVISION-004",
+      "requirementIds": [
+        "REQ-REVISION-004"
+      ],
+      "title": "Decompose work into stable components and dependencies",
+      "given": [
+        "A mockup is decomposed into reusable components with a shared token dependency."
+      ],
+      "when": [
+        "Rename/reorder components and introduce a dependency cycle or conflicting ownership."
+      ],
+      "then": [
+        "IDs and prior decisions remain attached to the same components after rename/reorder.",
+        "Cycles/conflicting ownership are rejected or resolved explicitly before dispatch.",
+        "Dependency traversal identifies which work can proceed independently."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G3"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-REVISION-005",
+      "requirementIds": [
+        "REQ-REVISION-005"
+      ],
+      "title": "Apply batch decisions independently with a replayable receipt",
+      "given": [
+        "A three-item batch contains one valid acceptance, one request for changes, and one stale component."
+      ],
+      "when": [
+        "Submit the batch, drop the response, and retry."
+      ],
+      "then": [
+        "The valid items retain their individual decisions; the stale item returns an explicit failure.",
+        "Retry produces the same item results without duplicate decisions.",
+        "Independent accepted components are not reset by another item’s revision."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G3"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-REVISION-006",
+      "requirementIds": [
+        "REQ-REVISION-006"
+      ],
+      "title": "Retain revision lineage and detect merge conflicts",
+      "given": [
+        "Two revisions share a base and both change the same token while also changing independent components."
+      ],
+      "when": [
+        "Integrate them in both orders and compare the resulting lineage."
+      ],
+      "then": [
+        "Independent changes remain attributable and reusable.",
+        "The shared-token conflict is reported with both parents and is not silently overwritten.",
+        "A resolved merge produces a new revision and revalidates only impacted approvals."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G3"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-BUDGET-001",
+      "requirementIds": [
+        "REQ-BUDGET-001"
+      ],
+      "title": "Account for design spend in an exact currency ledger",
+      "given": [
+        "A run contains concept/mockup/revision costs, configured critique cost, and implementation work in one currency; a second currency appears."
+      ],
+      "when": [
+        "Compute totals and attempt an incompatible-currency entry."
+      ],
+      "then": [
+        "Design cap consumption includes only configured design categories; implementation spend is separately visible and excluded by default.",
+        "Exact arithmetic is stable at currency boundaries; no binary-float rounding leaks into the ledger.",
+        "The incompatible currency is rejected or explicitly converted with retained rate/source/time."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-BUDGET-002",
+      "requirementIds": [
+        "REQ-BUDGET-002"
+      ],
+      "title": "Represent unknown cost and honest enforcement modes",
+      "given": [
+        "One provider offers a bounded controlled dispatch and another returns no usable price/charge bound."
+      ],
+      "when": [
+        "Attempt a hard-cap dispatch and view the budget in both scenarios."
+      ],
+      "then": [
+        "Unknown is displayed/stored as unknown, not zero or a fabricated estimate.",
+        "Unbounded work cannot claim a guaranteed hard cap; it is blocked in hard mode or follows the explicitly selected advisory policy.",
+        "The user/agent sees which assumptions make enforcement possible."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-BUDGET-003",
+      "requirementIds": [
+        "REQ-BUDGET-003"
+      ],
+      "title": "Reserve design budget atomically under concurrency",
+      "given": [
+        "A run has 70 minor units remaining and two workers concurrently request 50 each."
+      ],
+      "when": [
+        "Release both reservation attempts at a barrier and restart after one commit."
+      ],
+      "then": [
+        "At most one 50-unit reservation succeeds; available funds never become negative.",
+        "The rejected worker has not dispatched chargeable work.",
+        "Reopening state retains the winning reservation and correct remaining balance."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-BUDGET-004",
+      "requirementIds": [
+        "REQ-BUDGET-004"
+      ],
+      "title": "Settle charges once and reconcile uncertain outcomes",
+      "given": [
+        "A provider completes work but its response is lost, and a duplicate receipt later arrives."
+      ],
+      "when": [
+        "Retry the operation and deliver the original receipt twice."
+      ],
+      "then": [
+        "The original operation is reconciled and settled once.",
+        "Unknown outcome retains pending reservation rather than releasing funds for another dispatch.",
+        "A provider charge above the advertised bound is recorded as a discrepancy requiring reconciliation, not truncated to fit the cap."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-BUDGET-005",
+      "requirementIds": [
+        "REQ-BUDGET-005"
+      ],
+      "title": "Handle cancellation and refunds without inventing savings",
+      "given": [
+        "One task has not dispatched; another is in flight and cancellation acknowledgement is delayed."
+      ],
+      "when": [
+        "Cancel both, restart the service, and later deliver a charge or refund receipt."
+      ],
+      "then": [
+        "The undispatched reservation is safely released.",
+        "In-flight exposure remains pending until evidence resolves it.",
+        "Ledger history preserves charge/refund links and does not count a UI cancel click as a refund."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-BUDGET-006",
+      "requirementIds": [
+        "REQ-BUDGET-006"
+      ],
+      "title": "Expose actionable budget state before decisions",
+      "given": [
+        "A run contains settled, reserved and unknown costs, and a proposed revision would exceed the available amount."
+      ],
+      "when": [
+        "Read budget via all adapters and request the revision."
+      ],
+      "then": [
+        "Amounts and units reconcile to the ledger across surfaces.",
+        "The refusal explains the specific constraint and offers reducing scope, waiting for reconciliation, or an authorized cap change.",
+        "Budget increases or enforcement-mode changes are recorded as explicit configuration decisions."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-BUDGET-007",
+      "requirementIds": [
+        "REQ-BUDGET-007"
+      ],
+      "title": "Budget revisions and decomposition by actual scoped work",
+      "given": [
+        "A four-component design has three accepted components and one revision request."
+      ],
+      "when": [
+        "Estimate, dispatch, and settle only the requested component, then re-request its exact successful operation."
+      ],
+      "then": [
+        "Cost records identify the revised component and its parent artifact.",
+        "Independent accepted components are neither regenerated nor billed.",
+        "Replay reuses the prior result according to provider/operation policy without a duplicate reservation or charge."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-MODEL-001",
+      "requirementIds": [
+        "REQ-MODEL-001"
+      ],
+      "title": "Apply deterministic model policy precedence on resume",
+      "given": [
+        "Every precedence level specifies a different role assignment and a run is resumed after defaults change."
+      ],
+      "when": [
+        "Resolve a new run, resume it, and resume again with an explicit override."
+      ],
+      "then": [
+        "Each result follows the documented order; changed defaults do not silently reroute existing work.",
+        "Explicit overrides are visible in the new revision of run settings.",
+        "Unknown/malformed configuration yields a repairable error rather than silent fallback."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-MODEL-002",
+      "requirementIds": [
+        "REQ-MODEL-002"
+      ],
+      "title": "Persist role defaults and preserve current-model mode",
+      "given": [
+        "A user selects role defaults, then starts current-model mode while stale agent override files exist."
+      ],
+      "when": [
+        "Save/reload preferences and resolve dispatch for both policies."
+      ],
+      "then": [
+        "Defaults survive a new session and report their source.",
+        "Current-model mode does not silently substitute a cheaper or preferred model; conflicting overrides are detected and handled within authorization.",
+        "A missing required capability is reported honestly and triggers the documented fallback policy."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-MODEL-003",
+      "requirementIds": [
+        "REQ-MODEL-003"
+      ],
+      "title": "Report actual capability and observed model assignments",
+      "given": [
+        "A host honors one role assignment, substitutes another, and lacks image understanding for a third."
+      ],
+      "when": [
+        "Dispatch synthetic role tasks and inspect host receipts."
+      ],
+      "then": [
+        "Observed assignments and capability gaps are recorded distinctly.",
+        "Required visual verification remains blocked or is transferred to an actually capable permitted route.",
+        "The dashboard and final report do not present requested assignments as confirmed."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-MODEL-004",
+      "requirementIds": [
+        "REQ-MODEL-004"
+      ],
+      "title": "Use current attributable pricing and capability data",
+      "given": [
+        "Price/capability records are fresh, stale, missing, and for an unavailable model."
+      ],
+      "when": [
+        "Resolve auto routing and attempt a hard-budget dispatch."
+      ],
+      "then": [
+        "The routing receipt identifies the data source and assumptions used.",
+        "Unavailable models are not invented; stale prices are not presented as current charges.",
+        "A hard guarantee is withheld when required cost bounds cannot be established."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-MODEL-005",
+      "requirementIds": [
+        "REQ-MODEL-005"
+      ],
+      "title": "Bound model fallback and disclose its effect",
+      "given": [
+        "A preferred model fails, a compatible fallback is cheaper, and another fallback lacks a required capability or exceeds a reservation."
+      ],
+      "when": [
+        "Exercise configured fallback paths and a no-fallback policy."
+      ],
+      "then": [
+        "Only compatible permitted fallback occurs; its observed assignment is visible.",
+        "Incompatible/over-budget fallback is rejected before chargeable dispatch.",
+        "No-fallback mode returns an actionable blocked result without fabricating completion."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-WORKER-001",
+      "requirementIds": [
+        "REQ-WORKER-001"
+      ],
+      "title": "Include complete scoped instructions in worker packets",
+      "given": [
+        "A project has nested AGENTS instructions and a worker owns a task below the nested scope."
+      ],
+      "when": [
+        "Build a packet and compare its instruction snapshot with the actual applicable files."
+      ],
+      "then": [
+        "All applicable instructions and precedence are represented with source digests.",
+        "Unrelated private files are excluded.",
+        "A missing required source produces a specific packet failure; it is not silently omitted."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-WORKER-002",
+      "requirementIds": [
+        "REQ-WORKER-002"
+      ],
+      "title": "Grant explicit ownership for existing and new targets",
+      "given": [
+        "A worker is assigned one existing file and one intended new component path outside the run-record directory."
+      ],
+      "when": [
+        "Attempt the allowed edit/create and an unrelated path or sibling component."
+      ],
+      "then": [
+        "Allowed existing and new targets are expressible and validated.",
+        "Out-of-scope writes are denied without widening the packet.",
+        "Instruction files and repository boundaries remain protected by the same authority checks."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-WORKER-003",
+      "requirementIds": [
+        "REQ-WORKER-003"
+      ],
+      "title": "Honor configurable and observed worker concurrency",
+      "given": [
+        "Policies request 1, 2, and 5 workers while a host allows at most 2; a separate host has no spawn capability."
+      ],
+      "when": [
+        "Schedule independent and dependent tasks in each host fixture."
+      ],
+      "then": [
+        "Active workers never exceed the effective safe limit; dependent work waits appropriately.",
+        "The configured limit is honored without a hardcoded 3 override.",
+        "Sequential fallback is explicit and is not described as independent concurrent work."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-WORKER-004",
+      "requirementIds": [
+        "REQ-WORKER-004"
+      ],
+      "title": "Recover worker leases and cancel safely",
+      "given": [
+        "A worker exits after reserving funds and another loses its heartbeat during artifact production."
+      ],
+      "when": [
+        "Expire leases, restart the coordinator, and attempt recovery/cancellation."
+      ],
+      "then": [
+        "Abandoned work becomes visible with the original operation identity and pending financial exposure.",
+        "No second worker silently writes the same target while the first remains authoritative.",
+        "Recovery preserves valid output and does not equate heartbeat loss with a refund."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-WORKER-005",
+      "requirementIds": [
+        "REQ-WORKER-005"
+      ],
+      "title": "Validate worker results and integrate by dependency scope",
+      "given": [
+        "One worker returns a valid scoped result; another claims passed tests without files or modifies an undeclared target."
+      ],
+      "when": [
+        "Validate and integrate the results."
+      ],
+      "then": [
+        "Only substantiated in-scope results can satisfy acceptance.",
+        "Missing evidence and ownership conflicts are explicit failures, not prose-derived passes.",
+        "Valid independent work is retained while the invalid result is repaired."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-UX-001",
+      "requirementIds": [
+        "REQ-UX-001"
+      ],
+      "title": "Keep current review context visible",
+      "given": [
+        "A review session navigates among several similar artifacts and returns after a reload."
+      ],
+      "when": [
+        "Use the dashboard in a real browser to select, inspect and resume each context."
+      ],
+      "then": [
+        "The visible selection and action target remain unambiguous and synchronized.",
+        "Reload preserves an appropriate explicit selection or clearly explains a fallback.",
+        "Status changes do not silently move the target under the user."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Real browser trace and screenshots showing artifact/version context.",
+        "DOM and state assertions confirming action target identity."
+      ],
+      "gates": [
+        "G5"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-UX-002",
+      "requirementIds": [
+        "REQ-UX-002"
+      ],
+      "title": "Provide stable before-and-after comparison",
+      "given": [
+        "A focused revision changes one region of an image and one component dependency."
+      ],
+      "when": [
+        "Compare revisions at desktop/mobile widths and switch between available comparison modes."
+      ],
+      "then": [
+        "Labels and image identities remain correct; comparison does not present unrelated latest artifacts.",
+        "Changed scope and retained approvals are visible without relying only on color.",
+        "Comparison controls remain keyboard/pointer operable and do not hide the decision context."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G5"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-UX-003",
+      "requirementIds": [
+        "REQ-UX-003"
+      ],
+      "title": "Preserve drafts and show actionable errors",
+      "given": [
+        "A form has meaningful feedback and annotations when the server returns validation, stale revision and transient connection errors."
+      ],
+      "when": [
+        "Submit, correct/review, and retry in a real browser."
+      ],
+      "then": [
+        "Draft content survives each recoverable error and focus moves to a useful error target.",
+        "No retry silently changes the artifact being approved or duplicates the command.",
+        "Error text distinguishes user correction from system retry and includes a stable support code."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G5"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-UX-004",
+      "requirementIds": [
+        "REQ-UX-004"
+      ],
+      "title": "Show honest progress and cancellation outcomes",
+      "given": [
+        "A controlled long-running operation has known queue transitions but unknown completion percentage and delayed cancellation acknowledgement."
+      ],
+      "when": [
+        "Observe progress, cancel, reconnect, and receive a late completion."
+      ],
+      "then": [
+        "No fabricated percentage, artificial delay, or premature success is displayed.",
+        "Cancellation pending and any retained cost exposure are clear.",
+        "Reconnection restores authoritative status and handles late completion consistently."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G5"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-UX-005",
+      "requirementIds": [
+        "REQ-UX-005"
+      ],
+      "title": "Support deliberate decisions with relevant disclosure",
+      "given": [
+        "A user can accept a scoped revision, alter a cap, and perform a routine authorized navigation action."
+      ],
+      "when": [
+        "Exercise the actions and inspect labels, details and confirmation behavior."
+      ],
+      "then": [
+        "Consequential choices have enough context to assess their effect.",
+        "Advanced diagnostic detail is available without dominating the normal flow.",
+        "Routine authorized actions continue without redundant permission prompts; manipulative default/urgency patterns are absent."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G5"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-UX-006",
+      "requirementIds": [
+        "REQ-UX-006"
+      ],
+      "title": "Keep interactions usable across supported viewport/input modes",
+      "given": [
+        "Representative supported small and large viewports contain a long run, large artwork and open dialog."
+      ],
+      "when": [
+        "Resize, change orientation, switch input mode and complete the critical review flow."
+      ],
+      "then": [
+        "Actions remain reachable without clipped dialogs or obscured essential content.",
+        "Scroll/selection changes do not misplace annotations or change decision targets.",
+        "Evidence includes actual viewport dimensions and browser engine."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G5"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-A11Y-001",
+      "requirementIds": [
+        "REQ-A11Y-001"
+      ],
+      "title": "Provide semantic keyboard interaction and focus management",
+      "given": [
+        "A real browser session starts without pointer interaction and includes a dialog, expanding details, a form error and a batch decision."
+      ],
+      "when": [
+        "Complete the critical flow using keyboard controls and inspect the accessibility tree."
+      ],
+      "then": [
+        "No keyboard trap or unreachable control exists.",
+        "Names, state and relationships are exposed programmatically; focus returns to a useful location.",
+        "An automated accessibility scan is supplemented by actual keyboard assertions, not treated as complete conformance proof."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G5"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-A11Y-002",
+      "requirementIds": [
+        "REQ-A11Y-002"
+      ],
+      "title": "Offer a single-pointer nondrag annotation alternative",
+      "given": [
+        "A user cannot perform drag gestures but can click/tap one point at a time; another uses only keyboard."
+      ],
+      "when": [
+        "Create, select, edit and remove equivalent annotations through both alternatives."
+      ],
+      "then": [
+        "The nondrag single-pointer path completes the essential operation; keyboard support alone is not used as its substitute.",
+        "Stored geometry and revision targeting match the pointer-drag path.",
+        "The alternative is discoverable and has clear instructions/feedback."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G5"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-A11Y-003",
+      "requirementIds": [
+        "REQ-A11Y-003"
+      ],
+      "title": "Verify contrast, noncolor cues and distinguishable controls",
+      "given": [
+        "Each shipped theme displays normal, hover, focus, selected, disabled, error, and high-information comparison states."
+      ],
+      "when": [
+        "Run automated checks plus targeted rendered-state contrast assertions and inspect monochrome/status semantics."
+      ],
+      "then": [
+        "Applicable text contrast reaches4.5:1 or 3:1 for large text and applicable nontext contrast reaches 3:1.",
+        "Statuses are understandable without color alone.",
+        "Any permitted exception is documented with criterion and evidence, not a blanket accessibility pass."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G5"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-A11Y-004",
+      "requirementIds": [
+        "REQ-A11Y-004"
+      ],
+      "title": "Respect reduced motion and expose useful status updates",
+      "given": [
+        "Reduced motion is enabled and a run produces frequent polling updates, one error and a completion."
+      ],
+      "when": [
+        "Observe the interface and accessibility tree through the update sequence."
+      ],
+      "then": [
+        "Nonessential movement is removed/reduced and all meaning remains available.",
+        "Live announcements are meaningful and deduplicated rather than read on every poll.",
+        "No unsolicited focus jump prevents completing another task."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G5"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-A11Y-005",
+      "requirementIds": [
+        "REQ-A11Y-005"
+      ],
+      "title": "Support zoom, reflow and usable target sizes",
+      "given": [
+        "The dashboard is viewed at 200% text zoom and at an equivalent 320 CSS-pixel width / 400% zoom, plus small touch targets."
+      ],
+      "when": [
+        "Complete the critical review and nondrag annotation paths."
+      ],
+      "then": [
+        "Essential controls/content remain available without two-axis page scrolling except documented essential content.",
+        "Applicable targets meet 24 by 24 CSS pixels or a valid spacing/criterion exception.",
+        "Zoom preserves labels, focus, dialogs and access to a nonvisual/structured annotation representation."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G5"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-PERF-001",
+      "requirementIds": [
+        "REQ-PERF-001"
+      ],
+      "title": "Measure explicit fixture-specific performance budgets",
+      "given": [
+        "A versioned performance fixture and a declared measurement protocol specify dataset, environment, repetitions and budget."
+      ],
+      "when": [
+        "Measure startup, snapshot, navigation, artifact preview and critical interaction before/after a change."
+      ],
+      "then": [
+        "Raw measurements and percentiles/repetitions are retained with environment and source fingerprint.",
+        "Regressions beyond the declared threshold fail or require an explicit reviewed budget revision.",
+        "Synthetic local results are not reported as production/user-field conformance."
+      ],
+      "automation": {
+        "kind": "benchmark",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G6"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-PERF-002",
+      "requirementIds": [
+        "REQ-PERF-002"
+      ],
+      "title": "Bound snapshot work and preserve cursor consistency",
+      "given": [
+        "Small and large run-history fixtures include concurrent additions/removals between page requests."
+      ],
+      "when": [
+        "Instrument file/database reads, request pages, and reuse a stale cursor after relevant snapshot change."
+      ],
+      "then": [
+        "Response and scan work are bounded by documented limits; artifact content hashes are reused safely.",
+        "Paging has a declared consistency model and does not silently duplicate/skip records under its supported mutation assumptions.",
+        "Stale/invalid cursors return a clear restart instruction rather than guessed offsets."
+      ],
+      "automation": {
+        "kind": "benchmark",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G6"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-PERF-003",
+      "requirementIds": [
+        "REQ-PERF-003"
+      ],
+      "title": "Manage polling and browser work across lifecycle changes",
+      "given": [
+        "A slow server, hidden tab, disconnected network and rapid run switching are exercised in a real browser."
+      ],
+      "when": [
+        "Observe request cadence, in-flight count, DOM updates and retained draft state."
+      ],
+      "then": [
+        "Polling does not accumulate concurrent duplicate requests or overwrite a newer selection with an old response.",
+        "Hidden/disconnected states reduce work and recover within declared bounds.",
+        "Updates do not reset active inputs, focus or annotation coordinates."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G6"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-PERF-004",
+      "requirementIds": [
+        "REQ-PERF-004"
+      ],
+      "title": "Cache only with correct identity and invalidation",
+      "given": [
+        "Two projects have similar artifact names and one artifact revision changes while another stays immutable."
+      ],
+      "when": [
+        "Warm caches, revise data, switch sessions/projects and exceed the configured cache bound."
+      ],
+      "then": [
+        "Unchanged content is reused; changed content invalidates precisely.",
+        "No cached response bypasses current authorization or leaks another project.",
+        "Eviction preserves authoritative artifacts/state and stays within configured limits."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G6"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-KNOWLEDGE-001",
+      "requirementIds": [
+        "REQ-KNOWLEDGE-001"
+      ],
+      "title": "Retain provenance for every actionable design rule",
+      "given": [
+        "A knowledge rule is sourced to a supplied book, another to a live article, and a third lacks provenance."
+      ],
+      "when": [
+        "Validate the catalog and package its rules."
+      ],
+      "then": [
+        "Valid rules retain traceable provenance and attribution.",
+        "Unattributed rules are marked project proposals or rejected as sourced claims.",
+        "No source PDF, copied chapter, private note or unsupported quotation enters the distributable."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G6"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-KNOWLEDGE-002",
+      "requirementIds": [
+        "REQ-KNOWLEDGE-002"
+      ],
+      "title": "Represent applicability, uncertainty and conflicting advice",
+      "given": [
+        "The catalog includes conflicting pagination advice, legacy OAuth guidance, and simplified memory/choice claims."
+      ],
+      "when": [
+        "Select rules for an approval-dashboard task and review the resulting rationale."
+      ],
+      "then": [
+        "Current standards supersede obsolete recipes with an attributable reason.",
+        "Conditional heuristics remain qualified; no fabricated scientific guarantee or score appears.",
+        "The selected rule explains task relevance rather than merely matching a keyword."
+      ],
+      "automation": {
+        "kind": "review",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G6"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-KNOWLEDGE-003",
+      "requirementIds": [
+        "REQ-KNOWLEDGE-003"
+      ],
+      "title": "Retrieve a bounded relevant subset of knowledge",
+      "given": [
+        "A large knowledge catalog includes repeated principles and unrelated backend chapters."
+      ],
+      "when": [
+        "Build packets for focused typography, budget reconciliation and annotation accessibility tasks."
+      ],
+      "then": [
+        "Each packet stays within the configured context budget and records selected/omitted rule IDs.",
+        "Required task constraints are not evicted by broad resource text.",
+        "Unrelated or duplicate content is excluded without losing source traceability."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G6"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-KNOWLEDGE-004",
+      "requirementIds": [
+        "REQ-KNOWLEDGE-004"
+      ],
+      "title": "Handle missing and untrusted resources transparently",
+      "given": [
+        "One source is unavailable, another contains instruction-like text, and a third updates after initial capture."
+      ],
+      "when": [
+        "Ingest and use these sources in a review task."
+      ],
+      "then": [
+        "Instruction-like source text cannot override task/system/project authority.",
+        "Unavailable material is not summarized as read; version changes are recorded.",
+        "The output identifies which recommendations are supported, inferred, or pending verification."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G6"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-THEME-001",
+      "requirementIds": [
+        "REQ-THEME-001"
+      ],
+      "title": "Keep theme install, activation and restore transactional",
+      "given": [
+        "An existing application theme contains user edits and a new candidate theme is installed into a disposable project."
+      ],
+      "when": [
+        "Install, activate, interrupt activation and restore, including a later user-edit conflict."
+      ],
+      "then": [
+        "Only planned theme targets change; failed activation recovers coherently.",
+        "Restore verifies current content and refuses to overwrite later edits.",
+        "Application redesign rollback is distinguished from package installer rollback."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G6"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-THEME-002",
+      "requirementIds": [
+        "REQ-THEME-002"
+      ],
+      "title": "Validate token coherence and accessible theme states",
+      "given": [
+        "A theme has missing tokens, a conflicting semantic alias and a low-contrast focus/error state."
+      ],
+      "when": [
+        "Compile/validate and render its representative component/state specimen."
+      ],
+      "then": [
+        "Missing/conflicting tokens produce actionable diagnostics.",
+        "Valid generated assets agree with the manifest and preserve intended override semantics.",
+        "Rendered accessibility regressions fail the applicable checks."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G6"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-THEME-003",
+      "requirementIds": [
+        "REQ-THEME-003"
+      ],
+      "title": "Upgrade themes without losing consumer customizations",
+      "given": [
+        "A consumer changed overrides after installation and the next theme release changes a shared token contract."
+      ],
+      "when": [
+        "Plan and apply the upgrade, then exercise rollback."
+      ],
+      "then": [
+        "Consumer changes are preserved or surfaced as explicit conflicts.",
+        "Breaking token/asset changes are documented with migration guidance.",
+        "Rollback restores the previous working theme while retaining the upgrade receipt and later user work."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G6"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-INSTALL-001",
+      "requirementIds": [
+        "REQ-INSTALL-001"
+      ],
+      "title": "Install through an auditable non-destructive plan",
+      "given": [
+        "Disposable Git and non-Git projects include unrelated instruction/config content and paths with spaces."
+      ],
+      "when": [
+        "Run installer preview then actual installation and compare observed writes with the plan."
+      ],
+      "then": [
+        "Writes match the declared plan and target only the chosen project.",
+        "Unrelated bytes and modes remain unchanged.",
+        "Preview performs no installation and is not counted as an install test pass."
+      ],
+      "automation": {
+        "kind": "artifact-isolation",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-INSTALL-002",
+      "requirementIds": [
+        "REQ-INSTALL-002"
+      ],
+      "title": "Restore upgrades safely after conflict or interruption",
+      "given": [
+        "An older supported install has user customizations and a separate unrelated executable on PATH."
+      ],
+      "when": [
+        "Upgrade, interrupt, retry and restore in unchanged and diverged fixtures."
+      ],
+      "then": [
+        "A successful unchanged restore matches pre-update content/modes.",
+        "Diverged files produce actionable conflicts and remain intact.",
+        "No unrelated executable/config is removed or hijacked; rollback evidence is retained."
+      ],
+      "automation": {
+        "kind": "artifact-isolation",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-INSTALL-003",
+      "requirementIds": [
+        "REQ-INSTALL-003"
+      ],
+      "title": "Resolve actual project roots and retain public aliases",
+      "given": [
+        "Installed runtimes are launched from nested directories, explicit non-Git roots and projects that record their own checkpoint files."
+      ],
+      "when": [
+        "Start and resume through retained aliases and an explicit root."
+      ],
+      "then": [
+        "All entry points reach the intended project and actual installed runtime.",
+        "Checkpoint creation does not invalidate its own resume eligibility.",
+        "Ambiguous roots fail clearly instead of acting in a parent/sibling project."
+      ],
+      "automation": {
+        "kind": "host-integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-INSTALL-004",
+      "requirementIds": [
+        "REQ-INSTALL-004"
+      ],
+      "title": "Verify local MCP and live OMP discovery independently",
+      "given": [
+        "An isolated installed runtime and a supported host session have declared capabilities; another fixture lacks hot-reload discovery."
+      ],
+      "when": [
+        "List/call tools, resolve bundled resources, discover retained commands and follow the documented discovery fallback."
+      ],
+      "then": [
+        "Observed host results support the claimed integrations.",
+        "Missing capability is reported honestly; direct-reading fallback is explicit and does not fabricate native discovery.",
+        "No forced host restart or unrelated global model/config edit is required unless explicitly documented and authorized."
+      ],
+      "automation": {
+        "kind": "host-integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Actual MCP transcript and OMP capability/discovery receipt from a disposable host/project.",
+        "Installed path/version/resource resolution evidence; no tokens or private project content."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-INSTALL-005",
+      "requirementIds": [
+        "REQ-INSTALL-005"
+      ],
+      "title": "Validate the extracted source ZIP in isolation",
+      "given": [
+        "A source ZIP is produced from the candidate and extracted into a fresh temporary directory with no access through PYTHONPATH to the checkout."
+      ],
+      "when": [
+        "Run documented source installation and packaged test/check commands from the extraction."
+      ],
+      "then": [
+        "No test depends on a missing root remediation file or other checkout-only fixture.",
+        "Manifest, license, executable/script behavior and required resources are present.",
+        "The archive evidence records the exact archive digest and extracted working directory."
+      ],
+      "automation": {
+        "kind": "artifact-isolation",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-INSTALL-006",
+      "requirementIds": [
+        "REQ-INSTALL-006"
+      ],
+      "title": "Build sdist and wheel and test only installed artifacts",
+      "given": [
+        "A candidate sdist is extracted in a clean directory and a new virtual environment has no project install."
+      ],
+      "when": [
+        "Build a wheel from the sdist, install it normally, and run runtime/MCP/dashboard/resource smoke and contract tests from another directory."
+      ],
+      "then": [
+        "Imports resolve from the installed wheel; expected resources are accessed through supported package resource APIs.",
+        "No runtime depends on repository docs/tests/installer files intentionally absent from the wheel.",
+        "The sdist and wheel hashes, build inputs and installation paths are recorded."
+      ],
+      "automation": {
+        "kind": "artifact-isolation",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-INSTALL-007",
+      "requirementIds": [
+        "REQ-INSTALL-007"
+      ],
+      "title": "Enforce distribution parity and exclude private payloads",
+      "given": [
+        "Candidate build fixtures include nested secrets, source PDFs, local databases, user screenshots and legitimate distributable assets."
+      ],
+      "when": [
+        "Build all distributions and scan their complete member lists/content with seeded canary fixtures."
+      ],
+      "then": [
+        "Private canaries and forbidden paths are absent, including nested/example-directory overrides.",
+        "Required runtime/theme/skill resources and license files match each distribution’s declared contract.",
+        "Version/capability differences are intentional and documented; manifests bind actual bytes."
+      ],
+      "automation": {
+        "kind": "artifact-isolation",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-SECURITY-001",
+      "requirementIds": [
+        "REQ-SECURITY-001"
+      ],
+      "title": "Authenticate every protected dashboard and resource route",
+      "given": [
+        "Protected HTML/API/blob/thumbnail/export routes exist for two sessions/projects."
+      ],
+      "when": [
+        "Request each route with missing, malformed, expired, wrong-project and valid credentials."
+      ],
+      "then": [
+        "Only valid in-scope credentials expose protected data or permit mutation.",
+        "Authentication cannot be bypassed through alternate encodings, redirects or resource endpoints.",
+        "Error/redirect responses do not echo credential values."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-SECURITY-002",
+      "requirementIds": [
+        "REQ-SECURITY-002"
+      ],
+      "title": "Enforce host origin and CSRF boundaries for mutations",
+      "given": [
+        "A real browser and HTTP adversarial fixtures send same-origin, cross-origin, missing/forged Origin and unexpected Host requests."
+      ],
+      "when": [
+        "Attempt approval, annotation, configuration and cleanup mutations through each route."
+      ],
+      "then": [
+        "Only the documented authorized request shape succeeds.",
+        "Rejected requests leave no command/decision/budget side effect.",
+        "CORS, cookies/credentials and redirect behavior do not broaden authority implicitly."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-SECURITY-003",
+      "requirementIds": [
+        "REQ-SECURITY-003"
+      ],
+      "title": "Render untrusted text and artwork without script execution",
+      "given": [
+        "Fixtures contain script/event-handler payloads, unsafe URLs, hostile SVG and markup in every user-controlled display field."
+      ],
+      "when": [
+        "Store, preview, compare, export and reload them in actual supported browser engines."
+      ],
+      "then": [
+        "No payload executes, exfiltrates credentials or gains same-origin authority.",
+        "Legitimate content remains understandable or is rejected with a clear format reason.",
+        "The policy applies to previews and errors as well as the main dashboard."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-SECURITY-004",
+      "requirementIds": [
+        "REQ-SECURITY-004"
+      ],
+      "title": "Enforce scoped capability and command authority",
+      "given": [
+        "Read-only, annotation-only, decision and revoked capabilities target different runs/components."
+      ],
+      "when": [
+        "Call all command types directly, including a replay after revocation and an attempted out-of-scope write."
+      ],
+      "then": [
+        "Only authorized operations execute on the exact permitted target.",
+        "Revocation blocks new work while safe result retrieval follows explicit policy.",
+        "YOLO, worker role names and knowledge documents do not expand authority."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-SECURITY-005",
+      "requirementIds": [
+        "REQ-SECURITY-005"
+      ],
+      "title": "Constrain paths and reject unsafe imported references",
+      "given": [
+        "Inputs include ../ paths, absolute external paths, symlink escapes, malicious archive members and shell metacharacters in valid names."
+      ],
+      "when": [
+        "Import/read/write/export/install and invoke applicable process helpers in disposable fixtures."
+      ],
+      "then": [
+        "Escapes and unsafe members are rejected before touching external targets.",
+        "Valid names with spaces/metacharacters are treated as data.",
+        "Checks occur at use time sufficiently to prevent the documented race/TOCTOU scenario."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-SECURITY-006",
+      "requirementIds": [
+        "REQ-SECURITY-006"
+      ],
+      "title": "Make local and LAN exposure explicit and truthful",
+      "given": [
+        "Loopback-only execution forbids network-interface enumeration; LAN execution has zero, one or multiple valid interfaces and a dynamic port."
+      ],
+      "when": [
+        "Start, discover, reconnect and stop the owned dashboard in each fixture."
+      ],
+      "then": [
+        "Loopback starts successfully without calling forbidden interface enumeration.",
+        "LAN errors produce a truthful unavailable state; no fake address/QR or silent broader bind appears.",
+        "Only the authenticated owned instance is stopped; another process on a reused port is untouched."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-SECURITY-007",
+      "requirementIds": [
+        "REQ-SECURITY-007"
+      ],
+      "title": "Redact credentials and protect operational state",
+      "given": [
+        "Synthetic secret canaries appear in tokens, URLs, provider errors, headers, files and backup paths."
+      ],
+      "when": [
+        "Exercise failure logging, support export, gate receipts, token rotation and retention cleanup."
+      ],
+      "then": [
+        "Canaries do not appear in distributable/support evidence or command echoes.",
+        "Expired credentials stop authorizing new requests and unrelated user files survive cleanup.",
+        "Backup/retention policy is inspectable and preserves recovery data needed by the supported lifecycle."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-DOCS-002",
+      "requirementIds": [
+        "REQ-DOCS-002"
+      ],
+      "title": "Deliver executable first-success and recovery documentation",
+      "given": [
+        "A new disposable user project follows only the packaged documentation with the declared prerequisites."
+      ],
+      "when": [
+        "Execute the supported first-success and selected failure-recovery instructions from the packaged artifact."
+      ],
+      "then": [
+        "The guide reaches a reviewable result and a valid saved decision/resume, not merely an installed command.",
+        "No undocumented repository file, credential, profile flag or imagined host syntax is required.",
+        "Instructions clearly separate package restore, application rollback and human research deferral."
+      ],
+      "automation": {
+        "kind": "artifact-isolation",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-EVIDENCE-002",
+      "requirementIds": [
+        "REQ-EVIDENCE-002"
+      ],
+      "title": "Require actual successful gate execution and evidence",
+      "given": [
+        "Plans contain an empty required command list, a dry-run result, a missing artifact, a timeout, a failing command and a fully executed valid check."
+      ],
+      "when": [
+        "Run gate evaluation for each fixture."
+      ],
+      "then": [
+        "Every incomplete/failing fixture is blocked or failed, never passed.",
+        "The valid fixture records exact argv, cwd, exit code, times, coverage, source/plan digests and artifact hashes.",
+        "Unknown gate IDs or missing required profile gates are rejected."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G8"
+      ],
+      "applicability": [
+        "release"
+      ]
+    },
+    {
+      "id": "AC-EVIDENCE-003",
+      "requirementIds": [
+        "REQ-EVIDENCE-003"
+      ],
+      "title": "Perform substantive review with truthful independence",
+      "given": [
+        "One review has distinct implementation/reviewer actors; another uses a declared sequential fallback; invalid reviews reuse identities or omit evidence."
+      ],
+      "when": [
+        "Validate release review records against the current candidate and plan."
+      ],
+      "then": [
+        "Independent:true is accepted only with distinct identities and substantive mapped evidence.",
+        "Fallback requires method and reason and yields PASS_WITH_DECLARED_REVIEW_FALLBACK rather than independent-review PASS.",
+        "Every release acceptance case is checked; failed/blocked cases, missing paths, stale fingerprints or severeOpen > 0 block readiness."
+      ],
+      "automation": {
+        "kind": "review",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G8"
+      ],
+      "applicability": [
+        "release"
+      ]
+    },
+    {
+      "id": "AC-EVIDENCE-004",
+      "requirementIds": [
+        "REQ-EVIDENCE-004"
+      ],
+      "title": "Run the required real browser release matrix",
+      "given": [
+        "A completed web candidate has declared critical flows, installed browser tool and configured Chromium, Firefox, WebKit projects."
+      ],
+      "when": [
+        "Execute the release matrix including approval, annotation, resize, keyboard, nondrag alternative, cancel/stale races and hostile content."
+      ],
+      "then": [
+        "Each required engine actually runs the mapped interactions and records results/screenshots/traces.",
+        "A missing browser/tool or failed project is blocked/failed, not silently dropped.",
+        "System package installation is not performed without existing authorization; a documented blocker remains truthful."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "playwright_fast plan and actual run/matrix receipts with tool/version/engine/project identities.",
+        "Real traces/screenshots and assertions tied to release acceptance cases."
+      ],
+      "gates": [
+        "G8"
+      ],
+      "applicability": [
+        "release"
+      ]
+    },
+    {
+      "id": "AC-EVIDENCE-005",
+      "requirementIds": [
+        "REQ-EVIDENCE-005"
+      ],
+      "title": "Bind release artifacts and readiness to one candidate",
+      "given": [
+        "All required gates pass for candidate A and an artifact is then rebuilt from candidate B or altered after testing."
+      ],
+      "when": [
+        "Attempt to assemble readiness for mixed artifacts, then for the coherent candidate A set."
+      ],
+      "then": [
+        "Mixed/stale/modified artifacts are rejected; successful old tests cannot qualify new bytes.",
+        "A coherent readiness receipt references exact source ZIP, sdist, wheel and their isolated-install evidence.",
+        "Readiness does not itself publish, merge, tag or deploy anything beyond existing authorization."
+      ],
+      "automation": {
+        "kind": "artifact-isolation",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G8"
+      ],
+      "applicability": [
+        "release"
+      ]
+    },
+    {
+      "id": "AC-EVIDENCE-006",
+      "requirementIds": [
+        "REQ-EVIDENCE-006"
+      ],
+      "title": "Report deferred human research and target-specific limits honestly",
+      "given": [
+        "A supported web release has automated evidence but no human participants; native/offline targets are not declared."
+      ],
+      "when": [
+        "Generate readiness and the validation-scope statement, then add an explicit native/offline target in a separate fixture."
+      ],
+      "then": [
+        "Human research is labeled DEFERRED, never passed, and does not block the automated web release.",
+        "Undeclared native/offline work is NOT_APPLICABLE with rationale; declared targets acquire their specific evidence obligations.",
+        "Claims distinguish tested environments, unknown/blocked capabilities and actual user validation; no synthetic persona is reported as a participant."
+      ],
+      "automation": {
+        "kind": "review",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G8"
+      ],
+      "applicability": [
+        "release"
+      ]
+    },
+    {
+      "id": "AC-DOCS-003",
+      "requirementIds": [
+        "REQ-DOCS-003"
+      ],
+      "title": "Ship a precise release and operational handoff",
+      "given": [
+        "The coherent candidate has gate/review/artifact receipts and remaining deferred or unsupported items."
+      ],
+      "when": [
+        "Prepare the release handoff and follow its recovery procedure in a disposable fixture."
+      ],
+      "then": [
+        "Every factual completion claim has current evidence and every material limit is explicit.",
+        "Recovery instructions reference the actual retained backup/export/artifact and are executable.",
+        "The pack-integrity PASS is not conflated with application, host, browser or human-validation PASS."
+      ],
+      "automation": {
+        "kind": "review",
+        "required": true,
+        "environment": "Disposable target-repository fixtures; no production account, live spend, or user installation."
+      },
+      "evidence": [
+        "Machine-readable assertions with fixture identity and actual result.",
+        "Execution receipt tied to the candidate source fingerprint; relevant redacted state before and after."
+      ],
+      "gates": [
+        "G8"
+      ],
+      "applicability": [
+        "release"
+      ]
+    },
+    {
+      "id": "AC-EVIDENCE-101",
+      "requirementIds": [
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-BUDGET-003",
+        "REQ-BUDGET-004"
+      ],
+      "title": "Crash between reservation and provider dispatch",
+      "given": [
+        "A reservation and outbox intent commit, but the worker has not contacted the provider."
+      ],
+      "when": [
+        "Crash/restart at that boundary and allow two recovery workers to claim the same intent."
+      ],
+      "then": [
+        "One logical dispatch results; the reservation is not duplicated or prematurely released.",
+        "Receipt/lease recovery retains the original request identity and exposes an uncertain provider outcome if needed."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository adversarial fixture; deterministic fault/barrier controls; no live spend."
+      },
+      "evidence": [
+        "Reproducible fixture/seed and actual assertions.",
+        "Redacted command, transaction and recovery receipts bound to the candidate."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-EVIDENCE-102",
+      "requirementIds": [
+        "REQ-CORE-002",
+        "REQ-APPROVAL-002",
+        "REQ-APPROVAL-004",
+        "REQ-REVISION-006"
+      ],
+      "title": "Approval races a relevant artifact revision",
+      "given": [
+        "Approval and revision commands reference the same component revision and synchronize immediately before commit."
+      ],
+      "when": [
+        "Commit them in both orders with controlled barriers."
+      ],
+      "then": [
+        "If revision wins, the old approval fails as stale; if approval wins, the subsequent relevant revision invalidates that approval.",
+        "No ordering leaves new unseen content covered by old approval."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository adversarial fixture; deterministic fault/barrier controls; no live spend."
+      },
+      "evidence": [
+        "Reproducible fixture/seed and actual assertions.",
+        "Redacted command, transaction and recovery receipts bound to the candidate."
+      ],
+      "gates": [
+        "G3"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-EVIDENCE-103",
+      "requirementIds": [
+        "REQ-CORE-002",
+        "REQ-BUDGET-003",
+        "REQ-BUDGET-006"
+      ],
+      "title": "Budget cap reduction races reservation",
+      "given": [
+        "An authorized cap change and new reservation are both valid against the initially observed state."
+      ],
+      "when": [
+        "Race the cap reduction against the reservation."
+      ],
+      "then": [
+        "Serialization preserves the budget invariant; a cap reduction below settled charges plus active reservations is rejected rather than concealing liability.",
+        "Neither ordering dispatches work against an unavailable bound."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository adversarial fixture; deterministic fault/barrier controls; no live spend."
+      },
+      "evidence": [
+        "Reproducible fixture/seed and actual assertions.",
+        "Redacted command, transaction and recovery receipts bound to the candidate."
+      ],
+      "gates": [
+        "G4"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-EVIDENCE-104",
+      "requirementIds": [
+        "REQ-CORE-003",
+        "REQ-REVISION-005",
+        "REQ-APPROVAL-003"
+      ],
+      "title": "Partial batch reply lost after component decisions",
+      "given": [
+        "A batch transaction has committed valid independent item decisions, the per-item stale outcome, and its batch receipt together; the response has not arrived."
+      ],
+      "when": [
+        "Lose the reply and retry from another adapter with the same batch key."
+      ],
+      "then": [
+        "The same item receipt set returns without duplicates or re-evaluating successful items against a new base.",
+        "Changed payload reuse of the batch key is rejected."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository adversarial fixture; deterministic fault/barrier controls; no live spend."
+      },
+      "evidence": [
+        "Reproducible fixture/seed and actual assertions.",
+        "Redacted command, transaction and recovery receipts bound to the candidate."
+      ],
+      "gates": [
+        "G3"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-EVIDENCE-105",
+      "requirementIds": [
+        "REQ-CORE-002",
+        "REQ-CORE-005",
+        "REQ-APPROVAL-006"
+      ],
+      "title": "Projection rebuild during active decisions",
+      "given": [
+        "A projection rebuild spans several transactions while a component receives a terminal decision."
+      ],
+      "when": [
+        "Interrupt/restart rebuilding and request actions throughout."
+      ],
+      "then": [
+        "No stale projection authorizes an otherwise invalid mutation.",
+        "The rebuilt view converges to the terminal authoritative state with a truthful freshness marker."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository adversarial fixture; deterministic fault/barrier controls; no live spend."
+      },
+      "evidence": [
+        "Reproducible fixture/seed and actual assertions.",
+        "Redacted command, transaction and recovery receipts bound to the candidate."
+      ],
+      "gates": [
+        "G3"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-EVIDENCE-106",
+      "requirementIds": [
+        "REQ-MIGRATION-001",
+        "REQ-MIGRATION-002",
+        "REQ-MIGRATION-004"
+      ],
+      "title": "Migration interrupted after candidate validation before activation",
+      "given": [
+        "The migrated candidate is valid, but activation has not committed."
+      ],
+      "when": [
+        "Crash, restart, and explicitly choose resume or rollback in separate fixtures."
+      ],
+      "then": [
+        "Both paths preserve original data and produce one coherent active store.",
+        "Neither path infers activation from partially written marker files."
+      ],
+      "automation": {
+        "kind": "integration",
+        "required": true,
+        "environment": "Disposable target-repository adversarial fixture; deterministic fault/barrier controls; no live spend."
+      },
+      "evidence": [
+        "Reproducible fixture/seed and actual assertions.",
+        "Redacted command, transaction and recovery receipts bound to the candidate."
+      ],
+      "gates": [
+        "G2"
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "AC-EVIDENCE-107",
+      "requirementIds": [
+        "REQ-UX-004",
+        "REQ-BUDGET-005",
+        "REQ-APPROVAL-003"
+      ],
+      "title": "Browser cancellation races late completion",
+      "given": [
+        "The browser requests cancellation while a provider completion and server state update are in flight."
+      ],
+      "when": [
+        "Deliver cancellation/completion in both orders, then reload."
+      ],
+      "then": [
+        "Browser and domain converge to the same documented terminal/reconciliation state.",
+        "Real cost/artifact evidence is retained; cancel click does not falsely imply no charge or erase a completed artifact."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository adversarial fixture; deterministic fault/barrier controls; no live spend."
+      },
+      "evidence": [
+        "Reproducible fixture/seed and actual assertions.",
+        "Redacted command, transaction and recovery receipts bound to the candidate."
+      ],
+      "gates": [
+        "G5"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-EVIDENCE-108",
+      "requirementIds": [
+        "REQ-INSTALL-002",
+        "REQ-INSTALL-006",
+        "REQ-SECURITY-005"
+      ],
+      "title": "Installing under hostile inherited destination settings",
+      "given": [
+        "A disposable environment has inherited PIP_TARGET / PIP_PREFIX / PYTHONPATH settings and an unrelated executable with a colliding name."
+      ],
+      "when": [
+        "Run the supported isolated runtime install/upgrade and invoke installed entry points."
+      ],
+      "then": [
+        "The declared environment receives the install; source path/destination overrides cannot leak it elsewhere.",
+        "Unrelated executables remain intact and runtime identity is verified."
+      ],
+      "automation": {
+        "kind": "artifact-isolation",
+        "required": true,
+        "environment": "Disposable target-repository adversarial fixture; deterministic fault/barrier controls; no live spend."
+      },
+      "evidence": [
+        "Reproducible fixture/seed and actual assertions.",
+        "Redacted command, transaction and recovery receipts bound to the candidate."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-EVIDENCE-109",
+      "requirementIds": [
+        "REQ-SECURITY-001",
+        "REQ-SECURITY-004",
+        "REQ-UX-003"
+      ],
+      "title": "Capability revoked while a stale browser submits",
+      "given": [
+        "A browser retains an unsent annotation/decision after its capability is revoked."
+      ],
+      "when": [
+        "Submit, reconnect, and attempt result retrieval under current policy."
+      ],
+      "then": [
+        "Revoked authority cannot create new state; the draft remains locally recoverable without leaking protected data.",
+        "The UI explains authentication/authorization recovery without replaying a queued mutation automatically."
+      ],
+      "automation": {
+        "kind": "browser",
+        "required": true,
+        "environment": "Disposable target-repository adversarial fixture; deterministic fault/barrier controls; no live spend."
+      },
+      "evidence": [
+        "Reproducible fixture/seed and actual assertions.",
+        "Redacted command, transaction and recovery receipts bound to the candidate."
+      ],
+      "gates": [
+        "G7"
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "AC-EVIDENCE-110",
+      "requirementIds": [
+        "REQ-DOCS-003",
+        "REQ-EVIDENCE-002",
+        "REQ-EVIDENCE-004",
+        "REQ-EVIDENCE-006"
+      ],
+      "title": "Document-only change is not misreported as browser verification",
+      "given": [
+        "Only handoff documentation changes; no browser check was run for this candidate."
+      ],
+      "when": [
+        "Generate a pack-integrity receipt and attempt to label it a full product release."
+      ],
+      "then": [
+        "The handoff integrity claim may pass within its scope.",
+        "Product/browser release remains unverified unless required current-candidate evidence exists; documentation work does not itself launch unnecessary browser QA."
+      ],
+      "automation": {
+        "kind": "review",
+        "required": true,
+        "environment": "Disposable target-repository adversarial fixture; deterministic fault/barrier controls; no live spend."
+      },
+      "evidence": [
+        "Reproducible fixture/seed and actual assertions.",
+        "Redacted command, transaction and recovery receipts bound to the candidate."
+      ],
+      "gates": [
+        "G8"
+      ],
+      "applicability": [
+        "release"
+      ]
+    }
+  ]
+}

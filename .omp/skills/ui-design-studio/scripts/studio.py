@@ -27,7 +27,7 @@ import uuid
 import zipfile
 import xml.etree.ElementTree as ET
 
-VERSION = "1.4.3"
+VERSION = "2.0.0"
 SLUG = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 SEMVER = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\Z")
 SHA = re.compile(r"[0-9a-f]{64}\Z")
@@ -1405,6 +1405,43 @@ def resume_check(path, current_environment=None):
             else "Manifest dependencies are current; no dependent work is stale."}
 
 
+def _knowledge_packet(repo, objective):
+    catalog = Path(repo) / ".prism-rebuild" / "knowledge" / "rules.json"
+    if not catalog.is_file():
+        return {"status": "unavailable", "reason": "No reviewed knowledge catalog is available in this repository."}
+    try:
+        document = read_json(catalog)
+        rules = document.get("rules", [])
+        require(isinstance(document, dict) and document.get("schemaVersion") in {"1.0", "1.0.0"} and isinstance(rules, list), "Knowledge catalog is malformed")
+        for rule in rules:
+            require(isinstance(rule, dict) and all(isinstance(rule.get(key), str) and rule[key].strip() for key in ("id", "topic", "principle", "appliesWhen", "action", "check", "authority")), "Knowledge rule is incomplete")
+            sources = rule.get("sourceIds", [])
+            locators = rule.get("sourceLocators", {})
+            exceptions = rule.get("exceptions", [])
+            require(isinstance(sources, list) and isinstance(locators, dict) and isinstance(exceptions, list), "Knowledge provenance is malformed")
+            require(all(isinstance(source, str) and source.strip() for source in sources) and all(isinstance(exception, str) and exception.strip() for exception in exceptions), "Knowledge provenance is malformed")
+            require(all(source in locators and isinstance(locators[source], str) and locators[source].strip() for source in sources), "Knowledge source IDs require matching locators")
+        terms = {term for term in re.findall(r"[a-z0-9]+", objective.lower()) if len(term) > 2}
+        ranked = []
+        for rule in rules:
+            haystack = " ".join(str(rule.get(key, "")) for key in ("topic", "principle", "appliesWhen", "action", "check", "exceptions")).lower()
+            score = sum(haystack.count(term) for term in terms)
+            if score:
+                ranked.append((score, rule.get("id", ""), rule))
+        ranked.sort(key=lambda item: (-item[0], item[1]))
+        selected = [rule for _, _, rule in ranked[:8]]
+        selected_ids = {rule.get("id") for rule in selected}
+        return {"status": "selected", "catalogSha256": sha_file(catalog), "query": objective,
+                "selectedRuleIds": [rule.get("id") for rule in selected],
+                "omittedRuleIds": [rule.get("id") for rule in rules if rule.get("id") not in selected_ids],
+                "rules": [{"id": rule.get("id"), "principle": rule.get("principle"), "appliesWhen": rule.get("appliesWhen"),
+                           "action": rule.get("action"), "check": rule.get("check"), "exceptions": rule.get("exceptions", []),
+                           "authority": rule.get("authority"), "sourceIds": rule.get("sourceIds", []),
+                           "sourceLocators": rule.get("sourceLocators", {})} for rule in selected]}
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
+        return {"status": "unavailable", "reason": f"Knowledge catalog could not be selected: {exc}"}
+
+
 def worker_packet(path, role, objective, owned_files, instruction_files=None, artifacts=None, allowed_actions=None, *, repo=None):
     root = Path(path).resolve()
     run = read_json(safe_path(root, "run.json"))
@@ -1456,6 +1493,7 @@ def worker_packet(path, role, objective, owned_files, instruction_files=None, ar
                         "status": routing.get("status", "pending"), "policy": run.get("modelPolicy"),
                         "selected": selected, "assignment": assignment},
             "ownedFiles": owned, "instructions": instruction_records, "artifacts": artifact_records,
+            "knowledge": _knowledge_packet(repo, objective),
             "contractRevision": digest_bytes(canonical({"scope": run.get("scope"), "instructions": instruction_records})),
             "acceptance": {"requiredEvidence": sorted(REQUIRED_EVIDENCE),
                            "fullThemeReleaseBlocked": run.get("scope", "full-redesign") != "full-redesign",
@@ -1651,6 +1689,10 @@ def register_theme(repo, theme_id, run_path, make_default=False):
         registry["themes"] = [item for item in registry["themes"] if item["id"] != theme_id] + [record]
         if first or make_default:
             registry["defaultTheme"] = theme_id
+        if first or make_default or run_document["themeAction"] == "modify-default":
+            registry["activeTheme"] = {"id": theme_id, "version": verification["version"],
+                                       "themeDigest": verification["themeDigest"], "activatedAt": now(),
+                                       "activationReceipt": run_result["runId"]}
         path = themes / "registry.json"
         backup = None
         if path.exists():
@@ -1663,10 +1705,23 @@ def register_theme(repo, theme_id, run_path, make_default=False):
         os.close(fd)
         lock.unlink(missing_ok=True)
     return _registered_result({"status": "PASS", "registry": str(path), "defaultTheme": registry["defaultTheme"],
-            "backup": str(backup) if backup else None,
-            "message": "Registry updated atomically. The app's reviewed adapter must consume this registry; this command does not deploy or activate a running application."}, run_path, repo)
+            "activeTheme": registry.get("activeTheme"), "backup": str(backup) if backup else None,
+            "message": "Registry and active-theme selection updated atomically; the application adapter resolves this record before loading local theme assets."}, run_path, repo)
 
 
+def restore_theme(repo, backup):
+    repo = Path(repo).resolve()
+    _, themes, _ = config_paths(repo)
+    candidate = Path(backup).expanduser().resolve()
+    require(candidate.is_file() and candidate.is_relative_to(themes / ".registry-backups"), "Theme registry backup must be inside .registry-backups")
+    restored = read_json(candidate)
+    require(isinstance(restored, dict) and restored.get("schemaVersion") == "1.0" and isinstance(restored.get("themes"), list), "Theme registry backup is malformed")
+    ids = [item.get("id") for item in restored["themes"] if isinstance(item, dict)]
+    require(len(ids) == len(restored["themes"]) and len(ids) == len(set(ids)), "Theme registry backup contains duplicate IDs")
+    require(restored.get("defaultTheme") is None or restored["defaultTheme"] in ids, "Theme registry backup has an invalid default")
+    path = themes / "registry.json"
+    atomic_json(path, restored)
+    return {"status": "PASS", "registry": str(path), "restoredFrom": str(candidate), "defaultTheme": restored.get("defaultTheme"), "activeTheme": restored.get("activeTheme")}
 def semver_newer(candidate, previous):
     """Compare SemVer precedence without runtime dependencies; build metadata is ignored."""
     require(isinstance(previous, str) and SEMVER.fullmatch(previous), "Existing registered semantic version is invalid")

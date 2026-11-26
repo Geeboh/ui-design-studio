@@ -1,0 +1,28 @@
+---
+name: ui-produce
+description: "Implement a scoped accepted design in its target repository through shared Studio contracts. Use for production-stage code changes and bounded implementation revisions."
+---
+
+# Implement the accepted scope
+
+Implementation target: activate with compatible Studio commands.
+
+## Inputs and scope
+
+Require exact applicable accepted artifact/component versions, dependencies, target root/worktree, repository instructions, owned paths and permitted operations. Creation of new files must be explicitly covered by task ownership; do not require every authorized output to pre-exist.
+
+## Workflow
+
+Inspect the existing implementation and shared contracts. Preserve compatible aliases and the authoritative engine. Implement the smallest cohesive change that satisfies the accepted design and required behaviour.
+
+Read `.prism-rebuild/docs/ACCESSIBILITY-AND-PERFORMANCE.md` for relevant checks and selected knowledge rules for the actual task. Keep semantic HTML, focus, non-drag alternatives, state/feedback and recovery aligned with the design.
+
+Detect stale inputs or overlapping ownership before writing. A relevant dependency change requires conflict resolution; unrelated progress does not. Produce a new result/version and record changed scope.
+
+Use actual host capabilities and observed model assignment. Implementation spend is separate from the design cap by default. Any new paid design generation returns through design admission rather than bypassing it as implementation.
+
+## Mode, outputs and exit
+
+Guided and YOLO both permit routine authorized implementation; material new design/scope choices follow the stored policy. Neither mode authorizes unrelated edits or publication.
+
+Return changed files, exact inputs, verification outcomes and limitations. Run meaningful risk-based checks and required gates; missing browser/host tests are blocked/not run, not passed. Exit when the scoped implementation and required checks are complete, or a precise blocker remains. Do not equate a compiled build with the whole user journey succeeding.

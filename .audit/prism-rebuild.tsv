@@ -1,0 +1,5 @@
+ts	phase	decision	why	evidence	result
+2026-11-26T00:00:00Z	start	started M0 on prepared overhaul branch	objective requires a current-candidate rebuild through M8	.git/HEAD, .prism-rebuild/prompts/MASTER-REBUILD.md	open
+2026-11-26T00:00:00Z	M0	kept existing candidate as baseline	selected commit equals reviewed baseline, so reproducing tests remain regression targets	.prism-state/discovery.md	baseline matched
+2026-11-26T00:00:00Z	M0	used SQLite DELETE policy as initial design target	preflight helper SQLite is 3.45.1 and WAL qualification is not established	.prism-rebuild/docs/ARCHITECTURE.md	open
+2026-11-26T10:22:46+11:00	start	log timestamp correction	initial rows used a placeholder time before the host clock was read; later rows use observed host time	.audit/prism-rebuild.tsv:1-4	supersedes timestamp only

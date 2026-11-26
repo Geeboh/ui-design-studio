@@ -1,0 +1,33 @@
+{
+  "recordType": "modelPreferenceSet",
+  "schemaVersion": "2.0.0",
+  "preferenceSetId": "preferences_personal",
+  "revision": 1,
+  "preferenceScope": "personal",
+  "projectId": "project_demo",
+  "principalId": "actor_human",
+  "snapshotId": "snapshot_preferences",
+  "modelPolicy": {
+    "mode": "current",
+    "defaultIdentity": null,
+    "rolePreferences": [],
+    "allowFallback": false,
+    "maxFallbacks": 0,
+    "origin": "personal",
+    "capabilitySnapshotId": null
+  },
+  "workerPolicy": {
+    "mode": "auto",
+    "maxWorkers": null,
+    "unknownCapacityPolicy": "serialize",
+    "priority": "interactive_first",
+    "leaseSeconds": 120,
+    "heartbeatSeconds": 30
+  },
+  "updatedAt": "2026-11-26T00:00:00Z",
+  "updatedBy": {
+    "actorId": "actor_human",
+    "kind": "human",
+    "displayName": "Example reviewer"
+  }
+}

@@ -24,6 +24,7 @@ LAN updates replace advertised URLs, permitted Hosts and permitted Origins.
 from __future__ import annotations
 
 from contextlib import contextmanager
+import importlib.util
 import base64
 import datetime as dt
 import errno
@@ -68,6 +69,27 @@ MAX_ANNOTATIONS = 256
 ATTACHMENT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._ -]{0,159}\Z")
 ATTACHMENT_MIME = {"image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "image/webp": ".webp"}
 ANNOTATION_TOOLS = {"arrow", "line", "curve", "rectangle", "ellipse", "text"}
+def _usage_backend():
+    if not hasattr(_usage_backend, "module"):
+        path = Path(__file__).with_name("usage.py")
+        spec = importlib.util.spec_from_file_location("ui_design_studio_usage", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _usage_backend.module = module
+    return _usage_backend.module
+
+
+def record_usage(studio, root, payload):
+    return _usage_backend().record_usage(studio, Path(root), payload, records_lock)
+
+
+def usage_projection(studio, root, *, omp_probe=None, range_key="24h"):
+    return _usage_backend().project(studio, Path(root), omp_probe=omp_probe, range_key=range_key)
+
+
+def usage_export(studio, root, *, omp_probe=None, format_name="json"):
+    return _usage_backend().export_data(studio, Path(root), omp_probe=omp_probe, format_name=format_name)
+
 
 
 def digest(data):
@@ -80,6 +102,14 @@ def canonical(data):
 
 def timestamp():
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="microseconds")
+
+
+def approval_run_digest(run):
+    material = {key: run.get(key) for key in (
+        "id", "mode", "scope", "scopeSchemaVersion", "scopeRationale", "themeAction",
+        "themeId", "projectContext", "modelPolicy", "modelRouting", "themeDigest",
+    )}
+    return digest(canonical(material))
 
 
 def need(studio, condition, message):
@@ -351,8 +381,15 @@ def project_theme(studio, root, repo=None):
         try:
             unused, themes, runs = studio.config_paths(candidate)
             if root != runs and root.is_relative_to(runs):
-                theme = studio.safe_path(themes, run["themeId"], must_exist=False, allow_dir=True)
-                return candidate, theme, run["themeId"]
+                theme_id = run["themeId"]
+                registry_path = themes / "registry.json"
+                if registry_path.is_file():
+                    registry = studio.registry_read(themes)
+                    registered = next((item for item in registry["themes"] if item["id"] == theme_id), None)
+                    need(studio, registered is not None, f"Theme {theme_id} is not registered")
+                    theme_id = registered["id"]
+                theme = studio.safe_path(themes, theme_id, must_exist=False, allow_dir=True)
+                return candidate, theme, theme_id
         except (studio.StudioError, OSError, ValueError):
             if repo is not None:
                 raise
@@ -446,8 +483,9 @@ def current_decision(studio, root, run, decision):
     actor = decision.get("actor")
     if actor not in ("user", "agent-yolo") or (run.get("mode") == "guided" and actor != "user"):
         return False
-    if not isinstance(decision.get("rationale"), str) or not decision["rationale"].strip():
-        return False
+    if decision.get("outcome") in ("changes", "rejected") or actor == "agent-yolo":
+        if not isinstance(decision.get("rationale"), str) or not decision["rationale"].strip():
+            return False
     return decision.get("inputsDigest") == studio.file_digest(root, decision.get("inputs"))
 
 
@@ -490,7 +528,7 @@ def publish_request(studio, root, request_id, stage, title, context, files, choi
             seen.add(option["id"])
         request = {"schemaVersion": "1.0", "id": request_id, "stage": stage, "title": title, "context": context,
                    "inputs": inputs, "inputsDigest": studio.file_digest(root, inputs), "options": choices,
-                   "decisionsDigest": digest(canonical(decisions)), "runDigest": digest(canonical(run)),
+                   "decisionsDigest": digest(canonical(decisions)), "runDigest": approval_run_digest(run),
                    "createdAt": timestamp(), "status": "pending"}
         path = studio.safe_path(root, f"approval-requests/{request_id}.json", must_exist=False)
         if path.exists():
@@ -522,7 +560,7 @@ def approve(studio, root, payload, repo=None):
             current_inputs = expanded_inputs(studio, root, request["inputs"])
             current_inputs = bind_theme_sources(studio, root, current_inputs, source_record)
             fresh = (current_inputs == request["inputs"] and studio.file_digest(root, current_inputs) == request["inputsDigest"]
-                     and digest(canonical(decisions)) == request["decisionsDigest"] and digest(canonical(run)) == request["runDigest"])
+                     and digest(canonical(decisions)) == request["decisionsDigest"] and approval_run_digest(run) == request["runDigest"])
         except (studio.StudioError, OSError, UnicodeError, ValueError, KeyError):
             fresh = False
         if not fresh or payload.get("inputsDigest") != request.get("inputsDigest"):
@@ -582,12 +620,66 @@ def approve(studio, root, payload, repo=None):
                 raise RuntimeError("Approval persistence failed and rollback failed") from rollback_error
             raise
     return {"status": "PASS", "decision": decision}
+def cancel_run(studio, root):
+    with records_lock(studio, root):
+        run_path = studio.safe_path(root, "run.json")
+        run = studio.read_json(run_path)
+        if run.get("status") not in ("completed", "passed", "cancelled", "reconciling"):
+            run["status"] = "cancelled"
+            run["cancelledAt"] = timestamp()
+            run["cancellation"] = {"status": "requested", "remoteOutcome": "unknown"}
+            studio.atomic_json(run_path, run)
+        return {"status": "PASS", "run": run.get("id"), "runStatus": run.get("status"), "remoteOutcome": run.get("cancellation", {}).get("remoteOutcome")}
+def reconcile_run(studio, root, payload=None):
+    with records_lock(studio, root):
+        run_path = studio.safe_path(root, "run.json")
+        run = studio.read_json(run_path)
+        cancellation = run.get("cancellation")
+        need(studio, isinstance(cancellation, dict), "No cancellation is available for reconciliation")
+        payload = payload if isinstance(payload, dict) else {}
+        receipt = payload.get("providerReceiptId")
+        if receipt is not None:
+            need(studio, isinstance(receipt, str) and 1 <= len(receipt) <= 256, "Provider receipt ID is invalid")
+            outcome = payload.get("remoteOutcome")
+            need(studio, outcome in {"completed", "cancelled", "failed"}, "Reconciled remote outcome is invalid")
+            billing = payload.get("cost")
+            need(studio, isinstance(billing, dict), "Reconciliation requires a cost observation")
+            billing_status = billing.get("status")
+            need(studio, billing_status in {"observed", "estimated", "unknown", "not_billable"}, "Reconciled cost status is invalid")
+            existing_receipt = cancellation.get("providerReceiptId")
+            if existing_receipt is not None:
+                need(studio, existing_receipt == receipt and cancellation.get("remoteOutcome") == outcome and cancellation.get("billing") == billing,
+                     "Provider receipt was reused with different reconciliation data")
+            else:
+                cancellation = dict(cancellation)
+                cancellation.update({"status": "resolved", "remoteOutcome": outcome, "providerReceiptId": receipt, "billing": billing, "resolvedAt": timestamp()})
+                run["cancellation"] = cancellation
+                run["status"] = "completed" if outcome == "completed" else "failed" if outcome == "failed" else "cancelled"
+                studio.atomic_json(run_path, run)
+        elif cancellation.get("remoteOutcome") == "unknown":
+            cancellation = dict(cancellation)
+            cancellation["status"] = "reconciling"
+            cancellation["requestedAt"] = cancellation.get("requestedAt") or timestamp()
+            run["cancellation"] = cancellation
+            if run.get("status") == "cancelled":
+                run["status"] = "reconciling"
+            studio.atomic_json(run_path, run)
+        return {"status": "PASS", "run": run.get("id"), "runStatus": run.get("status"), "cancellation": run.get("cancellation")}
 
 
 class ArtworkLibrary:
     def __init__(self, studio, root, repo=None):
         self.studio, self.root, self.repo = studio, Path(root), repo
         self.directory = studio.safe_path(root, "artwork-library", must_exist=False, allow_dir=True)
+        self._source_signatures = {}
+
+    def _dependency_signature(self, record):
+        signature = []
+        for relative in sorted(record.get("files", {})):
+            path = self.studio.safe_path(self.root, relative)
+            observed = path.stat()
+            signature.append((relative, observed.st_mtime_ns, observed.st_ctime_ns, observed.st_size))
+        return tuple(signature)
 
     def publication_index(self):
         index = read_record(self.studio, self.directory, "index.json", {"schemaVersion": "1.0", "current": {}, "versions": []})
@@ -648,6 +740,7 @@ class ArtworkLibrary:
         studio, root = self.studio, self.root
         warnings = []
         import_theme_art(studio, root, self.repo)
+        index = self.publication_index()
         for directory, dirs, names in os.walk(root, followlinks=False):
             base = Path(directory)
             dirs[:] = sorted(name for name in dirs if name not in EXCLUDED and not name.startswith(".") and not (base / name).is_symlink())
@@ -656,8 +749,18 @@ class ArtworkLibrary:
                 if source.is_symlink() or source.suffix.lower() not in VISUAL or name.startswith("."):
                     continue
                 relative = source.relative_to(root).as_posix()
+                current = index["current"].get(relative)
+                if current:
+                    try:
+                        record = self._manifest(studio.safe_path(self.directory, current, allow_dir=True))
+                        signature = self._dependency_signature(record)
+                        if self._source_signatures.get(relative) == signature:
+                            continue
+                    except (studio.StudioError, OSError, UnicodeError, ValueError, TypeError):
+                        pass
                 try:
-                    unused_record, dependency_warnings = self.retain(relative, strict=False)
+                    record, dependency_warnings = self.retain(relative, strict=False)
+                    self._source_signatures[relative] = self._dependency_signature(record)
                     warnings.extend(dependency_warnings)
                 except (studio.StudioError, OSError, UnicodeError, ValueError, TypeError) as exc:
                     warnings.append(f"Artwork {relative}: {exc}")
@@ -928,6 +1031,7 @@ class DesignState:
         self.preview_capability = preview_capability
         self.started_at = timestamp()
         self.library = ArtworkLibrary(studio, self.root, repo)
+        self.omp_usage = _usage_backend().OMPUsageProbe(self.root)
         self.lock = threading.RLock()
         self.history = []
         self.last_revision = None
@@ -966,6 +1070,8 @@ class DesignState:
         studio, root = self.studio, self.root
         warnings = ["Worker statuses are reported records, not proof of process liveness."]
         run = studio.read_json(studio.safe_path(root, "run.json"))
+        usage = usage_projection(studio, root, omp_probe=self.omp_usage)
+        warnings.extend(usage.get("warnings", []))
         coverage = studio.read_json(studio.safe_path(root, "coverage.json"))
         decisions, latest = latest_decisions(studio, root)
         evidence = run.get("evidence", [])
@@ -1086,7 +1192,7 @@ class DesignState:
                     decision = latest.get(request["stage"], {})
                     try:
                         inputs = expanded_inputs(studio, root, request["inputs"])
-                        changed = inputs != request["inputs"] or studio.file_digest(root, inputs) != request["inputsDigest"] or digest(canonical(run)) != request["runDigest"]
+                        changed = inputs != request["inputs"] or studio.file_digest(root, inputs) != request["inputsDigest"] or approval_run_digest(run) != request["runDigest"]
                     except (studio.StudioError, OSError, UnicodeError, ValueError, TypeError):
                         changed = True
                     if changed:
@@ -1125,8 +1231,17 @@ class DesignState:
                 "artworks": published_art, "evidence": published_evidence, "approvals": approvals,
                 "decisions": [{key: decision[key] for key in ("stage", "actor", "outcome", "rationale", "recordedAt", "optionId", "inputsDigest", "attachments", "annotations") if key in decision}
                               for decision in decisions["decisions"]]}
+        snap["usage"] = usage
+        if isinstance(run.get("cancellation"), dict):
+            snap["run"]["cancellation"] = dict(run["cancellation"])
         stable = {key: value for key, value in snap.items() if key != "statistics"}
         stable["statistics"] = {key: value for key, value in snap["statistics"].items() if key != "elapsedSeconds"}
+        if isinstance(stable.get("usage"), dict):
+            stable["usage"] = dict(stable["usage"])
+            stable["usage"]["generatedAt"] = None
+            if isinstance(stable["usage"].get("omp"), dict):
+                stable["usage"]["omp"] = dict(stable["usage"]["omp"])
+                stable["usage"]["omp"]["observedAt"] = None
         revision = digest(canonical(stable))
         if revision != self.last_revision:
             self.history.append({"at": timestamp(), "verified": counts["verified"], "required": counts["required"], "passedGates": sum(g["status"] == "passed" for g in gates)})
@@ -1420,6 +1535,32 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self.respond(200, owner.state.snapshot())
                 return
+            if path == "/api/usage":
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                self.respond(200, owner.state.snapshot().get("usage", {}))
+                return
+            if path in {"/api/usage/1h", "/api/usage/24h", "/api/usage/7d", "/api/usage/30d", "/api/usage/90d", "/api/usage/all"}:
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                self.respond(200, usage_projection(owner.studio, owner.root, omp_probe=owner.state.omp_usage, range_key=path.rsplit("/", 1)[1]))
+                return
+            if path == "/api/usage/omp":
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                self.respond(200, owner.state.omp_usage.snapshot(start=True))
+                return
+            if path in ("/api/usage/export.json", "/api/usage/export.csv"):
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                format_name = "csv" if path.endswith(".csv") else "json"
+                content, content_type, filename = usage_export(owner.studio, owner.root, omp_probe=owner.state.omp_usage, format_name=format_name)
+                self.respond(200, content, content_type, extra={"Content-Disposition": f'attachment; filename="{filename}"'})
+                return
             if path.startswith("/preview/"):
                 self.preview(path)
                 return
@@ -1469,7 +1610,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             path = self.request_path()
             shutdown = self.server.shutdown_only
-            if (shutdown and path != "/api/shutdown") or (not shutdown and path != "/api/approval"):
+            if (shutdown and path != "/api/shutdown") or (not shutdown and path not in ("/api/approval", "/api/command", "/api/cancel", "/api/reconcile", "/api/usage")):
                 self.respond(404, {"error": "Not found"})
                 return
             if not self.authorized(owner.shutdown_token if shutdown else owner.token):
@@ -1492,6 +1633,14 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self.respond(200, {"status": "PASS", "instanceId": owner.instance_id})
                 owner.stop.set()
+            elif path == "/api/command":
+                self.respond(200, owner.dispatch_command(payload))
+            elif path == "/api/cancel":
+                self.respond(200, cancel_run(owner.studio, owner.root))
+            elif path == "/api/reconcile":
+                self.respond(200, reconcile_run(owner.studio, owner.root, payload))
+            elif path == "/api/usage":
+                self.respond(200, record_usage(owner.studio, owner.root, payload))
             else:
                 self.respond(200, approve(owner.studio, owner.root, payload, owner.repo))
         except ApprovalConflict as exc:
@@ -1518,6 +1667,13 @@ class DesignServer:
         self.close_lock = threading.RLock()
         self.http = self.local = self.run_lock = self.temporary = self.state = None
         self.threads = []
+
+    def dispatch_command(self, payload):
+        from ui_design_studio.application import dispatch
+        from ui_design_studio.storage import StateStore
+
+        state_root = Path(self.repo or self.root) / ".ui-design-studio" / "prism" / "state.sqlite3"
+        return dispatch(StateStore(state_root), payload)
 
     @property
     def addresses(self):

@@ -1,0 +1,1871 @@
+{
+  "schemaVersion": "1.0.0",
+  "productVersion": "2.0.0",
+  "reviewedBaseline": "60307ef31fd6e2bad1d39620fc507b0b822e281a",
+  "description": "Original proposed implementation requirements; none is marked implemented by this handoff.",
+  "requirements": [
+    {
+      "id": "REQ-DOCS-001",
+      "title": "Record the baseline, target, and capability boundaries",
+      "description": "Maintain an implementation decision record that names the reviewed baseline, current candidate, supported targets, entry points, retained aliases, host capabilities, deferred human research, and explicit non-goals. Discover actual host tools before choosing verification commands.",
+      "milestone": "M0",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-DOCS-001"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-EVIDENCE-001",
+      "title": "Bind evidence to the exact candidate",
+      "description": "Compute a reproducible source fingerprint from commit identity, the current source content including relevant dirty/untracked files, verification plan digest, and artifact identities. Release normally requires a clean tree; permitted intermediate dirty candidates still receive content-bound receipts.",
+      "milestone": "M0",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-EVIDENCE-001"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-CORE-001",
+      "title": "Use one command contract across CLI, MCP, and dashboard",
+      "description": "Route state-changing operations through shared typed command handlers and domain validation. Transport adapters may format protocol-specific responses but must preserve field semantics, authority checks, error identifiers, and side effects.",
+      "milestone": "M1",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-CORE-001"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "reviewed-baseline",
+          "ref": "git:60307ef31fd6e2bad1d39620fc507b0b822e281a",
+          "note": "Approval comment accepted by browser/API but rejected by workflow validation; client/server annotation limits diverge."
+        },
+        {
+          "type": "reference",
+          "ref": "Designing Web APIs, Jin/Sahni/Shevat, first edition 2018",
+          "note": "Supplied PDF pages 61–69, 131–140; principle adapted to this product, not a claim of implementation."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-CORE-002",
+      "title": "Commit state changes atomically with expected revisions",
+      "description": "Use SQLite transactions, integrity constraints, and integer entity revisions for command state changes. Validate expected versions inside the transaction and reject conflicts without losing an earlier successful write.",
+      "milestone": "M1",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-CORE-002",
+        "AC-EVIDENCE-102",
+        "AC-EVIDENCE-103",
+        "AC-EVIDENCE-105"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-CORE-003",
+      "title": "Make retried commands idempotent and reject key reuse",
+      "description": "Persist operation identity and a canonical semantic request hash so replay returns the recorded result without repeating side effects. Reusing a key with a different request must be an explicit conflict.",
+      "milestone": "M1",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-CORE-003",
+        "AC-EVIDENCE-101",
+        "AC-EVIDENCE-104"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "primary-documentation",
+          "ref": "https://www.rfc-editor.org/rfc/rfc9110.html#name-idempotent-methods",
+          "note": "Current primary guidance checked for this handoff; criterion exceptions and product-specific applicability remain explicit."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-CORE-004",
+      "title": "Recover committed outbox work without duplicate effects",
+      "description": "Write domain state and outbox intent atomically. Dispatch and consumer receipts must support replay after crash without inventing exactly-once guarantees for an uncontrolled provider.",
+      "milestone": "M1",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-CORE-004",
+        "AC-EVIDENCE-101"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-CORE-005",
+      "title": "Rebuild projections from authoritative state",
+      "description": "Treat dashboard summaries, indexes, and counters as rebuildable read projections. They must carry a freshness/version marker and cannot override authoritative decisions, ledger entries, or artifact identity.",
+      "milestone": "M1",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-CORE-005",
+        "AC-EVIDENCE-105"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-CORE-006",
+      "title": "Verify immutable content-addressed artifacts",
+      "description": "Store artifact bytes as immutable blobs addressed by digest, with metadata separate from content. Verify integrity when importing and when relying on an artifact for approval or handoff; retain exact base identities across revisions.",
+      "milestone": "M1",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-CORE-006"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-CORE-007",
+      "title": "Negotiate capabilities and preserve documented compatibility",
+      "description": "Version the persisted schema independently from package releases. Report runtime/schema/capability information at adapter connection and retain existing documented aliases through a declared transition.",
+      "milestone": "M1",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-CORE-007"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-MIGRATION-001",
+      "title": "Migrate legacy records by copy with an audit map",
+      "description": "Inventory and back up legacy JSON/files before migration. Import into a separate candidate state store with stable legacy-to-new ID mapping, counts, digests, and validation findings before activating it.",
+      "milestone": "M2",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-EVIDENCE-106",
+        "AC-MIGRATION-001"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-MIGRATION-002",
+      "title": "Make migration repeatable and restartable",
+      "description": "Use a durable migration identity/checkpoint and deterministic legacy mapping so retrying or resuming a migration cannot duplicate entities, decisions, or charges.",
+      "milestone": "M2",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-EVIDENCE-106",
+        "AC-MIGRATION-002"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-MIGRATION-003",
+      "title": "Preserve uncertainty in incomplete legacy data",
+      "description": "Never infer approval, completion, paid cost, currency, model assignment, or evidence freshness from missing legacy fields. Mark uncertainty and offer explicit repair or review steps.",
+      "milestone": "M2",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-MIGRATION-003"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-MIGRATION-004",
+      "title": "Provide verified rollback without overwriting later work",
+      "description": "Retain a tested pre-migration restore point and an activation receipt. Rollback must detect divergent later writes and must not silently overwrite them; portable export provides a recovery path.",
+      "milestone": "M2",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-EVIDENCE-106",
+        "AC-MIGRATION-004"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-MIGRATION-005",
+      "title": "Enforce supported local SQLite storage and backup semantics",
+      "description": "Document and validate a single-host local state path, actual SQLite runtime/source identity, transaction/backup behavior, and lock recovery. Multi-connection WAL requires a verified fix for the documented WAL-reset race: SQLite 3.51.3 or later, recognized fixed backports 3.44.6/3.50.7, or attributable vendor patch evidence. Otherwise block that mode or use a separately reviewed/tested journaling policy. Network filesystem/WAL deployment is unsupported.",
+      "milestone": "M2",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-MIGRATION-005"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "primary-documentation",
+          "ref": "https://www.sqlite.org/wal.html#walreset",
+          "note": "WAL-reset bug and fixed versions verified 2026-11-26; recheck runtime policy at implementation/release."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-APPROVAL-001",
+      "title": "Keep decision feedback semantics consistent",
+      "description": "Specify feedback requirements by decision type. A genuinely optional approval comment may be omitted, null, empty, or whitespace without making a saved approval invalid; required explanations must be validated before submission.",
+      "milestone": "M3",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-APPROVAL-001"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "reviewed-baseline",
+          "ref": "git:60307ef31fd6e2bad1d39620fc507b0b822e281a",
+          "note": "Confirmed optional empty approval feedback mismatch."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-APPROVAL-002",
+      "title": "Invalidate approvals only for relevant dependencies",
+      "description": "Bind approval to exact artifact/component content, dependency revisions, acceptance criteria, and decision scope. Exclude unrelated run progress, UI state, or journal timestamps from the approval fingerprint.",
+      "milestone": "M3",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-APPROVAL-002",
+        "AC-EVIDENCE-102"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "reviewed-baseline",
+          "ref": "git:60307ef31fd6e2bad1d39620fc507b0b822e281a",
+          "note": "Approval freshness currently hashes all run.json, making ordinary phase changes stale."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-APPROVAL-003",
+      "title": "Resolve concurrent terminal decisions deterministically",
+      "description": "A decision request has a versioned terminal lifecycle. Competing accept/cancel/request-changes commands must not overwrite each other; repeated identical commands remain replayable.",
+      "milestone": "M3",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-APPROVAL-003",
+        "AC-EVIDENCE-104",
+        "AC-EVIDENCE-107"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-APPROVAL-004",
+      "title": "Reject stale submissions against changed artifacts",
+      "description": "Submit the artifact/dependency fingerprint and expected decision revision with a decision. Validate both atomically; a stale visible preview cannot authorize unseen replacement content.",
+      "milestone": "M3",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-APPROVAL-004",
+        "AC-EVIDENCE-102"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-APPROVAL-005",
+      "title": "Record truthful decision actors in guided and YOLO modes",
+      "description": "Guided mode requires the relevant user design decision; YOLO may record agent decisions within authorized scope/budget. Record actual actor, mode, rationale and evidence. Neither mode grants new publishing, tool, account, or repository authority.",
+      "milestone": "M3",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-APPROVAL-005"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-APPROVAL-006",
+      "title": "Publish authoritative allowed actions and reasons",
+      "description": "Expose allowable decision and workflow transitions with reason codes from the domain policy. Dashboard and workers must consume these results rather than maintain competing transition logic.",
+      "milestone": "M3",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-APPROVAL-006",
+        "AC-EVIDENCE-105"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-REVISION-001",
+      "title": "Pin focused revision to exact base and annotations",
+      "description": "Create a revision request with exact base artifact digest/revision, selected component IDs, immutable annotation snapshot, intended change, retained constraints, and acceptance conditions.",
+      "milestone": "M3",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-REVISION-001"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-REVISION-002",
+      "title": "Use consistent annotation geometry and bounded payloads",
+      "description": "Define image-relative normalized geometry, coordinate-space identity, finite values, shape semantics, and maximum payload limits in one contract. Shapes end at the final pointer position; client reduction/clamping must preserve intended endpoints and server validity.",
+      "milestone": "M3",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-REVISION-002"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "reviewed-baseline",
+          "ref": "git:60307ef31fd6e2bad1d39620fc507b0b822e281a",
+          "note": "Confirmed second-point endpoint bug, image/stage coordinate mismatch, and client/server128-point disagreement."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-REVISION-003",
+      "title": "Constrain focused revisions to the requested scope",
+      "description": "A revision carries an explicit change set and retained constraints. Worker output must identify intended changes, unexpected affected dependencies, and evidence; expanding scope requires a new authorized plan or decision under the selected mode.",
+      "milestone": "M3",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-REVISION-003"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-REVISION-004",
+      "title": "Decompose work into stable components and dependencies",
+      "description": "Decomposition creates stable component IDs, explicit dependency edges, ownership and acceptance conditions. Detect cycles/ambiguous ownership and retain identities when display names or layouts change.",
+      "milestone": "M3",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-REVISION-004"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-REVISION-005",
+      "title": "Apply batch decisions independently with a replayable receipt",
+      "description": "A batch review returns an independent semantic outcome for each selected component, keeps accepted independent work, and identifies stale/invalid items without silently applying them. Commit valid item decisions, invalid/stale item outcomes and one replayable batch receipt together in one transaction.",
+      "milestone": "M3",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-EVIDENCE-104",
+        "AC-REVISION-005"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-REVISION-006",
+      "title": "Retain revision lineage and detect merge conflicts",
+      "description": "Retain parent/base, affected components, decision history, and merge outcome for each revision. Concurrent changes to shared dependencies require explicit conflict handling instead of last-write-wins replacement.",
+      "milestone": "M3",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-EVIDENCE-102",
+        "AC-REVISION-006"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-BUDGET-001",
+      "title": "Account for design spend in an exact currency ledger",
+      "description": "Track design work separately from implementation/pack-building spend. Store amounts as integer minor units with explicit currency/exponent, operation/category and provenance; never sum mixed currencies without a declared conversion policy.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-BUDGET-001"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-BUDGET-002",
+      "title": "Represent unknown cost and honest enforcement modes",
+      "description": "Distinguish estimate, upper bound, reservation, settled charge and unknown cost. Hard enforcement is available only when controlled dispatch and a defensible maximum charge bound exist; otherwise show advisory enforcement.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-BUDGET-002"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-BUDGET-003",
+      "title": "Reserve design budget atomically under concurrency",
+      "description": "Before controlled design dispatch, reserve a bounded amount inside the authoritative transaction. Enforce settledDesign + activeDesignReservations + proposedReservation <= designCap for the same currency.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-BUDGET-003",
+        "AC-EVIDENCE-101",
+        "AC-EVIDENCE-103"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-BUDGET-004",
+      "title": "Settle charges once and reconcile uncertain outcomes",
+      "description": "Settlement binds the original operation/provider receipt and reconciles its reservation exactly once. A timeout or missing receipt keeps an uncertain charge pending; retry cannot create duplicate paid work or erase potential liability.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-BUDGET-004",
+        "AC-EVIDENCE-101"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-BUDGET-005",
+      "title": "Handle cancellation and refunds without inventing savings",
+      "description": "Differentiate cancel-before-dispatch, cancel-after-dispatch, provider cancellation acknowledgement, and verified refunds. Only confirmed unspent/recovered funds change availability.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-BUDGET-005",
+        "AC-EVIDENCE-107"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-BUDGET-006",
+      "title": "Expose actionable budget state before decisions",
+      "description": "Expose cap, settled design spend, active reservations, remaining available amount, pending uncertainty, proposed next-action bound and enforcement mode through shared projections.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-BUDGET-006",
+        "AC-EVIDENCE-103"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-BUDGET-007",
+      "title": "Budget revisions and decomposition by actual scoped work",
+      "description": "Link estimates/reservations/charges to the specific component batch or focused revision. Preserve accepted independent assets and account for reused work without charging it again as a new generation.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-BUDGET-007"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-MODEL-001",
+      "title": "Apply deterministic model policy precedence on resume",
+      "description": "Resolve model policy in order: explicit invocation override, persisted run settings on resume, project defaults, personal defaults, capability/cost-based auto selection. Record resolved values and origin per role.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-MODEL-001"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-MODEL-002",
+      "title": "Persist role defaults and preserve current-model mode",
+      "description": "Support personal/project role defaults with conflict-safe persistence and maintain an explicit current-model mode that preserves the active session model when capable and permitted.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-MODEL-002"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-MODEL-003",
+      "title": "Report actual capability and observed model assignments",
+      "description": "Discover available model/tool capabilities through the active host and record requested, resolved and actually observed assignments separately. Never claim visual review, concurrency or a model identity solely from a request.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-MODEL-003"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-MODEL-004",
+      "title": "Use current attributable pricing and capability data",
+      "description": "Keep model identifiers, context/tool capabilities, and price inputs externally supplied or discovered with source/time/version. Reject stale or absent data when it is necessary for a hard cost guarantee.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-MODEL-004"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-MODEL-005",
+      "title": "Bound model fallback and disclose its effect",
+      "description": "Fallback must respect task capability, session grants, current-model choice, design budget and role independence. Record the reason and effect; do not silently expand cost or permission.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-MODEL-005"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-WORKER-001",
+      "title": "Include complete scoped instructions in worker packets",
+      "description": "Packet construction includes relevant actual AGENTS instructions, task constraints, immutable inputs, ownership, acceptance IDs, budget/model policy and return contract. Preserve instruction provenance and flag missing required context.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-WORKER-001"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "reviewed-baseline",
+          "ref": "git:60307ef31fd6e2bad1d39620fc507b0b822e281a",
+          "note": "Worker packets omit AGENTS by default."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-WORKER-002",
+      "title": "Grant explicit ownership for existing and new targets",
+      "description": "Represent worker ownership with validated existing paths, allowed new path patterns and logical components. Intersect worker authority with project, session, host and invocation grants; creation does not require a file to already exist.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-WORKER-002"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "reviewed-baseline",
+          "ref": "git:60307ef31fd6e2bad1d39620fc507b0b822e281a",
+          "note": "Existing worker ownership limits target existing run-directory files instead of implementation paths."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-WORKER-003",
+      "title": "Honor configurable and observed worker concurrency",
+      "description": "Compute concurrency from explicit run/project policy, task dependencies, host capacity and budget rather than a fixed constant. Report requested versus actual parallelism; sequential role passes are labeled sequential.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-WORKER-003"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "reviewed-baseline",
+          "ref": "git:60307ef31fd6e2bad1d39620fc507b0b822e281a",
+          "note": "Worker cap hardcoded to3."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-WORKER-004",
+      "title": "Recover worker leases and cancel safely",
+      "description": "Use bounded worker leases/heartbeats and durable task ownership. Detect abandoned work and distinguish safe retry from uncertain charged effects; cancellation propagates without deleting retained evidence.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-WORKER-004"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-WORKER-005",
+      "title": "Validate worker results and integrate by dependency scope",
+      "description": "Worker results identify changed targets, artifact digests, acceptance evidence, risks and actual assignments. The coordinator validates these results and integrates independent changes while surfacing overlap/conflicts.",
+      "milestone": "M4",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-WORKER-005"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "core"
+      ]
+    },
+    {
+      "id": "REQ-UX-001",
+      "title": "Keep current review context visible",
+      "description": "The dashboard presents current run/component/artifact revision, decision status, accepted scope, relevant budget and next action without requiring users to remember prior screens.",
+      "milestone": "M5",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-UX-001"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-UX-002",
+      "title": "Provide stable before-and-after comparison",
+      "description": "Display exact base and proposed revisions with aligned comparison controls and a clear changed-scope summary. Preserve zoom/position when useful and distinguish changed, retained, and invalidated components.",
+      "milestone": "M5",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-UX-002"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-UX-003",
+      "title": "Preserve drafts and show actionable errors",
+      "description": "Retain unsent feedback/annotations across validation errors, stale-state conflicts and recoverable transport failures. Put field errors by their inputs and provide a clear retry/review action without duplicate submission.",
+      "milestone": "M5",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-EVIDENCE-109",
+        "AC-UX-003"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-UX-004",
+      "title": "Show honest progress and cancellation outcomes",
+      "description": "Acknowledge actions promptly, distinguish queued/running/reconciling/completed/failed states, and show real progress only when measurable. Cancellation must reflect actual engine/provider state.",
+      "milestone": "M5",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-EVIDENCE-107",
+        "AC-UX-004"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-UX-005",
+      "title": "Support deliberate decisions with relevant disclosure",
+      "description": "Before a consequential design decision, show the target, changed scope, material consequences and budget effect. Reveal advanced details progressively without hiding essential constraints or creating artificial confirmation steps for routine work.",
+      "milestone": "M5",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-UX-005"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-UX-006",
+      "title": "Keep interactions usable across supported viewport/input modes",
+      "description": "Verify navigation, forms, dialogs, comparison and annotation controls at declared desktop/mobile sizes and keyboard/touch/pointer input modes. Preserve useful state during resize/orientation changes.",
+      "milestone": "M5",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-UX-006"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-A11Y-001",
+      "title": "Provide semantic keyboard interaction and focus management",
+      "description": "Use meaningful roles/names, visible focus, logical order and correct dialog focus containment/return. Every supported dashboard action must be keyboard operable, including error recovery and component decisions.",
+      "milestone": "M5",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-A11Y-001"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "primary-documentation",
+          "ref": "https://www.w3.org/WAI/WCAG22/Understanding/keyboard.html",
+          "note": "Current primary guidance checked for this handoff; criterion exceptions and product-specific applicability remain explicit."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-A11Y-002",
+      "title": "Offer a single-pointer nondrag annotation alternative",
+      "description": "Provide an alternative to dragging for essential annotation operations using a single pointer without holding/dragging, in addition to keyboard access. A component/region list and click-to-set points may implement this requirement.",
+      "milestone": "M5",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-A11Y-002"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "primary-documentation",
+          "ref": "https://www.w3.org/WAI/WCAG22/Understanding/dragging-movements.html",
+          "note": "Current primary guidance checked for this handoff; criterion exceptions and product-specific applicability remain explicit."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-A11Y-003",
+      "title": "Verify contrast, noncolor cues and distinguishable controls",
+      "description": "Meet the declared WCAG 2.2 AA target for applicable text/nontext contrast and control identification. Encode decision/status differences through text/shape/semantics as well as color across supported themes and states.",
+      "milestone": "M5",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-A11Y-003"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "primary-documentation",
+          "ref": "https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html",
+          "note": "Current primary guidance checked for this handoff; criterion exceptions and product-specific applicability remain explicit."
+        },
+        {
+          "type": "primary-documentation",
+          "ref": "https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html",
+          "note": "Current primary guidance checked for this handoff; criterion exceptions and product-specific applicability remain explicit."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-A11Y-004",
+      "title": "Respect reduced motion and expose useful status updates",
+      "description": "Honor reduced-motion settings; do not rely on animation to communicate change. Announce meaningful asynchronous status/errors without repeatedly interrupting reading or stealing focus.",
+      "milestone": "M5",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-A11Y-004"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "primary-documentation",
+          "ref": "https://www.w3.org/TR/WCAG22/",
+          "note": "Current primary guidance checked for this handoff; criterion exceptions and product-specific applicability remain explicit."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-A11Y-005",
+      "title": "Support zoom, reflow and usable target sizes",
+      "description": "Verify applicable WCAG 2.2 AA reflow/zoom and target-size requirements, with documented essential two-dimensional image/canvas exceptions and an accessible equivalent workflow.",
+      "milestone": "M5",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-A11Y-005"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "primary-documentation",
+          "ref": "https://www.w3.org/WAI/WCAG22/Understanding/reflow.html",
+          "note": "Current primary guidance checked for this handoff; criterion exceptions and product-specific applicability remain explicit."
+        },
+        {
+          "type": "primary-documentation",
+          "ref": "https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html",
+          "note": "Current primary guidance checked for this handoff; criterion exceptions and product-specific applicability remain explicit."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-PERF-001",
+      "title": "Measure explicit fixture-specific performance budgets",
+      "description": "Define measured baselines and acceptance budgets for representative run counts, artifact counts/sizes, viewport/device/network assumptions and operations. Treat these as project regression targets, not field Core Web Vitals claims.",
+      "milestone": "M6",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-PERF-001"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-PERF-002",
+      "title": "Bound snapshot work and preserve cursor consistency",
+      "description": "Use bounded indexed/incremental reads with explicit page limits and version/snapshot-aware opaque cursors. Avoid rescanning/re-reading all artifact bytes for every status request.",
+      "milestone": "M6",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-PERF-002"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "reviewed-baseline",
+          "ref": "git:60307ef31fd6e2bad1d39620fc507b0b822e281a",
+          "note": "Status snapshots repeatedly scan/read visual artifacts; full-status polling grows with history."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-PERF-003",
+      "title": "Manage polling and browser work across lifecycle changes",
+      "description": "Avoid overlapping requests and unnecessary full render/redecode work. Pause or reduce polling for hidden/disconnected pages, back off after errors, cancel obsolete requests and preserve active input/focus.",
+      "milestone": "M6",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-PERF-003"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-PERF-004",
+      "title": "Cache only with correct identity and invalidation",
+      "description": "Cache immutable blob metadata/previews by content identity and mutable projections by revision. Prevent cross-project/session leakage and bound memory/disk growth with documented eviction.",
+      "milestone": "M6",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-PERF-004"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-KNOWLEDGE-001",
+      "title": "Retain provenance for every actionable design rule",
+      "description": "Each knowledge rule records stable ID, source title/edition or URL, page/section/date, original synthesis, applicability and confidence. Do not ship uploaded books or copied long extracts in the product or rebuild pack.",
+      "milestone": "M6",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-KNOWLEDGE-001"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-KNOWLEDGE-002",
+      "title": "Represent applicability, uncertainty and conflicting advice",
+      "description": "Separate empirical findings, practitioner heuristics and project policy. Retain limitations/counterexamples and resolve contradictions explicitly; no universal seven-item, 400 ms, conversion or cognitive-score rule is inferred from introductory material.",
+      "milestone": "M6",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-KNOWLEDGE-002"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-KNOWLEDGE-003",
+      "title": "Retrieve a bounded relevant subset of knowledge",
+      "description": "Route compact relevant rules into assessment/planning/design/review workers using explicit context budgets, deduplication and source pointers. Preserve project instructions and acceptance criteria ahead of optional background.",
+      "milestone": "M6",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-KNOWLEDGE-003"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-KNOWLEDGE-004",
+      "title": "Handle missing and untrusted resources transparently",
+      "description": "Treat imported resource content as data, not instructions. Record retrieval/version status, distinguish read material from unavailable links or unwatched videos, and continue useful work with explicit evidence limits.",
+      "milestone": "M6",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-KNOWLEDGE-004"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-THEME-001",
+      "title": "Keep theme install, activation and restore transactional",
+      "description": "Retain theme lifecycle capabilities with planned changes, backups, conflict detection and activation receipts. Theme installation is separate from application activation and can be restored without deleting unrelated work.",
+      "milestone": "M6",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-THEME-001"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-THEME-002",
+      "title": "Validate token coherence and accessible theme states",
+      "description": "A theme provides consistent semantic tokens, component/state mappings and documented override points. Validate generated outputs and applicable accessibility states without assuming aesthetic consistency proves usability.",
+      "milestone": "M6",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-THEME-002"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-THEME-003",
+      "title": "Upgrade themes without losing consumer customizations",
+      "description": "Version theme contracts and retain provenance/compatibility notes. Upgrade through a three-way or explicit conflict-aware process rather than overwriting consumer overrides or accepted design evidence.",
+      "milestone": "M6",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-THEME-003"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-INSTALL-001",
+      "title": "Install through an auditable non-destructive plan",
+      "description": "Project installation targets an explicit existing project root, previews a complete change set and preserves surrounding AGENTS/config/ignore content, permissions, unrelated files and existing application source.",
+      "milestone": "M7",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-INSTALL-001"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-INSTALL-002",
+      "title": "Restore upgrades safely after conflict or interruption",
+      "description": "Installer updates and restore use durable receipts/backups, preserve global runtime/user executables, and refuse to overwrite later edits. Exercise failure injection at copy/config/activation boundaries.",
+      "milestone": "M7",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-EVIDENCE-108",
+        "AC-INSTALL-002"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-INSTALL-003",
+      "title": "Resolve actual project roots and retain public aliases",
+      "description": "Preserve documented ui-design/ui-design-mcp/skill entry aliases through the transition and resolve explicit/non-Git project roots correctly. Resume identity must not depend on a self-invalidating dirty-state snapshot.",
+      "milestone": "M7",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-INSTALL-003"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "reviewed-baseline",
+          "ref": "git:60307ef31fd6e2bad1d39620fc507b0b822e281a",
+          "note": "Non-Git root inference and checkpoint dirty-state self-invalidation defects."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-INSTALL-004",
+      "title": "Verify local MCP and live OMP discovery independently",
+      "description": "Exercise the installed local MCP runtime with a real supported client/transport and verify OMP command/skill discovery using actual host capabilities. Keep source ZIP OMP installation distinct from wheel runtime installation.",
+      "milestone": "M7",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-INSTALL-004"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-INSTALL-005",
+      "title": "Validate the extracted source ZIP in isolation",
+      "description": "Build and extract the release source ZIP outside the checkout, clear source-path leakage, then run its documented installation and verification. All referenced tests/fixtures/docs must be included or the advertised verification corrected.",
+      "milestone": "M7",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-INSTALL-005"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "reviewed-baseline",
+          "ref": "git:60307ef31fd6e2bad1d39620fc507b0b822e281a",
+          "note": "Source ZIP includes tests whose root remediation-document dependency is omitted."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-INSTALL-006",
+      "title": "Build sdist and wheel and test only installed artifacts",
+      "description": "Build an sdist, unpack it away from the checkout, build its wheel there, and install that wheel into a fresh environment. Test public entry points and bundled resources from a nonrepository working directory without editable installs or source-path leakage.",
+      "milestone": "M7",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-EVIDENCE-108",
+        "AC-INSTALL-006"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-INSTALL-007",
+      "title": "Enforce distribution parity and exclude private payloads",
+      "description": "Declare the capability/file matrix for source ZIP, sdist and wheel and validate version/manifests against it. Exclude secrets, project source, user art, local state, caches, environments and uploaded references; retain required licenses and original resource attribution.",
+      "milestone": "M7",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-INSTALL-007"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-SECURITY-001",
+      "title": "Authenticate every protected dashboard and resource route",
+      "description": "Preserve authenticated dashboard/resource access, validate session/capability scope on every request and return safe failures for absent/invalid/expired credentials. Static public bootstrap content must not disclose protected project data.",
+      "milestone": "M7",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-EVIDENCE-109",
+        "AC-SECURITY-001"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-SECURITY-002",
+      "title": "Enforce host origin and CSRF boundaries for mutations",
+      "description": "Validate configured host/origin policy and mutation content/CSRF requirements independently from bearer possession where browser state is involved. Reject cross-site and malformed requests before domain mutation.",
+      "milestone": "M7",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-SECURITY-002"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-SECURITY-003",
+      "title": "Render untrusted text and artwork without script execution",
+      "description": "Treat titles, feedback, annotations, imported knowledge and artwork as untrusted. Use safe text rendering, explicit markup sanitization where needed, appropriate content types/CSP and isolated handling of active formats such as SVG.",
+      "milestone": "M7",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-SECURITY-003"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-SECURITY-004",
+      "title": "Enforce scoped capability and command authority",
+      "description": "Define read, annotate, decide and execute capabilities with project/run/component scope and expiry/revocation. Intersect session/host/project/task grants in domain handlers; reading a resource must not imply write or publication authority.",
+      "milestone": "M7",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-EVIDENCE-109",
+        "AC-SECURITY-004"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-SECURITY-005",
+      "title": "Constrain paths and reject unsafe imported references",
+      "description": "Resolve paths against explicit allowlisted roots, defend against traversal/symlink escapes and validate archive/resource references. Execute argument arrays without shell interpretation; never convert artifact text into executable commands.",
+      "milestone": "M7",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-EVIDENCE-108",
+        "AC-SECURITY-005"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-SECURITY-006",
+      "title": "Make local and LAN exposure explicit and truthful",
+      "description": "Default new installs to loopback unless LAN is deliberately configured; preserve and surface explicit legacy LAN policy during migration. Loopback mode must not require interface discovery. Advertise only observed reachable owned endpoints and generate QR locally.",
+      "milestone": "M7",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-SECURITY-006"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "reviewed-baseline",
+          "ref": "git:60307ef31fd6e2bad1d39620fc507b0b822e281a",
+          "note": "Loopback startup unconditionally discovers LAN and fails when psutil.net_if_addrs is forbidden; baseline default LAN behavior must be documented accurately."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-SECURITY-007",
+      "title": "Redact credentials and protect operational state",
+      "description": "Restrict credentials/state/backups to appropriate local permissions; rotate/expire capability material under a documented lifecycle. Redact tokens, private paths and sensitive project content from logs, evidence, exports and support bundles according to explicit data policy.",
+      "milestone": "M7",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-SECURITY-007"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-DOCS-002",
+      "title": "Deliver executable first-success and recovery documentation",
+      "description": "Document supported installation paths, current aliases, project-root selection, decision/budget/model semantics, migration/restore and error recovery. Verify a first-success journey through real artifact creation/review/decision/resume in each advertised distribution workflow.",
+      "milestone": "M7",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-DOCS-002"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "web"
+      ]
+    },
+    {
+      "id": "REQ-EVIDENCE-002",
+      "title": "Require actual successful gate execution and evidence",
+      "description": "A gate passes only after its reviewed argv commands actually execute successfully against the current candidate, cover required acceptance cases and produce inspectable evidence. Missing commands, plans, dry runs, skips, timeouts, nonzero exits and absent evidence do not satisfy required tests.",
+      "milestone": "M8",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-EVIDENCE-002",
+        "AC-EVIDENCE-110"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "release"
+      ]
+    },
+    {
+      "id": "REQ-EVIDENCE-003",
+      "title": "Perform substantive review with truthful independence",
+      "description": "Use a genuinely distinct reviewer where available and record identity, scope, findings and evidence-linked acceptance mapping. If independence is unavailable, use an explicit sequential-role fallback with reason and limited-assurance label; never fabricate an independent reviewer.",
+      "milestone": "M8",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-EVIDENCE-003"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "release"
+      ]
+    },
+    {
+      "id": "REQ-EVIDENCE-004",
+      "title": "Run the required real browser release matrix",
+      "description": "Follow baseline AGENTS browser QA routing: use installed playwright_fast or /pw-fast plan then actual affected/quick Chromium for routine browser work; release uses matrix/full across configured Chromium, Firefox and WebKit projects. Retain real interaction/visual evidence; a mocked DOM or plan is not a browser pass.",
+      "milestone": "M8",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-EVIDENCE-004",
+        "AC-EVIDENCE-110"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        },
+        {
+          "type": "project-instruction",
+          "ref": "git:60307ef31fd6e2bad1d39620fc507b0b822e281a:AGENTS.md",
+          "note": "Browser QA routing and release matrix are required for the supported web product."
+        }
+      ],
+      "applicability": [
+        "release"
+      ]
+    },
+    {
+      "id": "REQ-EVIDENCE-005",
+      "title": "Bind release artifacts and readiness to one candidate",
+      "description": "Build final distributions from the verified candidate and bind their SHA256 digests, manifests, version, source fingerprint and verification plan to a release readiness receipt. Changing source or rebuilding differing bytes requires the relevant checks again.",
+      "milestone": "M8",
+      "priority": "P0",
+      "acceptanceIds": [
+        "AC-EVIDENCE-005"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "release"
+      ]
+    },
+    {
+      "id": "REQ-EVIDENCE-006",
+      "title": "Report deferred human research and target-specific limits honestly",
+      "description": "Human participant research is DEFERRED by policy and is not a required automated-release gate. Report it separately from automated checks. Native/offline/platform-specific checks apply only to declared targets; automated web/browser/accessibility checks remain required for the supported web release.",
+      "milestone": "M8",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-EVIDENCE-006",
+        "AC-EVIDENCE-110"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "release"
+      ]
+    },
+    {
+      "id": "REQ-DOCS-003",
+      "title": "Ship a precise release and operational handoff",
+      "description": "Release documentation states what changed, why, compatibility/migration steps, actual verification, known limits, rollback/restore instructions, artifact identities and support procedures. Include retained aliases and the transition policy; avoid claiming the implementation handoff itself is rebuilt software.",
+      "milestone": "M8",
+      "priority": "P1",
+      "acceptanceIds": [
+        "AC-DOCS-003",
+        "AC-EVIDENCE-110"
+      ],
+      "source": [
+        {
+          "type": "project-policy",
+          "ref": "PACK-CONVENTIONS.md",
+          "note": "Proposed v2 behavior; implementation is not supplied by this handoff."
+        }
+      ],
+      "applicability": [
+        "release"
+      ]
+    }
+  ]
+}

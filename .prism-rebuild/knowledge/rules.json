@@ -1,0 +1,870 @@
+{
+  "schemaVersion": "1.0.0",
+  "reviewedAt": "2026-11-26",
+  "scope": "Original conditional rules for PRISM Studio rebuild and future product workflows; not installed application behaviour.",
+  "ruleCount": 40,
+  "rules": [
+    {
+      "id": "PR-001",
+      "topic": "task",
+      "principle": "Design around the user's task and constraints.",
+      "appliesWhen": "Starting or reassessing a screen, flow or run.",
+      "action": "State the intended user, task, success condition and constraints before choosing layouts or infrastructure.",
+      "check": "The proposed flow exposes a recognizable next action and an observable success condition.",
+      "exceptions": [
+        "Exploratory discovery can keep hypotheses open; label them instead of inventing certainty."
+      ],
+      "sourceIds": [
+        "B10",
+        "B09",
+        "U07"
+      ],
+      "sourceLocators": {
+        "B10": "PDF pp8–18",
+        "B09": "PDF pp61–65",
+        "U07": "Primary task and testing sections"
+      },
+      "authority": "source-informed-heuristic"
+    },
+    {
+      "id": "PR-002",
+      "topic": "knowledge",
+      "principle": "Keep observations, policy and proposals distinguishable.",
+      "appliesWhen": "Recording findings, decisions or implementation guidance.",
+      "action": "Label current behaviour, proposed behaviour, user decisions, source advice and measured results separately.",
+      "check": "A reader can identify what exists, what is intended and what evidence supports each material claim.",
+      "exceptions": [
+        "An unresolved fact remains unknown; a confident writing style does not change its status."
+      ],
+      "sourceIds": [
+        "PROJECT",
+        "B08"
+      ],
+      "sourceLocators": {
+        "PROJECT": "Pack claim boundaries",
+        "B08": "PDF pp41–45"
+      },
+      "authority": "project-policy"
+    },
+    {
+      "id": "PR-003",
+      "topic": "knowledge",
+      "principle": "Retrieve the smallest context sufficient for the task.",
+      "appliesWhen": "Building a worker packet or selecting references.",
+      "action": "Include the active skill, correct repository instructions, exact inputs, owned scope and selected rule IDs; retrieve source sections on demand.",
+      "check": "Packet size and sources are recorded; AGENTS and required contracts are present without whole-book injection.",
+      "exceptions": [
+        "Expand context when a concrete unresolved risk requires it; do not omit necessary evidence merely to hit a token target."
+      ],
+      "sourceIds": [
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "PROJECT": "docs/SKILLS-AND-CONTEXT.md"
+      },
+      "authority": "project-policy"
+    },
+    {
+      "id": "PR-004",
+      "topic": "knowledge",
+      "principle": "Check the version and authority of operational advice.",
+      "appliesWhen": "Using prices, protocols, models, host flags or historical code.",
+      "action": "Resolve current primary documentation or observed capabilities and retain the source date and applicable version.",
+      "check": "No retired recipe or unverified model/price is presented as current capability.",
+      "exceptions": [
+        "Durable conceptual reasoning may remain useful without re-reading the whole source."
+      ],
+      "sourceIds": [
+        "B02",
+        "B05",
+        "P08",
+        "P09",
+        "P10",
+        "P11",
+        "P06"
+      ],
+      "sourceLocators": {
+        "B02": "PDF pp410–411",
+        "B05": "PDF pp67,240–268",
+        "P08": "SOURCES.md P08",
+        "P09": "SOURCES.md P09",
+        "P10": "SOURCES.md P10",
+        "P11": "SOURCES.md P11",
+        "P06": "Section 2.4"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-005",
+      "topic": "cognition",
+      "principle": "Treat psychology and visual heuristics as conditional.",
+      "appliesWhen": "Using a named law, count limit or example to justify a design.",
+      "action": "Explain the relevant task and tradeoff; externalize required information and evaluate actual behaviour.",
+      "check": "No universal menu count, ROI promise or unsupported causal score is used as a gate.",
+      "exceptions": [
+        "Directly applicable primary evidence can support a narrower quantitative claim with its conditions."
+      ],
+      "sourceIds": [
+        "C01",
+        "C06",
+        "P15",
+        "P16"
+      ],
+      "sourceLocators": {
+        "C01": "Study-guide scope",
+        "C06": "Cognitive walkthrough and memory discussion",
+        "P15": "SOURCES.md P15",
+        "P16": "Memory capacity qualifications"
+      },
+      "authority": "source-informed-heuristic"
+    },
+    {
+      "id": "PR-006",
+      "topic": "interaction",
+      "principle": "Keep frequent actions visible and disclose rare complexity.",
+      "appliesWhen": "Balancing novice guidance with expert repeat work.",
+      "action": "Group information by task, expose common actions and preserve optional expansion state; test the added effort of hidden controls.",
+      "check": "The primary repeat task does not require avoidable disclosure on every pass.",
+      "exceptions": [
+        "A dense professional surface can be appropriate; progressive disclosure is not a universal reduction in controls."
+      ],
+      "sourceIds": [
+        "B10",
+        "U07",
+        "U11"
+      ],
+      "sourceLocators": {
+        "B10": "PDF p69",
+        "U07": "Progressive disclosure versus power-user tools",
+        "U11": "Expert and guided pattern contrast"
+      },
+      "authority": "source-informed-heuristic"
+    },
+    {
+      "id": "PR-007",
+      "topic": "accessibility",
+      "principle": "Name controls and errors by their user-facing purpose.",
+      "appliesWhen": "Creating buttons, form fields, navigation or validation.",
+      "action": "Use meaningful accessible names, visible labels where needed, linked field errors and recovery instructions.",
+      "check": "Keyboard and accessible-tree checks identify each control and correction without relying on placeholder or colour.",
+      "exceptions": [
+        "An established icon can be visually compact, but its accessible name and context remain necessary."
+      ],
+      "sourceIds": [
+        "B07",
+        "P01",
+        "B10"
+      ],
+      "sourceLocators": {
+        "B07": "PDF pp47–55",
+        "B10": "PDF pp48–54 read in context",
+        "P01": "SC 3.3.1, 3.3.2, 4.1.2"
+      },
+      "authority": "standard"
+    },
+    {
+      "id": "PR-008",
+      "topic": "visual-design",
+      "principle": "Separate visual priority from semantic structure.",
+      "appliesWhen": "Styling headings, labels, actions or dense information.",
+      "action": "Use size, weight, contrast and spacing to express priority while preserving correct headings, labels and reading order.",
+      "check": "The visual and semantic structures support the same task; style changes do not remove names or meaning.",
+      "exceptions": [
+        "Secondary text still needs applicable contrast; semantic correctness does not mandate identical visual weight."
+      ],
+      "sourceIds": [
+        "B10",
+        "P01"
+      ],
+      "sourceLocators": {
+        "B10": "PDF pp35–62, especially p54",
+        "P01": "SC 1.3.1 and 1.3.2"
+      },
+      "authority": "source-informed-heuristic"
+    },
+    {
+      "id": "PR-009",
+      "topic": "visual-design",
+      "principle": "Use coherent tokens with verified state combinations.",
+      "appliesWhen": "Creating or changing a theme or shared component.",
+      "action": "Define semantic colours, typography, spacing, focus and motion states; test actual backgrounds and interactions.",
+      "check": "Supported themes pass applicable contrast/focus checks and preserve recognizable state meaning.",
+      "exceptions": [
+        "An existing sound system can be reused; no specific spacing grid or font count is compulsory."
+      ],
+      "sourceIds": [
+        "B10",
+        "U07",
+        "P01",
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "B10": "PDF pp70–73,102–106,142–166",
+        "U07": "SOURCES.md U07",
+        "P01": "SOURCES.md P01",
+        "PROJECT": "Theme lifecycle"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-010",
+      "topic": "responsive",
+      "principle": "Adapt to content and input capability.",
+      "appliesWhen": "Designing desktop, narrow, touch or zoomed layouts.",
+      "action": "Keep the expert task usable while supporting reflow, reachable controls and appropriate coarse-pointer targets.",
+      "check": "Exercise narrow/wide, keyboard/touch and enlarged layouts; record any criterion-specific two-dimensional exception.",
+      "exceptions": [
+        "A canvas or table may legitimately require two-dimensional navigation; surrounding controls still need usable reflow."
+      ],
+      "sourceIds": [
+        "P01",
+        "U07",
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "P01": "SC 1.4.4 and 1.4.10",
+        "U07": "Responsive design section",
+        "PROJECT": "Desktop expert context"
+      },
+      "authority": "standard"
+    },
+    {
+      "id": "PR-011",
+      "topic": "accessibility",
+      "principle": "Preserve predictable keyboard and focus behaviour.",
+      "appliesWhen": "Implementing navigation, dialogs, updates or composite widgets.",
+      "action": "Use native patterns, visible focus, logical movement, sensible dialog focus return and no focus theft during background updates.",
+      "check": "Complete the primary flows with keyboard controls and verify active focus after updates and dialog exit.",
+      "exceptions": [
+        "Use conventional roving-focus patterns inside composites; every internal element need not be a separate Tab stop."
+      ],
+      "sourceIds": [
+        "P01"
+      ],
+      "sourceLocators": {
+        "P01": "SC 2.1.1, 2.1.2, 2.4.3, 2.4.7, 2.4.11"
+      },
+      "authority": "standard"
+    },
+    {
+      "id": "PR-012",
+      "topic": "accessibility",
+      "principle": "Provide a distinct non-drag pointer path.",
+      "appliesWhen": "An interaction uses dragging.",
+      "action": "Offer click/tap endpoints, move controls or an equivalent input for the same result, in addition to keyboard support.",
+      "check": "Complete the operation using a single pointer without dragging; document any narrow essential exception.",
+      "exceptions": [
+        "Essential freehand behaviour may need a criterion-specific exception; this does not exempt selection, movement or other controls."
+      ],
+      "sourceIds": [
+        "P01",
+        "P02"
+      ],
+      "sourceLocators": {
+        "P01": "SC 2.5.7",
+        "P02": "Intent and separation from keyboard accessibility"
+      },
+      "authority": "standard"
+    },
+    {
+      "id": "PR-013",
+      "topic": "accessibility",
+      "principle": "Measure hit areas and spacing rather than icon size alone.",
+      "appliesWhen": "Building pointer controls or dense action groups.",
+      "action": "Meet applicable SC 2.5.8 size or exception conditions; prefer larger primary touch targets where feasible.",
+      "check": "Measure actual hit boxes and spacing in each supported layout.",
+      "exceptions": [
+        "WCAG AA, AAA and native-platform points are distinct; do not present 44 CSS px as the universal AA minimum."
+      ],
+      "sourceIds": [
+        "P01"
+      ],
+      "sourceLocators": {
+        "P01": "SC 2.5.8 and 2.5.5"
+      },
+      "authority": "standard"
+    },
+    {
+      "id": "PR-014",
+      "topic": "accessibility",
+      "principle": "Keep state legible without colour alone.",
+      "appliesWhen": "Displaying decisions, connection, errors, budget or charts.",
+      "action": "Pair colour with text, symbols or structure and meet applicable text/non-text contrast.",
+      "check": "All supported themes and relevant states remain distinguishable in non-colour and contrast checks.",
+      "exceptions": [
+        "Do not infer overall accessibility conformance from one contrast measurement."
+      ],
+      "sourceIds": [
+        "B10",
+        "P01"
+      ],
+      "sourceLocators": {
+        "B10": "PDF pp162–168",
+        "P01": "SC 1.4.1, 1.4.3, 1.4.11"
+      },
+      "authority": "standard"
+    },
+    {
+      "id": "PR-015",
+      "topic": "feedback",
+      "principle": "Provide truthful feedback without distracting repetition.",
+      "appliesWhen": "Work is slow, asynchronous or repeatedly refreshed.",
+      "action": "Acknowledge actions, show actual known progress, preserve cancel/recovery and announce meaningful milestones with reduced-motion support.",
+      "check": "A stalled task is distinguishable from activity; polling does not steal focus or repeatedly flood announcements.",
+      "exceptions": [
+        "Use indeterminate progress when a percentage is unknown; do not simulate effort or completion."
+      ],
+      "sourceIds": [
+        "B03",
+        "P01",
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "B03": "PDF p10",
+        "P01": "SC 4.1.3; relevant motion criteria",
+        "PROJECT": "Honest progress policy"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-016",
+      "topic": "accessibility",
+      "principle": "Choose image alternatives by purpose.",
+      "appliesWhen": "Adding an image, icon, chart or artifact preview.",
+      "action": "Describe meaningful information or function; use empty alt for appropriate decorative images; expose artifact metadata and useful text context.",
+      "check": "Alternative text matches the role and does not duplicate decorative noise.",
+      "exceptions": [
+        "Complex visual work may need an adjacent description or data view beyond a short alt attribute."
+      ],
+      "sourceIds": [
+        "P01",
+        "P03"
+      ],
+      "sourceLocators": {
+        "P01": "SC 1.1.1",
+        "P03": "Decorative image guidance"
+      },
+      "authority": "standard"
+    },
+    {
+      "id": "PR-017",
+      "topic": "artifacts",
+      "principle": "Review real immutable artifacts and identify derivatives.",
+      "appliesWhen": "Presenting work for approval or comparison.",
+      "action": "Render the retained artifact safely, label version/source, and keep full-resolution access; distinguish preview captures from authoritative source bytes.",
+      "check": "A reviewer can identify and inspect the exact version being decided on; failed rendering is visible.",
+      "exceptions": [
+        "Unsupported formats remain unsupported; a placeholder or successful thumbnail does not prove source rendering."
+      ],
+      "sourceIds": [
+        "B04",
+        "B10",
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "B04": "PDF pp251–260",
+        "B10": "PDF pp208–216",
+        "PROJECT": "Real artifact review"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-018",
+      "topic": "approval",
+      "principle": "Bind decisions to exact relevant inputs.",
+      "appliesWhen": "Recording an approval, rejection or change request.",
+      "action": "Use the artifact/component version, dependency fingerprint and expected request revision; record actor and optional/conditional fields consistently.",
+      "check": "The same valid decision succeeds through CLI/MCP/dashboard; stale relevant inputs fail with a recoverable conflict.",
+      "exceptions": [
+        "Unrelated run metadata or displayed stage changes must not invalidate an applicable decision."
+      ],
+      "sourceIds": [
+        "B08",
+        "B06",
+        "B09",
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "B08": "PDF pp71–90",
+        "B06": "PDF pp120–124",
+        "B09": "PDF pp131–140",
+        "PROJECT": "Dependency-scoped approvals"
+      },
+      "authority": "project-policy"
+    },
+    {
+      "id": "PR-019",
+      "topic": "approval",
+      "principle": "Invalidate by dependency rather than by whole-run churn.",
+      "appliesWhen": "A component, artifact, setting or dependency changes.",
+      "action": "Recompute applicability only for affected versioned inputs and dependents; retain historical decisions and unaffected accepted versions.",
+      "check": "Changing an independent component preserves existing applicable approvals; changing a required dependency makes the impact visible.",
+      "exceptions": [
+        "A shared integration/theme dependency can legitimately affect many components when it is actually recorded."
+      ],
+      "sourceIds": [
+        "B04",
+        "B08",
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "B04": "PDF pp229–235",
+        "B08": "PDF pp71–90",
+        "PROJECT": "Partial approval policy"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-020",
+      "topic": "revision",
+      "principle": "Pin focused revision scope before generation.",
+      "appliesWhen": "A user requests a localized design change.",
+      "action": "Persist exact base version/digest, annotation revision, component IDs, instructions, protected areas and acceptance checks; resolve stale bases explicitly.",
+      "check": "The output has new immutable identity and a checkable change summary; protected areas are compared.",
+      "exceptions": [
+        "Do not guarantee identical surrounding pixels unless the implementation proves it; report unavoidable spillover."
+      ],
+      "sourceIds": [
+        "B04",
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "B04": "PDF pp251–260",
+        "PROJECT": "Focused revisions"
+      },
+      "authority": "project-policy"
+    },
+    {
+      "id": "PR-021",
+      "topic": "revision",
+      "principle": "Use artifact coordinates and explicit shape bounds.",
+      "appliesWhen": "Capturing or persisting annotations.",
+      "action": "Translate from the actual displayed image to normalized original-image coordinates; use start/latest end for two-point shapes and consistent advertised limits.",
+      "check": "Check letterboxing, zoom, pan, resize and boundary points; client and server accept the same representation.",
+      "exceptions": [
+        "HTML/PDF annotation uses an immutable image capture with source dependency; never silently reuse an old overlay on a new base."
+      ],
+      "sourceIds": [
+        "PROJECT",
+        "B07"
+      ],
+      "sourceLocators": {
+        "PROJECT": "Annotation contract",
+        "B07": "PDF pp33–55"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-022",
+      "topic": "revision",
+      "principle": "Decompose into stable components with versioned dependencies.",
+      "appliesWhen": "A design needs independently reviewable or revisable parts.",
+      "action": "Assign logical component IDs, exact input versions and an acyclic dependency graph; expose a decomposition preview before dispatch.",
+      "check": "Independent work can proceed and changed dependencies are detectable without guessing from filenames.",
+      "exceptions": [
+        "Decomposition does not fabricate acceptance of extracted components or require distributed services."
+      ],
+      "sourceIds": [
+        "B04",
+        "B08",
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "B04": "PDF pp229–235",
+        "B08": "PDF pp21–47",
+        "PROJECT": "Decompose-and-re-request"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-023",
+      "topic": "revision",
+      "principle": "Make batch decisions independently accountable.",
+      "appliesWhen": "Submitting decisions for several components.",
+      "action": "Validate each exact component/version and return per-item outcomes plus an idempotent batch receipt; preserve successful independent items.",
+      "check": "A conflict in one item neither silently accepts it nor discards unrelated successful decisions.",
+      "exceptions": [
+        "A composition still needs integration checks; per-component acceptance does not imply whole-product acceptance."
+      ],
+      "sourceIds": [
+        "B09",
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "B09": "PDF pp61–73,131–155",
+        "PROJECT": "Partial approvals and batch outcomes"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-024",
+      "topic": "authority",
+      "principle": "Separate design autonomy from permissions and money.",
+      "appliesWhen": "Selecting Guided/YOLO mode or deciding a next action.",
+      "action": "Persist mode; obtain required guided design decisions or record delegated agent choices; preserve user decisions in either mode and enforce existing scope/cap limits.",
+      "check": "Every decision identifies its actor; mode changes do not rewrite history or create publication authority.",
+      "exceptions": [
+        "Routine already-authorized work continues without redundant permission requests."
+      ],
+      "sourceIds": [
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "PROJECT": "Decisions and modes"
+      },
+      "authority": "project-policy"
+    },
+    {
+      "id": "PR-025",
+      "topic": "budget",
+      "principle": "Count design spend in an explicit currency.",
+      "appliesWhen": "Creating a budget or recording a charge.",
+      "action": "Separate design from implementation/pack-building costs; record estimates, reservations, settled charges, refunds and unknown exposure with exact arithmetic.",
+      "check": "The displayed totals reconcile to ledger entries and never treat unknown cost as zero or combine currencies silently.",
+      "exceptions": [
+        "Critique belongs to design spend when configured; conversion requires explicit rate, time and policy."
+      ],
+      "sourceIds": [
+        "PROJECT",
+        "B04"
+      ],
+      "sourceLocators": {
+        "PROJECT": "Design-only budget policy",
+        "B04": "PDF pp34–40"
+      },
+      "authority": "project-policy"
+    },
+    {
+      "id": "PR-026",
+      "topic": "budget",
+      "principle": "Reserve bounded cost before controlled dispatch.",
+      "appliesWhen": "A paid design attempt is about to run.",
+      "action": "Atomically verify capacity, reserve an admissible bound and persist attempt identity before dispatch through the controlled path.",
+      "check": "Concurrent admissions cannot claim the same available money; all paid attempts follow the same route.",
+      "exceptions": [
+        "If provider/host charges cannot be bounded or controlled, label enforcement advisory instead of claiming a hard cap."
+      ],
+      "sourceIds": [
+        "PROJECT",
+        "B06",
+        "B08"
+      ],
+      "sourceLocators": {
+        "PROJECT": "Hard/advisory budget enforcement",
+        "B06": "PDF pp157–160",
+        "B08": "PDF p96"
+      },
+      "authority": "project-policy"
+    },
+    {
+      "id": "PR-027",
+      "topic": "budget",
+      "principle": "Reconcile uncertain effects before retrying.",
+      "appliesWhen": "A billable call times out, crashes or is cancelled.",
+      "action": "Keep execution identity and unresolved exposure; inspect provider receipts, settle known results and retry only under the explicit duplicate-risk policy.",
+      "check": "Replaying state or retrying a request does not silently trigger a second paid generation.",
+      "exceptions": [
+        "A cancellation request does not prove stopped billing, failure or refund."
+      ],
+      "sourceIds": [
+        "B06",
+        "B09",
+        "P04",
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "B06": "PDF pp126–135",
+        "B09": "PDF p129",
+        "P04": "Section 9.2.2",
+        "PROJECT": "Budget reconciliation"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-028",
+      "topic": "models",
+      "principle": "Persist model policy with explicit precedence.",
+      "appliesWhen": "Starting, resuming or changing run settings.",
+      "action": "Apply invocation override, persisted run settings, project defaults, personal defaults, then capability/cost-based auto selection; support current-model mode.",
+      "check": "Resume preserves the run policy and the UI explains inherited versus overridden settings.",
+      "exceptions": [
+        "Applying new defaults to an existing run is an explicit recorded change, not a silent migration."
+      ],
+      "sourceIds": [
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "PROJECT": "Model policy precedence"
+      },
+      "authority": "project-policy"
+    },
+    {
+      "id": "PR-029",
+      "topic": "models",
+      "principle": "Report actual model capability and cost uncertainty.",
+      "appliesWhen": "Assigning a role to a provider/model or choosing a fallback.",
+      "action": "Validate available modalities/tools, current pricing provenance and permitted fallback; record requested and observed assignments separately.",
+      "check": "No hardcoded unavailable model or unsupported enforcement claim reaches a worker packet.",
+      "exceptions": [
+        "If the host cannot control selection, state that limitation and use only an allowed compatible fallback."
+      ],
+      "sourceIds": [
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "PROJECT": "Capability routing and observed assignments"
+      },
+      "authority": "project-policy"
+    },
+    {
+      "id": "PR-030",
+      "topic": "scheduling",
+      "principle": "Bound work and expose the reason for waiting.",
+      "appliesWhen": "Queuing workers, rendering jobs or provider attempts.",
+      "action": "Account separately for dependencies, worker slots, rate limits, reservations, cancellation and user holds.",
+      "check": "Queue depth and wait reason are observable; a saturated subsystem cannot block existing artifact review indefinitely.",
+      "exceptions": [
+        "A queue absorbs bursts but does not create capacity; more workers are not a universal fix."
+      ],
+      "sourceIds": [
+        "B03",
+        "B04",
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "B03": "PDF pp15,17–19",
+        "B04": "PDF pp51–69,229–235",
+        "PROJECT": "Bounded worker policy"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-031",
+      "topic": "contracts",
+      "principle": "Use one command policy and stable machine errors.",
+      "appliesWhen": "Implementing CLI, MCP or HTTP operations.",
+      "action": "Route adapters through shared validation/handlers; return a stable error identifier, safe details, field location and recovery action.",
+      "check": "Optional/null/empty fields, bounds and allowed actions have equivalent semantics across interfaces.",
+      "exceptions": [
+        "HTTP Problem Details can be an HTTP mapping; do not impose HTTP status mechanics on every transport."
+      ],
+      "sourceIds": [
+        "B07",
+        "B09",
+        "P07"
+      ],
+      "sourceLocators": {
+        "B07": "PDF pp21–55",
+        "B09": "PDF pp61–73,131–140",
+        "P07": "Problem Details"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-032",
+      "topic": "state",
+      "principle": "Commit authoritative state before publishing read views.",
+      "appliesWhen": "Persisting a workflow transition or refreshing the dashboard.",
+      "action": "Record state and event/outbox atomically; publish committed facts and rebuild small projections; show the committed result after writes.",
+      "check": "Crash recovery cannot expose an uncommitted approval; a lagging projection does not undo visible acknowledgement.",
+      "exceptions": [
+        "A full event-sourced architecture or broker is unnecessary to gain transactional records and derived views."
+      ],
+      "sourceIds": [
+        "B08",
+        "B06",
+        "P21",
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "B08": "PDF pp96–98",
+        "B06": "PDF pp74–87,118–124",
+        "P21": "SOURCES.md P21",
+        "PROJECT": "Transactional SQLite architecture"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-033",
+      "topic": "performance",
+      "principle": "Measure named scenarios before choosing optimizations.",
+      "appliesWhen": "Setting a performance gate or claiming improvement.",
+      "action": "Record environment, fixture, cache state, samples and metric; separate computation, transfer, rendering and workflow latency.",
+      "check": "The comparison uses equivalent conditions and raw observations; synthetic results are not presented as field Web Vitals.",
+      "exceptions": [
+        "Thresholds are profile-specific project targets unless a scoped standard or research result says otherwise."
+      ],
+      "sourceIds": [
+        "B02",
+        "B05",
+        "P14",
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "B02": "PDF pp25–35",
+        "B05": "PDF pp191–215",
+        "P14": "SOURCES.md P14",
+        "PROJECT": "Performance fixture protocol"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-034",
+      "topic": "performance",
+      "principle": "Avoid rereading unchanged artifact bytes for status.",
+      "appliesWhen": "Constructing snapshots, history lists or preview metadata.",
+      "action": "Use bounded projections, pagination and relevant invalidation; keep original blobs out of routine status payloads.",
+      "check": "The unchanged warm snapshot path performs no original-blob rereads and large history remains bounded.",
+      "exceptions": [
+        "Approval/content-integrity boundaries still verify the relevant actual bytes; preview caches cannot substitute for that evidence."
+      ],
+      "sourceIds": [
+        "B02",
+        "B04",
+        "B06",
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "B02": "PDF p441",
+        "B04": "PDF pp172–175",
+        "B06": "PDF pp103–112",
+        "PROJECT": "Snapshot and integrity boundaries"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-035",
+      "topic": "performance",
+      "principle": "Match refresh transport to actual update needs.",
+      "appliesWhen": "Polling or streaming dashboard state.",
+      "action": "Preserve single-flight cancellation and lifecycle recovery; adapt hidden/idle/error refresh and support revision-based catch-up before adopting streams.",
+      "check": "There is no overlapping poll or stale overwrite; reconnect restores current state and relevant events.",
+      "exceptions": [
+        "Native EventSource lacks arbitrary Authorization headers; use an appropriate authenticated design and never put capabilities in URLs for convenience."
+      ],
+      "sourceIds": [
+        "B05",
+        "P25",
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "B05": "PDF pp167–180,321–328",
+        "P25": "EventSource interface and reconnection",
+        "PROJECT": "Capability-authenticated dashboard"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-036",
+      "topic": "performance",
+      "principle": "Cache by sensitivity and immutable identity.",
+      "appliesWhen": "Setting asset, snapshot or approval cache policy.",
+      "action": "Distinguish reusable non-sensitive shell assets from private workflow data; invalidate derivatives by source identity.",
+      "check": "No stale or shared cache can silently substitute a different artifact/decision, and credentials are excluded from cached/exported material.",
+      "exceptions": [
+        "Aggressive asset caching is conditional; do not globally relax private no-store policy because a book recommends caching."
+      ],
+      "sourceIds": [
+        "B02",
+        "B05",
+        "P05"
+      ],
+      "sourceLocators": {
+        "B02": "PDF pp63–77",
+        "B05": "PDF pp269–290",
+        "P05": "Authenticated/private cache semantics"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-037",
+      "topic": "implementation",
+      "principle": "Give mutable state and asynchronous lifetimes explicit owners.",
+      "appliesWhen": "Refactoring dashboard JavaScript or diagnosing stale work.",
+      "action": "Separate transport, rendering and draft ownership; copy deliberately, compare identity/revisions and cancel or ignore obsolete callbacks.",
+      "check": "Repeated open/close and token/run changes leave no unbounded retained work or stale state overwrite.",
+      "exceptions": [
+        "Do not replace understandable code with a class hierarchy, framework or micro-optimization without a concrete benefit."
+      ],
+      "sourceIds": [
+        "B01",
+        "P13",
+        "P18"
+      ],
+      "sourceLocators": {
+        "B01": "PDF pp52–65,72–75,92–93",
+        "P13": "Layout read/write behaviour",
+        "P18": "Reachability and GC"
+      },
+      "authority": "engineering-proposal"
+    },
+    {
+      "id": "PR-038",
+      "topic": "themes",
+      "principle": "Make theme lifecycle scoped and reversible.",
+      "appliesWhen": "Previewing, installing, activating, restoring or removing a theme.",
+      "action": "Distinguish dashboard, generated-design and OMP-host scope; validate tokens, stage files, preserve originals and record ownership/activation receipts.",
+      "check": "Restore affects only unchanged receipt-owned additions; conflicts and unavailable host actions are visible.",
+      "exceptions": [
+        "A file copy is not verified host activation; colour preference alone does not authorize replacing host configuration."
+      ],
+      "sourceIds": [
+        "PROJECT",
+        "P01",
+        "B10"
+      ],
+      "sourceLocators": {
+        "PROJECT": "Theme lifecycle",
+        "B10": "PDF pp142–166",
+        "P01": "Applicable contrast/focus criteria"
+      },
+      "authority": "project-policy"
+    },
+    {
+      "id": "PR-039",
+      "topic": "evidence",
+      "principle": "Claim only the verification actually performed.",
+      "appliesWhen": "Reviewing, releasing or reporting completion.",
+      "action": "Bind each check to exact build/artifacts, method, environment and outcome; distinguish pass/fail/blocked/not-run/deferred and preserve raw evidence.",
+      "check": "Pack integrity, automated behaviour, host integration and human research are reported separately.",
+      "exceptions": [
+        "Human participant research is deferred by policy; do not fabricate participants or convert missing tooling into a pass."
+      ],
+      "sourceIds": [
+        "PROJECT",
+        "B09",
+        "U07"
+      ],
+      "sourceLocators": {
+        "PROJECT": "Evidence and human research policy",
+        "B09": "PDF pp131–140,177–193",
+        "U07": "Test methods and blind spots"
+      },
+      "authority": "project-policy"
+    },
+    {
+      "id": "PR-040",
+      "topic": "lifecycle",
+      "principle": "Preserve recoverable state and ownership across upgrades.",
+      "appliesWhen": "Migrating, packaging, installing, restoring or collecting retained data.",
+      "action": "Use copy-first backups, versioned schemas, repeatable migration and complete packaged references; retain versions needed by decisions/revisions/evidence.",
+      "check": "Old runs remain interpretable, incomplete evidence stays explicit and restore refuses unrelated user changes.",
+      "exceptions": [
+        "Do not manufacture legacy approvals/budgets; SQLite WAL stays on a supported local same-host filesystem."
+      ],
+      "sourceIds": [
+        "B08",
+        "B09",
+        "P22",
+        "PROJECT"
+      ],
+      "sourceLocators": {
+        "B08": "PDF pp96–100",
+        "B09": "PDF pp141–155,177–193",
+        "P22": "WAL host/filesystem limitation",
+        "PROJECT": "Migration and installation policy"
+      },
+      "authority": "engineering-proposal"
+    }
+  ]
+}

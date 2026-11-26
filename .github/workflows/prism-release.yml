@@ -1,0 +1,28 @@
+name: PRISM Studio release checks
+
+on:
+  push:
+    branches: [main, overhaul/prism-v2]
+  pull_request:
+
+jobs:
+  core-and-package:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: src
+    strategy:
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m venv .ci-venv
+      - run: .ci-venv/bin/python -m pip install --upgrade pip build pytest hatchling
+      - run: .ci-venv/bin/python -m pip install 'mcp==1.30.0' 'segno>=1.6,<2' 'psutil>=7,<8'
+      - run: .ci-venv/bin/python -m pytest tests/test_prism_core.py tests/test_prism_migration.py tests/test_prism_m3.py tests/test_prism_m4.py -q
+      - run: .ci-venv/bin/python -m pytest tests/test_mcp.py tests/test_mcp_package.py tests/test_release_builder.py tests/test_install.py -q
+      - run: .ci-venv/bin/python -m build --wheel --sdist --no-isolation --outdir dist/ci
+      - run: .ci-venv/bin/python scripts/package_release.py --output dist/ci/PRISM-Studio-2.0.0.zip
+      - run: .ci-venv/bin/python scripts/package_release.py --check

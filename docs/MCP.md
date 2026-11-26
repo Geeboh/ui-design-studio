@@ -48,6 +48,14 @@ The server supplies deterministic operations and instructions, not an autonomous
 
 `ui_design_resume_check` reports changed manifest dependencies and transitive stale nodes. A missing manifest blocks conservatively. `ui_design_worker_packet` generates one selected-role packet with exact owned-file hashes, original instructions, scope, acceptance gates and reviewer independence. These tools do not execute workers or claim model observation.
 
+## Inspect token and cost usage
+
+Open the authenticated dashboard's **Usage** section to inspect local run telemetry and optional native OMP statistics. PRISM reads `omp stats --json` directly when the user requests OMP data. Tersio is not required.
+
+Local usage records live in the selected run's private `usage.json`. Record one provider observation through the authenticated `POST /api/usage` route with a stable `usageId` and `idempotencyKey`. Use `GET /api/usage/24h`, `GET /api/usage/7d`, or `GET /api/usage/all` for bounded projections. Export with `GET /api/usage/export.json` or `GET /api/usage/export.csv`.
+
+Observed, estimated, not-billable, and unknown costs remain separate. Missing token counts remain `Unknown`; cache reads are not compression savings. Usage telemetry never changes hard budget enforcement.
+
 ## Print a verified address and QR code
 
 ```bash
@@ -88,7 +96,7 @@ The first command prints the live links again. An explicit stop inhibits automat
 
 ## Choose network exposure
 
-The default `--dashboard-host 0.0.0.0` permits trusted-LAN access. HTTP does not encrypt bearer credentials or project content. Use only trusted networks. To disable LAN exposure, add `--dashboard-host 127.0.0.1` to the server arguments.
+The default `--dashboard-host 127.0.0.1` keeps the dashboard on loopback. Use `--dashboard-host 0.0.0.0` only for explicit trusted-LAN access. HTTP does not encrypt bearer credentials or project content.
 
 `--dashboard-port` accepts 0 through 65535 and defaults to an ephemeral port. An occupied explicit port fails. `--lan-address ADDRESS` selects an IPv4 address from an active local interface. The adapter never guesses an address, opens a tunnel, or edits a firewall. Address changes refresh advertised URLs and allowed origins. Existing CLI servers keep their owner's configured exposure when reused.
 

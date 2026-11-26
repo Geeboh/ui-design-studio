@@ -1,0 +1,28 @@
+---
+name: ui-yolo
+description: "Apply or resume YOLO design-decision mode for an authorized Studio run while retaining scope, budget and permission boundaries. Use when the user requests autonomous design choices."
+---
+
+# Apply YOLO decision policy
+
+Implementation target: activate with compatible Studio commands.
+
+## Inputs and scope
+
+Resolve the run, goal, authorized scope, existing user decisions, design budget, model policy and current stage. Read persisted settings on resume. Keep the existing `ui-yolo` alias.
+
+## Workflow
+
+Persist YOLO as a decision policy and route work through `ui-design-studio`; do not create a separate workflow engine. Read only the mode section of `.prism-rebuild/docs/PRODUCT-AND-UX.md` unless another task needs more context.
+
+Make delegated design choices within the goal and constraints. Record the chosen artifact/component version, actor type, rationale and relevant dependency fingerprint. Accept and preserve actual user decisions in YOLO; never block a human decision merely because this mode is active.
+
+Continue routine authorized work without redundant confirmation. Preserve focused-revision bases, accepted independent components, capability boundaries and all design-cost admission rules. YOLO does not raise a cap, authorize publication, invent a model capability or convert unknown charges to zero.
+
+Stop only the action that lacks required authority or capability; complete other useful authorized work and expose the precise blocker.
+
+## Outputs and exit
+
+Return the persisted mode and route-specific artifacts, decisions, cost/evidence status and next action. Agent decisions remain labelled agent decisions, never human approval. Required automated gates still apply; human participant research remains deferred.
+
+Exit when the delegated scope is complete, the user changes mode, or a concrete external blocker prevents further progress. A mode switch affects subsequent choices and does not rewrite historical decisions.

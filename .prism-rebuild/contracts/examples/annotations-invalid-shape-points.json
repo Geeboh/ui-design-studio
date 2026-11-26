@@ -1,0 +1,48 @@
+{
+  "recordType": "annotationSet",
+  "schemaVersion": "2.0.0",
+  "annotationSetId": "annotations_one",
+  "revision": 1,
+  "runId": "run_demo",
+  "componentId": "component_header",
+  "baseArtifactVersionId": "artifact_version_one",
+  "baseArtifactSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "imageSize": {
+    "widthPx": 1200,
+    "heightPx": 800
+  },
+  "coordinateSpace": "normalized_image",
+  "capture": {
+    "viewportWidthCssPx": 1200,
+    "viewportHeightCssPx": 800,
+    "devicePixelRatio": 1
+  },
+  "annotations": [
+    {
+      "annotationId": "annotation_box",
+      "type": "rectangle",
+      "points": [
+        {
+          "x": 0.1,
+          "y": 0.2
+        },
+        {
+          "x": 0.8,
+          "y": 0.6
+        },
+        {
+          "x": 0.9,
+          "y": 0.7
+        }
+      ],
+      "text": "Align these controls.",
+      "description": "Rectangle around the header controls."
+    }
+  ],
+  "createdBy": {
+    "actorId": "actor_human",
+    "kind": "human",
+    "displayName": "Example reviewer"
+  },
+  "savedAt": "2026-11-26T00:00:00Z"
+}
