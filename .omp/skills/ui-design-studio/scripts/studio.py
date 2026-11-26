@@ -1405,6 +1405,34 @@ def resume_check(path, current_environment=None):
             else "Manifest dependencies are current; no dependent work is stale."}
 
 
+def _knowledge_packet(repo, objective):
+    catalog = Path(repo) / ".prism-rebuild" / "knowledge" / "rules.json"
+    if not catalog.is_file():
+        return {"status": "unavailable", "reason": "No reviewed knowledge catalog is available in this repository."}
+    try:
+        document = read_json(catalog)
+        rules = document.get("rules", [])
+        terms = {term for term in re.findall(r"[a-z0-9]+", objective.lower()) if len(term) > 2}
+        ranked = []
+        for rule in rules:
+            haystack = " ".join(str(rule.get(key, "")) for key in ("topic", "principle", "appliesWhen", "action", "check", "exceptions")).lower()
+            score = sum(haystack.count(term) for term in terms)
+            if score:
+                ranked.append((score, rule.get("id", ""), rule))
+        ranked.sort(key=lambda item: (-item[0], item[1]))
+        selected = [rule for _, _, rule in ranked[:8]]
+        selected_ids = {rule.get("id") for rule in selected}
+        return {"status": "selected", "catalogSha256": sha_file(catalog), "query": objective,
+                "selectedRuleIds": [rule.get("id") for rule in selected],
+                "omittedRuleIds": [rule.get("id") for rule in rules if rule.get("id") not in selected_ids],
+                "rules": [{"id": rule.get("id"), "principle": rule.get("principle"), "appliesWhen": rule.get("appliesWhen"),
+                           "action": rule.get("action"), "check": rule.get("check"), "exceptions": rule.get("exceptions", []),
+                           "authority": rule.get("authority"), "sourceIds": rule.get("sourceIds", []),
+                           "sourceLocators": rule.get("sourceLocators", {})} for rule in selected]}
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
+        return {"status": "unavailable", "reason": f"Knowledge catalog could not be selected: {exc}"}
+
+
 def worker_packet(path, role, objective, owned_files, instruction_files=None, artifacts=None, allowed_actions=None, *, repo=None):
     root = Path(path).resolve()
     run = read_json(safe_path(root, "run.json"))
@@ -1456,6 +1484,7 @@ def worker_packet(path, role, objective, owned_files, instruction_files=None, ar
                         "status": routing.get("status", "pending"), "policy": run.get("modelPolicy"),
                         "selected": selected, "assignment": assignment},
             "ownedFiles": owned, "instructions": instruction_records, "artifacts": artifact_records,
+            "knowledge": _knowledge_packet(repo, objective),
             "contractRevision": digest_bytes(canonical({"scope": run.get("scope"), "instructions": instruction_records})),
             "acceptance": {"requiredEvidence": sorted(REQUIRED_EVIDENCE),
                            "fullThemeReleaseBlocked": run.get("scope", "full-redesign") != "full-redesign",
