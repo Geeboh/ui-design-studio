@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "sourceFingerprintSha256": null,
+  "reviewedPlanSha256": null,
+  "reviewer": {
+    "identity": "",
+    "actorId": "",
+    "independent": false,
+    "implementationActorIds": [],
+    "method": "unassigned",
+    "fallbackReason": null
+  },
+  "findings": {
+    "severeOpen": null,
+    "items": []
+  },
+  "checkedAcceptance": [],
+  "recommendation": "blocked",
+  "templateNote": "Intentionally incomplete. Populate from an actual review of the exact source and plan. Every required release acceptance ID needs result, evidencePaths and a substantive note. Do not mark this example passed."
+}

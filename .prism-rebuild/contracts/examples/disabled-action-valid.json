@@ -1,0 +1,12 @@
+{
+  "command": "approval.decide",
+  "enabled": false,
+  "disabledReasons": [
+    {
+      "code": "DEPENDENCY_CHANGED",
+      "message": "The referenced artifact changed; review its new version.",
+      "entityRefs": [],
+      "remediationCommand": "approval.get"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+---
+name: ui-assess
+description: "Assess an existing UI, workflow or implementation for concrete defects and prioritized improvements. Use for review-only work or the assessment stage of a Studio run."
+---
+
+# Assess the current state
+
+Implementation target: activate with compatible Studio commands.
+
+## Inputs and scope
+
+Read the goal, current artifact/build, target users/tasks, repository instructions, supported surfaces and requested review scope. Inspection is read-only unless edits are separately authorized. Resolve exact versions and distinguish supplied claims from observations.
+
+## Workflow
+
+Inspect real artifacts and representative complete workflows. Assess task clarity, hierarchy, state/feedback, recovery, accessibility, responsiveness, cost exposure and applicable implementation risks.
+
+Use a compact cognitive walkthrough: What is the goal? Can the action be found and understood? Is its consequence clear? Is feedback intelligible? Can an error be recovered?
+
+Select only relevant rules from `.prism-rebuild/knowledge/rules.json`; consult `.prism-rebuild/docs/ACCESSIBILITY-AND-PERFORMANCE.md` for applicable checks. Do not load all sources or invent universal psychology scores.
+
+Reproduce a material defect where feasible and record exact steps, expected/actual behaviour, impact and evidence. Distinguish confirmed defect, inferred risk, preference and proposed enhancement. Verify time-sensitive technical claims with current primary documentation.
+
+## Mode, outputs and exit
+
+Guided and YOLO do not change the evidence standard. Return prioritized findings with affected versions, source/check evidence, confidence, remedy and acceptance condition. Identify strengths worth preserving and tradeoffs that require a design decision. Human participant research is deferred; do not manufacture observations or claim a screenshot proves interaction correctness.
+
+Exit when the requested scope is assessed with explicit coverage and limitations. Missing tools or unavailable sources remain identified gaps. Assessment alone creates no approval or authority to implement.

@@ -20,6 +20,8 @@ from mcp.server.stdio import stdio_server
 from .dashboard import AmbiguousSessions, DashboardSession, DashboardUnavailable, discover, format_dashboard_text
 from .runtime import studio
 from .server import create_server
+from .application import dispatch
+from .storage import StateStore
 
 
 def _repo(value: str) -> Path:
@@ -111,7 +113,7 @@ def mcp_main(argv: list[str] | None = None) -> int:
     """Start one MCP stdio connection with an explicit, fixed repository boundary."""
     parser = argparse.ArgumentParser(prog="ui-design-mcp", description=__doc__)
     parser.add_argument("--repo", required=True, type=_repo)
-    parser.add_argument("--dashboard-host", choices=("0.0.0.0", "127.0.0.1"), default="0.0.0.0")
+    parser.add_argument("--dashboard-host", choices=("0.0.0.0", "127.0.0.1"), default="127.0.0.1")
     parser.add_argument("--dashboard-port", type=_port, default=0)
     parser.add_argument("--lan-address", type=_ipv4)
     args = parser.parse_args(argv)
@@ -187,7 +189,7 @@ def _dashboard_serve(argv: list[str]) -> int:
     parser = _DashboardParser(prog="ui-design dashboard-serve",
                               description="Keep a verified dashboard available until stopped.")
     parser.add_argument("--repo", required=True, type=_repo)
-    parser.add_argument("--dashboard-host", choices=("0.0.0.0", "127.0.0.1"), default="0.0.0.0")
+    parser.add_argument("--dashboard-host", choices=("0.0.0.0", "127.0.0.1"), default="127.0.0.1")
     parser.add_argument("--dashboard-port", type=_port, default=0)
     parser.add_argument("--lan-address", type=_ipv4)
     parser.add_argument("--json", action="store_true")
@@ -264,9 +266,27 @@ def _dashboard_serve(argv: list[str]) -> int:
             signal.signal(signum, previous)
 
 
+def _command(argv: list[str]) -> int:
+    parser = _DashboardParser(prog="ui-design command", description="Dispatch one PRISM command envelope.")
+    parser.add_argument("--state", required=True, type=Path)
+    parser.add_argument("--input", required=True, help="JSON envelope path, or - for stdin")
+    parser.add_argument("--json", action="store_true", help="Retained for adapter symmetry")
+    try:
+        args = parser.parse_args(argv)
+        raw = sys.stdin.read() if args.input == "-" else args.input
+        envelope = json.loads(raw) if args.input == "-" else json.loads(Path(raw).read_text(encoding="utf-8"))
+        result = dispatch(StateStore(args.state), envelope)
+    except (OSError, UnicodeError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        result = {"status": "FAIL", "error": {"code": "VALIDATION_ERROR", "message": _terminal_text(exc), "retry": "none", "fieldErrors": []}}
+    print(json.dumps(result, ensure_ascii=False, allow_nan=False))
+    return 0 if result.get("status") in ("PASS", "REJECTED") else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """Keep existing engine commands and add dashboard entrypoints."""
     arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments and arguments[0] == "command":
+        return _command(arguments[1:])
     if arguments and arguments[0] == "dashboard-info":
         return _dashboard_info(arguments[1:])
     if arguments and arguments[0] == "dashboard-serve":

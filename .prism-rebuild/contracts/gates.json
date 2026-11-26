@@ -1,0 +1,392 @@
+{
+  "schemaVersion": "1.0.0",
+  "profiles": {
+    "core": [
+      "G0",
+      "G1",
+      "G2",
+      "G3",
+      "G4"
+    ],
+    "web": [
+      "G0",
+      "G1",
+      "G2",
+      "G3",
+      "G4",
+      "G5",
+      "G6",
+      "G7"
+    ],
+    "release": [
+      "G0",
+      "G1",
+      "G2",
+      "G3",
+      "G4",
+      "G5",
+      "G6",
+      "G7",
+      "G8"
+    ]
+  },
+  "validationPolicy": {
+    "humanParticipantResearch": {
+      "status": "DEFERRED",
+      "blocksAutomatedRelease": false,
+      "reason": "Project policy; never present synthetic personas or automated checks as real participant research."
+    },
+    "requiredWebVerification": "Actual browser interaction and applicable automated accessibility checks remain required; release uses configured Chromium, Firefox, WebKit matrix.",
+    "optionalTargets": {
+      "native": "Required only when explicitly declared as a supported target.",
+      "offline": "Required only when explicitly declared as a supported capability."
+    },
+    "resultStates": [
+      "NOT_RUN",
+      "RUNNING",
+      "PASSED",
+      "FAILED",
+      "BLOCKED",
+      "DEFERRED",
+      "NOT_APPLICABLE",
+      "STALE"
+    ],
+    "packIntegrityIsProductPass": false
+  },
+  "commandContract": {
+    "required": [
+      "id",
+      "argv",
+      "cwd",
+      "timeoutSeconds",
+      "expectedExitCodes",
+      "coversAcceptanceIds",
+      "evidenceArtifacts"
+    ],
+    "argv": "Nonempty array of literal arguments, executed without a shell.",
+    "cwd": "Relative existing path within target repository.",
+    "timeoutSeconds": "Positive bounded integer.",
+    "expectedExitCodes": "Must be [0]. A wrapper asserts intentional negative application outcomes and returns zero only when assertions hold; every nonzero gate-command exit fails.",
+    "coversAcceptanceIds": "Existing case IDs actually asserted by this command.",
+    "evidenceArtifacts": "Relative paths produced by execution, existing after run, nonsecret, and hashed in receipt."
+  },
+  "gates": [
+    {
+      "id": "G0",
+      "title": "Baseline and safe implementation context",
+      "milestone": "M0",
+      "requiredProfiles": [
+        "core",
+        "web",
+        "release"
+      ],
+      "caseIds": [
+        "AC-DOCS-001",
+        "AC-EVIDENCE-001"
+      ],
+      "commands": [],
+      "commandBinding": "Bind reviewed real target-repository argv commands in the verification plan after implementation; empty catalog commands are not runnable proof.",
+      "evidenceKinds": [
+        "integration",
+        "review"
+      ],
+      "passCriteria": [
+        "Actual successful execution, not a plan, dry-run or claimed result.",
+        "All assigned acceptance cases mapped to existing inspectable evidence.",
+        "Source fingerprint and reviewed plan digest match the tested candidate.",
+        "Required commands exit successfully within timeouts; no missing tools, evidence or hidden skips.",
+        "No unresolved blocking invariant, security, installation or critical interaction failure."
+      ]
+    },
+    {
+      "id": "G1",
+      "title": "Authoritative domain and transport contracts",
+      "milestone": "M1",
+      "requiredProfiles": [
+        "core",
+        "web",
+        "release"
+      ],
+      "caseIds": [
+        "AC-CORE-001",
+        "AC-CORE-002",
+        "AC-CORE-003",
+        "AC-CORE-004",
+        "AC-CORE-005",
+        "AC-CORE-006",
+        "AC-CORE-007"
+      ],
+      "commands": [],
+      "commandBinding": "Bind reviewed real target-repository argv commands in the verification plan after implementation; empty catalog commands are not runnable proof.",
+      "evidenceKinds": [
+        "integration"
+      ],
+      "passCriteria": [
+        "Actual successful execution, not a plan, dry-run or claimed result.",
+        "All assigned acceptance cases mapped to existing inspectable evidence.",
+        "Source fingerprint and reviewed plan digest match the tested candidate.",
+        "Required commands exit successfully within timeouts; no missing tools, evidence or hidden skips.",
+        "No unresolved blocking invariant, security, installation or critical interaction failure."
+      ]
+    },
+    {
+      "id": "G2",
+      "title": "Migration and recovery foundation",
+      "milestone": "M2",
+      "requiredProfiles": [
+        "core",
+        "web",
+        "release"
+      ],
+      "caseIds": [
+        "AC-MIGRATION-001",
+        "AC-MIGRATION-002",
+        "AC-MIGRATION-003",
+        "AC-MIGRATION-004",
+        "AC-MIGRATION-005",
+        "AC-EVIDENCE-106"
+      ],
+      "commands": [],
+      "commandBinding": "Bind reviewed real target-repository argv commands in the verification plan after implementation; empty catalog commands are not runnable proof.",
+      "evidenceKinds": [
+        "integration"
+      ],
+      "passCriteria": [
+        "Actual successful execution, not a plan, dry-run or claimed result.",
+        "All assigned acceptance cases mapped to existing inspectable evidence.",
+        "Source fingerprint and reviewed plan digest match the tested candidate.",
+        "Required commands exit successfully within timeouts; no missing tools, evidence or hidden skips.",
+        "No unresolved blocking invariant, security, installation or critical interaction failure."
+      ]
+    },
+    {
+      "id": "G3",
+      "title": "Approval and focused revision workflow",
+      "milestone": "M3",
+      "requiredProfiles": [
+        "core",
+        "web",
+        "release"
+      ],
+      "caseIds": [
+        "AC-APPROVAL-001",
+        "AC-APPROVAL-002",
+        "AC-APPROVAL-003",
+        "AC-APPROVAL-004",
+        "AC-APPROVAL-005",
+        "AC-APPROVAL-006",
+        "AC-REVISION-001",
+        "AC-REVISION-002",
+        "AC-REVISION-003",
+        "AC-REVISION-004",
+        "AC-REVISION-005",
+        "AC-REVISION-006",
+        "AC-EVIDENCE-102",
+        "AC-EVIDENCE-104",
+        "AC-EVIDENCE-105"
+      ],
+      "commands": [],
+      "commandBinding": "Bind reviewed real target-repository argv commands in the verification plan after implementation; empty catalog commands are not runnable proof.",
+      "evidenceKinds": [
+        "integration"
+      ],
+      "passCriteria": [
+        "Actual successful execution, not a plan, dry-run or claimed result.",
+        "All assigned acceptance cases mapped to existing inspectable evidence.",
+        "Source fingerprint and reviewed plan digest match the tested candidate.",
+        "Required commands exit successfully within timeouts; no missing tools, evidence or hidden skips.",
+        "No unresolved blocking invariant, security, installation or critical interaction failure."
+      ]
+    },
+    {
+      "id": "G4",
+      "title": "Design budget, model policy and worker control",
+      "milestone": "M4",
+      "requiredProfiles": [
+        "core",
+        "web",
+        "release"
+      ],
+      "caseIds": [
+        "AC-BUDGET-001",
+        "AC-BUDGET-002",
+        "AC-BUDGET-003",
+        "AC-BUDGET-004",
+        "AC-BUDGET-005",
+        "AC-BUDGET-006",
+        "AC-BUDGET-007",
+        "AC-MODEL-001",
+        "AC-MODEL-002",
+        "AC-MODEL-003",
+        "AC-MODEL-004",
+        "AC-MODEL-005",
+        "AC-WORKER-001",
+        "AC-WORKER-002",
+        "AC-WORKER-003",
+        "AC-WORKER-004",
+        "AC-WORKER-005",
+        "AC-EVIDENCE-101",
+        "AC-EVIDENCE-103"
+      ],
+      "commands": [],
+      "commandBinding": "Bind reviewed real target-repository argv commands in the verification plan after implementation; empty catalog commands are not runnable proof.",
+      "evidenceKinds": [
+        "integration"
+      ],
+      "passCriteria": [
+        "Actual successful execution, not a plan, dry-run or claimed result.",
+        "All assigned acceptance cases mapped to existing inspectable evidence.",
+        "Source fingerprint and reviewed plan digest match the tested candidate.",
+        "Required commands exit successfully within timeouts; no missing tools, evidence or hidden skips.",
+        "No unresolved blocking invariant, security, installation or critical interaction failure."
+      ]
+    },
+    {
+      "id": "G5",
+      "title": "Dashboard and accessible interactions",
+      "milestone": "M5",
+      "requiredProfiles": [
+        "web",
+        "release"
+      ],
+      "caseIds": [
+        "AC-UX-001",
+        "AC-UX-002",
+        "AC-UX-003",
+        "AC-UX-004",
+        "AC-UX-005",
+        "AC-UX-006",
+        "AC-A11Y-001",
+        "AC-A11Y-002",
+        "AC-A11Y-003",
+        "AC-A11Y-004",
+        "AC-A11Y-005",
+        "AC-EVIDENCE-107"
+      ],
+      "commands": [],
+      "commandBinding": "Bind reviewed real target-repository argv commands in the verification plan after implementation; empty catalog commands are not runnable proof.",
+      "evidenceKinds": [
+        "browser"
+      ],
+      "passCriteria": [
+        "Actual successful execution, not a plan, dry-run or claimed result.",
+        "All assigned acceptance cases mapped to existing inspectable evidence.",
+        "Source fingerprint and reviewed plan digest match the tested candidate.",
+        "Required commands exit successfully within timeouts; no missing tools, evidence or hidden skips.",
+        "No unresolved blocking invariant, security, installation or critical interaction failure."
+      ]
+    },
+    {
+      "id": "G6",
+      "title": "Knowledge, themes and measured performance",
+      "milestone": "M6",
+      "requiredProfiles": [
+        "web",
+        "release"
+      ],
+      "caseIds": [
+        "AC-PERF-001",
+        "AC-PERF-002",
+        "AC-PERF-003",
+        "AC-PERF-004",
+        "AC-KNOWLEDGE-001",
+        "AC-KNOWLEDGE-002",
+        "AC-KNOWLEDGE-003",
+        "AC-KNOWLEDGE-004",
+        "AC-THEME-001",
+        "AC-THEME-002",
+        "AC-THEME-003"
+      ],
+      "commands": [],
+      "commandBinding": "Bind reviewed real target-repository argv commands in the verification plan after implementation; empty catalog commands are not runnable proof.",
+      "evidenceKinds": [
+        "benchmark",
+        "browser",
+        "integration",
+        "review"
+      ],
+      "passCriteria": [
+        "Actual successful execution, not a plan, dry-run or claimed result.",
+        "All assigned acceptance cases mapped to existing inspectable evidence.",
+        "Source fingerprint and reviewed plan digest match the tested candidate.",
+        "Required commands exit successfully within timeouts; no missing tools, evidence or hidden skips.",
+        "No unresolved blocking invariant, security, installation or critical interaction failure."
+      ]
+    },
+    {
+      "id": "G7",
+      "title": "Distribution, host integration and operational security",
+      "milestone": "M7",
+      "requiredProfiles": [
+        "web",
+        "release"
+      ],
+      "caseIds": [
+        "AC-INSTALL-001",
+        "AC-INSTALL-002",
+        "AC-INSTALL-003",
+        "AC-INSTALL-004",
+        "AC-INSTALL-005",
+        "AC-INSTALL-006",
+        "AC-INSTALL-007",
+        "AC-SECURITY-001",
+        "AC-SECURITY-002",
+        "AC-SECURITY-003",
+        "AC-SECURITY-004",
+        "AC-SECURITY-005",
+        "AC-SECURITY-006",
+        "AC-SECURITY-007",
+        "AC-DOCS-002",
+        "AC-EVIDENCE-108",
+        "AC-EVIDENCE-109"
+      ],
+      "commands": [],
+      "commandBinding": "Bind reviewed real target-repository argv commands in the verification plan after implementation; empty catalog commands are not runnable proof.",
+      "evidenceKinds": [
+        "artifact-isolation",
+        "browser",
+        "host-integration",
+        "integration"
+      ],
+      "passCriteria": [
+        "Actual successful execution, not a plan, dry-run or claimed result.",
+        "All assigned acceptance cases mapped to existing inspectable evidence.",
+        "Source fingerprint and reviewed plan digest match the tested candidate.",
+        "Required commands exit successfully within timeouts; no missing tools, evidence or hidden skips.",
+        "No unresolved blocking invariant, security, installation or critical interaction failure."
+      ]
+    },
+    {
+      "id": "G8",
+      "title": "Release readiness and auditable handoff",
+      "milestone": "M8",
+      "requiredProfiles": [
+        "release"
+      ],
+      "caseIds": [
+        "AC-EVIDENCE-002",
+        "AC-EVIDENCE-003",
+        "AC-EVIDENCE-004",
+        "AC-EVIDENCE-005",
+        "AC-EVIDENCE-006",
+        "AC-DOCS-003",
+        "AC-EVIDENCE-110"
+      ],
+      "commands": [],
+      "commandBinding": "Bind reviewed real target-repository argv commands in the verification plan after implementation; empty catalog commands are not runnable proof.",
+      "evidenceKinds": [
+        "artifact-isolation",
+        "browser",
+        "integration",
+        "review"
+      ],
+      "passCriteria": [
+        "Actual successful execution, not a plan, dry-run or claimed result.",
+        "All assigned acceptance cases mapped to existing inspectable evidence.",
+        "Source fingerprint and reviewed plan digest match the tested candidate.",
+        "Required commands exit successfully within timeouts; no missing tools, evidence or hidden skips.",
+        "No unresolved blocking invariant, security, installation or critical interaction failure."
+      ]
+    }
+  ]
+}

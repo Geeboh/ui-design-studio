@@ -1,0 +1,19 @@
+{
+  "kind": "refund",
+  "legs": [
+    {
+      "correctsEntryId": "cost_original",
+      "category": "design",
+      "budgetAccountId": "budget_design",
+      "direction": "debit",
+      "amount": {
+        "amountMinor": 125,
+        "currencyCode": "USD",
+        "currencyExponent": 2
+      }
+    }
+  ],
+  "providerReceiptId": "refund-example-1",
+  "sourceEvidenceId": "evidence_refund",
+  "reason": "Provider returned a verified partial refund."
+}

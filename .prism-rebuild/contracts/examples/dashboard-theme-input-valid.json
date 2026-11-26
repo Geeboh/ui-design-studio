@@ -1,0 +1,13 @@
+{
+  "target": {
+    "themeScope": "dashboard",
+    "targetId": "target_dashboard"
+  },
+  "themeId": "theme_dusk",
+  "themeVersion": 1,
+  "themeArtifactVersionId": null,
+  "decisionId": null,
+  "expectedPreviousThemeId": null,
+  "expectedTargetFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "capabilityRevision": 1
+}

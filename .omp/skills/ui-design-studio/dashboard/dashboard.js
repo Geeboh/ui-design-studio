@@ -30,6 +30,39 @@
     historyKey: null,
     decisionKey: null,
   };
+  const DRAFT_PREFIX = "prism-studio:draft:";
+  function draftKey(request) {
+    return `${DRAFT_PREFIX}${window.location.pathname}:${request.id}:${request.inputsDigest}`;
+  }
+  function restoreDraft(request, fallback) {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(draftKey(request)) || "null");
+      if (!saved || typeof saved !== "object") return fallback;
+      return {
+        ...fallback,
+        optionId: typeof saved.optionId === "string" ? saved.optionId : fallback.optionId,
+        outcome: typeof saved.outcome === "string" ? saved.outcome : fallback.outcome,
+        rationale: typeof saved.rationale === "string" ? saved.rationale : fallback.rationale,
+        attachments: Array.isArray(saved.attachments) ? saved.attachments : fallback.attachments,
+        annotations: Array.isArray(saved.annotations) ? saved.annotations : fallback.annotations,
+        activeAttachmentId: typeof saved.activeAttachmentId === "string" ? saved.activeAttachmentId : fallback.activeAttachmentId,
+        reviewed: false,
+        submitting: false,
+        conflict: false,
+        result: null,
+      };
+    } catch {
+      return fallback;
+    }
+  }
+  function persistDraft(view) {
+    try {
+      const { inputsDigest, optionId, outcome, rationale, attachments, annotations, activeAttachmentId } = view.draft;
+      window.localStorage.setItem(draftKey(view.request), JSON.stringify({ inputsDigest, optionId, outcome, rationale, attachments, annotations, activeAttachmentId }));
+    } catch {
+      // Draft persistence is best effort when browser storage is unavailable or full.
+    }
+  }
   const previewJobs = new Map();
   const gridKeys = new WeakMap();
   let approvalSequence = 0;
@@ -904,6 +937,8 @@
         submitting: false, conflict: false, result: null, attachments: [], annotations: [], activeAttachmentId: "",
         annotationTool: "arrow", attachmentSequence: 0 },
     };
+    view.draft = restoreDraft(request, view.draft);
+    rationale.value = view.draft.rationale;
     const feedback = createAnnotationEditor(view, prefix);
     form.insertBefore(feedback, confirmationLabel);
     form.addEventListener("input", () => {
@@ -913,6 +948,7 @@
       view.draft.optionId = form.querySelector('input[name="optionId"]:checked')?.value || "";
       view.draft.outcome = form.querySelector('input[name="outcome"]:checked')?.value || "";
       updateApprovalAvailability(view);
+      persistDraft(view);
     });
     form.addEventListener("change", (event) => {
       if (event.target.name === "optionId") {
@@ -920,6 +956,7 @@
         view.draft.reviewed = false;
       }
       updateApprovalAvailability(view);
+      persistDraft(view);
     });
     useCurrent.addEventListener("click", () => {
       if (view.request.status !== "pending" || view.request.inputsDigest === view.draft.inputsDigest) return;

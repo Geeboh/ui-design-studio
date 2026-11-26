@@ -1,0 +1,28 @@
+---
+name: ui-review
+description: "Review versioned design artifacts or implementation results against their scope, contracts and acceptance conditions. Use for independent checks before decisions or finalization."
+---
+
+# Review the exact result
+
+Implementation target: activate with compatible Studio commands.
+
+## Inputs and scope
+
+Read the review target's exact versions/digests, requested changes, protected areas, relevant dependencies, decision policy and acceptance cases. Review actual artifacts/builds, not only the producing agent's summary.
+
+## Workflow
+
+Inspect complete applicable flows and compare before/after. Check scope drift, state correctness, recovery, accessibility and measured performance where relevant. For component work, verify both parts and their assembled interaction.
+
+Use `.prism-rebuild/docs/ACCESSIBILITY-AND-PERFORMANCE.md` selectively. Retrieve only rule/source sections needed to support a finding. Treat visual preferences as preferences, not defects or scientific laws.
+
+Exercise material failure paths: stale decision, failed save, retained draft, interrupted provider or missing artifact as applicable. Validate actual evidence identities and distinguish current results from historical receipts.
+
+## Mode, outputs and exit
+
+Return findings by severity with affected version, reproduction/evidence, impact and concrete acceptance condition. State coverage, untested areas and disagreements. A clean review can recommend acceptance but cannot manufacture a user's decision. Guided/YOLO decision authority remains separate; record the real actor.
+
+Human participant research is deferred. Automated scans, screenshots and agent walkthroughs support only their observed scope; never report skipped or unavailable tests as passed.
+
+Exit when the requested review is complete and findings/blockers are actionable. Avoid expanding every small change into a whole-product audit unless its risk requires that scope.

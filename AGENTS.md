@@ -1,2 +1,8 @@
 ## Browser QA routing — OMP Playwright Fast
 When implementing, repairing or reviewing browser-facing functionality, use the installed `playwright_fast` tool (or `/pw-fast`) to plan and execute browser QA. Browser verification is required for interaction changes, responsive design, forms, navigation and visual regressions; do not launch a browser for documentation-only or pure design discussion. For routine work: `plan` then `run` with `profile=affected` (conservative fallback) or `quick`, Chromium. For UI-design work, pair the current UI designer skill with real browser screenshots / interaction checks; do not use Playwright as a design generator. For release: `matrix` or `full` across configured Chromium, Firefox and WebKit projects. Prefer autonomous fixes and focused reruns; keep output concise and attach real evidence; never report a dry-run or plan as a pass. Do not install system packages without explicit authorization; avoid destructive changes and secret exposure. Maintain proper Git branch and review policy. Run validation in the project being changed.
+
+
+<!-- PRISM-REBUILD:BEGIN v1 -->
+## PRISM Studio rebuild
+During this rebuild, read `.prism-rebuild/AGENTS.md` and the assigned task's references. Preserve all applicable existing project instructions. These instructions govern the rebuild of this repository; do not ship this block into consumer projects.
+<!-- PRISM-REBUILD:END v1 -->

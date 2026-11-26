@@ -1,0 +1,28 @@
+---
+name: ui-finalize
+description: "Assemble a truthful, reproducible delivery for the completed Studio scope. Use after design-only or production work to verify artifacts, decisions, costs, packaging and remaining limitations."
+---
+
+# Finalize the requested scope
+
+Implementation target: activate with compatible Studio commands.
+
+## Inputs and scope
+
+Read the run's actual stage/scope, committed artifact/component versions, applicable decisions, acceptance receipts, installation/package targets and budget ledger. Distinguish design-only delivery from production/release completion.
+
+## Workflow
+
+Verify the deliverable inventory and exact dependency versions. Check that selected decisions remain applicable and required gates cover the delivered build. Reconcile known cost outcomes; expose unresolved charges/reservations rather than treating them as settled.
+
+For packaged delivery, verify included references, install/upgrade/restore behaviour and supported host integration from actual evidence. Preserve aliases and documented migration. Use the applicable requirements and gates; do not load all source books.
+
+Confirm the user can open the real artifacts and follow a practical next step. Record limitations, failed/blocked/deferred checks and recovery information alongside results.
+
+## Mode, outputs and exit
+
+Guided and YOLO share the same evidence standard. User decisions and agent decisions retain their real actor. Finalization itself does not authorize external publication, merge or a new purchase.
+
+Return artifact/version inventory, decision history, cost summary, checks, known risks and the next valid action. State human participant research is deferred where relevant. A pack-integrity pass does not establish implementation; an automated pass does not establish human usability.
+
+Exit successfully only when the requested scope's acceptance conditions are satisfied. Otherwise preserve the concrete deliverable and report the precise remaining blocker without calling the product complete.

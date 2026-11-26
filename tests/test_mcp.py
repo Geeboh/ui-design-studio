@@ -95,7 +95,7 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             async with ClientSession(read, write, read_timeout_seconds=timedelta(seconds=30)) as client:
                 initialized = await client.initialize()
                 self.assertEqual(initialized.serverInfo.name, "UI Design Studio")
-                self.assertEqual(initialized.serverInfo.version, "1.4.3")
+                self.assertEqual(initialized.serverInfo.version, "2.0.0")
                 yield client, process
 
     async def call(self, client, tool_name, **arguments):
@@ -156,6 +156,7 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             listed = await client.list_tools()
             tools = {tool.name: tool for tool in listed.tools}
             expected = {"ui_design_" + name.replace("-", "_") for name in COMMANDS}
+            expected.add("ui_design_command")
             expected.update({"ui_design_status_compact", "ui_design_status_page"})
             expected.update({"ui_design_start_run", "ui_design_resume_run", "ui_design_dashboard_info", "ui_design_read_guide"})
             self.assertEqual(set(tools), expected)

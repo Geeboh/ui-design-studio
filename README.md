@@ -1,8 +1,8 @@
 # UI Design Studio
 
-**Version 1.4.3 · A portable UI design workflow for Oh My Pi and local MCP clients**
+**Version 2.0.0 · PRISM Studio. A portable UI design workflow for Oh My Pi and local MCP clients**
 
-Assess an interface, develop coherent visual directions, design its complete pages and dialogs, implement the selected system, and deliver a documented theme. UI Design Studio combines a design director, nine reusable skills, seven specialist agent roles, run records, and installation/theme utilities.
+Assess an interface, develop coherent visual directions, design its complete pages and dialogs, implement the selected system, and deliver a documented theme. PRISM Studio keeps the existing Python engine, CLI aliases, MCP adapter, authenticated dashboard, run records, and installation utilities while adding transactional local state and evidence-bound governance.
 
 The designer learns the project from its own instructions, requirements, source code and existing design system. **No project profile is required.** Use the same package in different repositories without importing another project's assumptions.
 
@@ -15,7 +15,7 @@ The designer learns the project from its own instructions, requirements, source 
 | [Installation and maintenance](docs/INSTALLATION.md) | Requirements, installation, live-session discovery, configuration, upgrades, restore and troubleshooting |
 | [Local MCP adapter](docs/MCP.md) | Python package, explicit project connection, automatic landing dashboard, verified URLs and terminal QR |
 | [Run types and copy/paste recipes](docs/RUN-TYPES.md) | Guided, YOLO, `/goal` with YOLO, assessment, mockups, references, themes, scoped work, resume and model choices |
-| [Release notes](docs/CHANGELOG.md) | Changes in 1.4.3 and compatibility with existing installations |
+| [Release notes](docs/RELEASE-v2.0.0.md) | PRISM Studio 2.0.0 changes, compatibility, artifacts and verification scope |
 | [Validation record](docs/VALIDATION.md) | Checks actually performed on this release and their limits |
 | [Distribution and release maintenance](docs/DISTRIBUTION.md) | License, package contents, checksum verification and reproducible ZIP builds |
 | [Primary sources](docs/SOURCES.md) | Upstream OMP behaviour, accessibility, tokens and performance references |
@@ -27,7 +27,7 @@ The repository documentation and `install.sh` belong to the extracted source ZIP
 
 For a local MCP coding client, follow [Connect UI Design Studio through local MCP](docs/MCP.md). The installable `ui-design-studio-mcp` package bundles the engine and guides without installing `.omp` files into your project. The OMP path below remains unchanged.
 
-From the extracted `ui-design-studio-v1.4.3` directory, install into the **actual project root**:
+From the extracted `ui-design-studio-v2.0.0` directory, install into the **actual project root**:
 
 ```bash
 bash ./install.sh --mcp-global

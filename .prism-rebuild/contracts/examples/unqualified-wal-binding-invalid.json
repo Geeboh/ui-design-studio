@@ -1,0 +1,17 @@
+{
+  "recordType": "workspaceBinding",
+  "schemaVersion": "2.0.0",
+  "bindingId": "binding_demo",
+  "projectId": "project_demo",
+  "revision": 1,
+  "repoRoot": "/example/source",
+  "stateRoot": "/example/local-state",
+  "storageAssurance": "local_verified",
+  "journalMode": "wal",
+  "sqliteVersion": "3.51.2",
+  "sqliteSourceId": "example-source-build",
+  "walQualification": "unqualified",
+  "patchEvidence": null,
+  "databaseEpoch": "epoch_demo",
+  "boundAt": "2026-11-26T00:00:00Z"
+}

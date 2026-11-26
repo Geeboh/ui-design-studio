@@ -1,0 +1,119 @@
+{
+  "schemaVersion": "1.0.0",
+  "resources": [
+    {
+      "sourceId": "B01",
+      "filename": "01-You-don-t-know-JS.pdf",
+      "mediaType": "application/pdf",
+      "physicalPages": 109,
+      "sha256": "cef032e321d7bff30a4a1ae1f632489601ec4dd20413c503a56e34b5f08c3af7",
+      "includedInPack": false,
+      "reviewMethod": "Full-document text extraction, topic indexing and task-focused section review; principles restated in original prose."
+    },
+    {
+      "sourceId": "B02",
+      "filename": "02-Website-Performance-Optimizing-The-Front-End-And-The-Back-End.pdf",
+      "mediaType": "application/pdf",
+      "physicalPages": 484,
+      "sha256": "e5ea30f0725e8291bff88a6e61c44ebf746330297fc572c8775a4477d9b1812d",
+      "includedInPack": false,
+      "reviewMethod": "Full-document text extraction, topic indexing and task-focused section review; principles restated in original prose."
+    },
+    {
+      "sourceId": "B03",
+      "filename": "03-The-Reactive-Principles-And-Patterns.pdf",
+      "mediaType": "application/pdf",
+      "physicalPages": 19,
+      "sha256": "efe8358bfcd0f7f7bd1846fd0e6f8732dca70456ba742167c4bcde7ab7001e5c",
+      "includedInPack": false,
+      "reviewMethod": "Full-document text extraction, topic indexing and task-focused section review; principles restated in original prose."
+    },
+    {
+      "sourceId": "B04",
+      "filename": "04-System-Design-Interview-An-Insider-s-Guide-by-Alex-Xu-z-lib.org-.pdf",
+      "mediaType": "application/pdf",
+      "physicalPages": 269,
+      "sha256": "d2bafdef03246a64e3c58049c5ae188d8be9d74c6b23f05045637b07ad7167df",
+      "includedInPack": false,
+      "reviewMethod": "Full-document text extraction, topic indexing and task-focused section review; principles restated in original prose."
+    },
+    {
+      "sourceId": "B05",
+      "filename": "05-High-Performance-Browser-Networking.pdf",
+      "mediaType": "application/pdf",
+      "physicalPages": 536,
+      "sha256": "b85b07db154d4c629d36ada71c7f89257e834af6b3dcdb927b8c60ba1071902a",
+      "includedInPack": false,
+      "reviewMethod": "Full-document text extraction, topic indexing and task-focused section review; principles restated in original prose."
+    },
+    {
+      "sourceId": "B06",
+      "filename": "06-Event-driven-system-Kafka-.pdf",
+      "mediaType": "application/pdf",
+      "physicalPages": 166,
+      "sha256": "c9bb3e324d93529a25563fd25447a11549dcca8e61d36b9665fff0c8de2cdd41",
+      "includedInPack": false,
+      "reviewMethod": "Full-document text extraction, topic indexing and task-focused section review; principles restated in original prose."
+    },
+    {
+      "sourceId": "B07",
+      "filename": "07-Build-APIs-You-Won-t-Hate.pdf",
+      "mediaType": "application/pdf",
+      "physicalPages": 181,
+      "sha256": "5e958bf5b42c79784716276a4779c7cb87f4dc325a23e8b08cf5de4c70e8acc8",
+      "includedInPack": false,
+      "reviewMethod": "Full-document text extraction, topic indexing and task-focused section review; principles restated in original prose."
+    },
+    {
+      "sourceId": "B08",
+      "filename": "08-DDD.pdf",
+      "mediaType": "application/pdf",
+      "physicalPages": 137,
+      "sha256": "31a930281c0f4d4ef4d8e32958c66f1798d4b4feb5e12f162ed99fcd4e6c99ed",
+      "includedInPack": false,
+      "reviewMethod": "Full-document text extraction, topic indexing and task-focused section review; principles restated in original prose."
+    },
+    {
+      "sourceId": "B09",
+      "filename": "09-Designing-Web-APIs_-Building-APIs-That-Developers-Love-PDFDrive-.pdf",
+      "mediaType": "application/pdf",
+      "physicalPages": 232,
+      "sha256": "2fcf53f9d473b30c9072d26711a594415c8e33c176c3ec4a5d2dc5569bee8bbe",
+      "includedInPack": false,
+      "reviewMethod": "Full-document text extraction, topic indexing and task-focused section review; principles restated in original prose."
+    },
+    {
+      "sourceId": "B10",
+      "filename": "10-Refactoring-UI.pdf",
+      "mediaType": "application/pdf",
+      "physicalPages": 252,
+      "sha256": "c6df5ef9c14f153a301bfcc663d88167c8b90e5a94fe340b6f009c114a7b9d2e",
+      "includedInPack": false,
+      "reviewMethod": "Full-document text extraction, topic indexing and task-focused section review; principles restated in original prose."
+    },
+    {
+      "sourceId": "F11",
+      "filename": "11-UX-design.txt",
+      "mediaType": "text/plain",
+      "sha256": "4cd19110dc508f412f9a35af1b3cdf29e77ec7b950df947a7cb0c6c03f033520",
+      "linkedSources": 14,
+      "includedInPack": false,
+      "reviewMethod": "All listed URLs accounted for in SOURCES.md; substantive linked bodies reviewed except U13 preview-only, as recorded there."
+    },
+    {
+      "sourceId": "F12",
+      "filename": "12-Cognitive-Psychology-in-UX-Design.txt",
+      "mediaType": "text/plain",
+      "sha256": "7678cbcf218572d1e18b534bece84781f3df17f81c41a3bff66361716666d776",
+      "linkedSources": 7,
+      "includedInPack": false,
+      "reviewMethod": "All listed URLs accounted for in SOURCES.md; substantive linked bodies reviewed except U13 preview-only, as recorded there."
+    }
+  ],
+  "sourceCount": 12,
+  "pdfPageTotal": 2385,
+  "linkedUrlCount": 21,
+  "redistributedSourceDocuments": 0,
+  "register": "knowledge/SOURCES.md",
+  "coverageNote": "One UXPlanet URL was available only as a preview. Index pages do not imply every outbound link or video was reviewed. See exact source register for limitations."
+}

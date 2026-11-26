@@ -1,0 +1,26 @@
+{
+  "recordType": "approvalDecision",
+  "schemaVersion": "2.0.0",
+  "decisionId": "decision_one",
+  "requestId": "request_one",
+  "requestRevision": -1,
+  "runId": "run_demo",
+  "componentId": "component_header",
+  "artifactVersionId": "artifact_version_one",
+  "artifactSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "scopeFingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "outcome": "approved",
+  "feedback": "",
+  "annotations": [],
+  "actor": {
+    "actorId": "actor_human",
+    "kind": "human",
+    "displayName": "Example reviewer"
+  },
+  "authorityBasis": "explicit_user",
+  "authorizationGrantId": "grant_review",
+  "evidenceIds": [],
+  "operationId": "operation_approve",
+  "recordedAt": "2026-11-26T00:00:00Z",
+  "originalRecordedAt": null
+}

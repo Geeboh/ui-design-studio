@@ -1,0 +1,309 @@
+{
+  "schemaVersion": "1.0.0",
+  "milestones": [
+    {
+      "id": "M0",
+      "title": "Baseline and safe implementation context",
+      "dependencyIds": [],
+      "requirementIds": [
+        "REQ-DOCS-001",
+        "REQ-EVIDENCE-001"
+      ],
+      "gateIds": [
+        "G0"
+      ],
+      "outcome": "Reviewed candidate, capability inventory and reproducible evidence identity exist before implementation claims.",
+      "deliverables": [
+        "Candidate/worktree identity; retained user instructions; target/capability record.",
+        "Baseline defect reproduction inventory and exact verification prerequisites."
+      ],
+      "exitCriteria": [
+        "All cases assigned to G0 have current evidence; linked later integration cases remain explicitly pending until their assigned gate.",
+        "G0 passes with no unresolved blocking findings.",
+        "Required dependency milestones have valid receipts for the same coherent candidate or explicitly revalidated compatible scope.",
+        "A requirement is globally complete only when all of its applicable required cases pass; milestone progression does not waive later integration evidence."
+      ]
+    },
+    {
+      "id": "M1",
+      "title": "Authoritative domain and transport contracts",
+      "dependencyIds": [
+        "M0"
+      ],
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-CORE-005",
+        "REQ-CORE-006",
+        "REQ-CORE-007"
+      ],
+      "gateIds": [
+        "G1"
+      ],
+      "outcome": "Shared commands and durable invariants replace competing state logic.",
+      "deliverables": [
+        "Typed domain/schema/command handlers and adapter parity.",
+        "Transactional revisions, idempotency, outbox and immutable blob tests."
+      ],
+      "exitCriteria": [
+        "All cases assigned to G1 have current evidence; linked later integration cases remain explicitly pending until their assigned gate.",
+        "G1 passes with no unresolved blocking findings.",
+        "Required dependency milestones have valid receipts for the same coherent candidate or explicitly revalidated compatible scope.",
+        "A requirement is globally complete only when all of its applicable required cases pass; milestone progression does not waive later integration evidence."
+      ]
+    },
+    {
+      "id": "M2",
+      "title": "Migration and recovery foundation",
+      "dependencyIds": [
+        "M1"
+      ],
+      "requirementIds": [
+        "REQ-MIGRATION-001",
+        "REQ-MIGRATION-002",
+        "REQ-MIGRATION-003",
+        "REQ-MIGRATION-004",
+        "REQ-MIGRATION-005"
+      ],
+      "gateIds": [
+        "G2"
+      ],
+      "outcome": "Legacy data can be copied, migrated, resumed and rolled back without invented history.",
+      "deliverables": [
+        "Legacy fixture matrix, mapping receipts, backups and activated candidate checks.",
+        "Fault-injected migration/rollback recovery and local SQLite storage policy."
+      ],
+      "exitCriteria": [
+        "All cases assigned to G2 have current evidence; linked later integration cases remain explicitly pending until their assigned gate.",
+        "G2 passes with no unresolved blocking findings.",
+        "Required dependency milestones have valid receipts for the same coherent candidate or explicitly revalidated compatible scope.",
+        "A requirement is globally complete only when all of its applicable required cases pass; milestone progression does not waive later integration evidence."
+      ]
+    },
+    {
+      "id": "M3",
+      "title": "Approval and focused revision workflow",
+      "dependencyIds": [
+        "M1",
+        "M2"
+      ],
+      "requirementIds": [
+        "REQ-APPROVAL-001",
+        "REQ-APPROVAL-002",
+        "REQ-APPROVAL-003",
+        "REQ-APPROVAL-004",
+        "REQ-APPROVAL-005",
+        "REQ-APPROVAL-006",
+        "REQ-REVISION-001",
+        "REQ-REVISION-002",
+        "REQ-REVISION-003",
+        "REQ-REVISION-004",
+        "REQ-REVISION-005",
+        "REQ-REVISION-006"
+      ],
+      "gateIds": [
+        "G3"
+      ],
+      "outcome": "Scoped decisions and component revision lineage work under races/retries.",
+      "deliverables": [
+        "Approval/comment/staleness fixes and authoritative actions.",
+        "Pinned annotations, stable components, batch receipts and conflict-aware integration."
+      ],
+      "exitCriteria": [
+        "All cases assigned to G3 have current evidence; linked later integration cases remain explicitly pending until their assigned gate.",
+        "G3 passes with no unresolved blocking findings.",
+        "Required dependency milestones have valid receipts for the same coherent candidate or explicitly revalidated compatible scope.",
+        "A requirement is globally complete only when all of its applicable required cases pass; milestone progression does not waive later integration evidence."
+      ]
+    },
+    {
+      "id": "M4",
+      "title": "Design budget, model policy and worker control",
+      "dependencyIds": [
+        "M1",
+        "M3"
+      ],
+      "requirementIds": [
+        "REQ-BUDGET-001",
+        "REQ-BUDGET-002",
+        "REQ-BUDGET-003",
+        "REQ-BUDGET-004",
+        "REQ-BUDGET-005",
+        "REQ-BUDGET-006",
+        "REQ-BUDGET-007",
+        "REQ-MODEL-001",
+        "REQ-MODEL-002",
+        "REQ-MODEL-003",
+        "REQ-MODEL-004",
+        "REQ-MODEL-005",
+        "REQ-WORKER-001",
+        "REQ-WORKER-002",
+        "REQ-WORKER-003",
+        "REQ-WORKER-004",
+        "REQ-WORKER-005"
+      ],
+      "gateIds": [
+        "G4"
+      ],
+      "outcome": "Controlled dispatch respects design budget, actual capabilities and scoped authority.",
+      "deliverables": [
+        "Exact ledger, reservation/settlement/reconciliation and cap-race evidence.",
+        "Persisted model role defaults, current-model, resume precedence and complete worker packets."
+      ],
+      "exitCriteria": [
+        "All cases assigned to G4 have current evidence; linked later integration cases remain explicitly pending until their assigned gate.",
+        "G4 passes with no unresolved blocking findings.",
+        "Required dependency milestones have valid receipts for the same coherent candidate or explicitly revalidated compatible scope.",
+        "A requirement is globally complete only when all of its applicable required cases pass; milestone progression does not waive later integration evidence."
+      ]
+    },
+    {
+      "id": "M5",
+      "title": "Dashboard and accessible interactions",
+      "dependencyIds": [
+        "M3",
+        "M4"
+      ],
+      "requirementIds": [
+        "REQ-UX-001",
+        "REQ-UX-002",
+        "REQ-UX-003",
+        "REQ-UX-004",
+        "REQ-UX-005",
+        "REQ-UX-006",
+        "REQ-A11Y-001",
+        "REQ-A11Y-002",
+        "REQ-A11Y-003",
+        "REQ-A11Y-004",
+        "REQ-A11Y-005"
+      ],
+      "gateIds": [
+        "G5"
+      ],
+      "outcome": "The core workflow is usable and verified in a real browser.",
+      "deliverables": [
+        "Current context, comparison, draft recovery, progress and responsive flows.",
+        "Keyboard, nondrag pointer, contrast, reflow and reduced motion evidence."
+      ],
+      "exitCriteria": [
+        "All cases assigned to G5 have current evidence; linked later integration cases remain explicitly pending until their assigned gate.",
+        "G5 passes with no unresolved blocking findings.",
+        "Required dependency milestones have valid receipts for the same coherent candidate or explicitly revalidated compatible scope.",
+        "A requirement is globally complete only when all of its applicable required cases pass; milestone progression does not waive later integration evidence."
+      ]
+    },
+    {
+      "id": "M6",
+      "title": "Knowledge, themes and measured performance",
+      "dependencyIds": [
+        "M4",
+        "M5"
+      ],
+      "requirementIds": [
+        "REQ-PERF-001",
+        "REQ-PERF-002",
+        "REQ-PERF-003",
+        "REQ-PERF-004",
+        "REQ-KNOWLEDGE-001",
+        "REQ-KNOWLEDGE-002",
+        "REQ-KNOWLEDGE-003",
+        "REQ-KNOWLEDGE-004",
+        "REQ-THEME-001",
+        "REQ-THEME-002",
+        "REQ-THEME-003"
+      ],
+      "gateIds": [
+        "G6"
+      ],
+      "outcome": "Context selection and theme lifecycle are bounded, traceable and measured.",
+      "deliverables": [
+        "Provenance-aware rules and context budgets.",
+        "Theme upgrade/restore and declared fixture performance budgets."
+      ],
+      "exitCriteria": [
+        "All cases assigned to G6 have current evidence; linked later integration cases remain explicitly pending until their assigned gate.",
+        "G6 passes with no unresolved blocking findings.",
+        "Required dependency milestones have valid receipts for the same coherent candidate or explicitly revalidated compatible scope.",
+        "A requirement is globally complete only when all of its applicable required cases pass; milestone progression does not waive later integration evidence."
+      ]
+    },
+    {
+      "id": "M7",
+      "title": "Distribution, host integration and operational security",
+      "dependencyIds": [
+        "M2",
+        "M5",
+        "M6"
+      ],
+      "requirementIds": [
+        "REQ-INSTALL-001",
+        "REQ-INSTALL-002",
+        "REQ-INSTALL-003",
+        "REQ-INSTALL-004",
+        "REQ-INSTALL-005",
+        "REQ-INSTALL-006",
+        "REQ-INSTALL-007",
+        "REQ-SECURITY-001",
+        "REQ-SECURITY-002",
+        "REQ-SECURITY-003",
+        "REQ-SECURITY-004",
+        "REQ-SECURITY-005",
+        "REQ-SECURITY-006",
+        "REQ-SECURITY-007",
+        "REQ-DOCS-002"
+      ],
+      "gateIds": [
+        "G7"
+      ],
+      "outcome": "The exact delivered artifacts install and operate safely outside the checkout.",
+      "deliverables": [
+        "Source ZIP, sdist and wheel isolation and parity.",
+        "Actual MCP/OMP integration; authentication, origin, XSS, capability and LAN boundary evidence."
+      ],
+      "exitCriteria": [
+        "All cases assigned to G7 have current evidence; linked later integration cases remain explicitly pending until their assigned gate.",
+        "G7 passes with no unresolved blocking findings.",
+        "Required dependency milestones have valid receipts for the same coherent candidate or explicitly revalidated compatible scope.",
+        "A requirement is globally complete only when all of its applicable required cases pass; milestone progression does not waive later integration evidence."
+      ]
+    },
+    {
+      "id": "M8",
+      "title": "Release readiness and auditable handoff",
+      "dependencyIds": [
+        "M0",
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6",
+        "M7"
+      ],
+      "requirementIds": [
+        "REQ-EVIDENCE-002",
+        "REQ-EVIDENCE-003",
+        "REQ-EVIDENCE-004",
+        "REQ-EVIDENCE-005",
+        "REQ-EVIDENCE-006",
+        "REQ-DOCS-003"
+      ],
+      "gateIds": [
+        "G8"
+      ],
+      "outcome": "Current candidate evidence, substantive review and exact artifacts support an honest release claim.",
+      "deliverables": [
+        "Configured Chromium/Firefox/WebKit release matrix and mapped acceptance evidence.",
+        "Distinct review or disclosed sequential fallback; artifact hashes; limits and tested rollback."
+      ],
+      "exitCriteria": [
+        "All cases assigned to G8 have current evidence; linked later integration cases remain explicitly pending until their assigned gate.",
+        "G8 passes with no unresolved blocking findings.",
+        "Required dependency milestones have valid receipts for the same coherent candidate or explicitly revalidated compatible scope.",
+        "A requirement is globally complete only when all of its applicable required cases pass; milestone progression does not waive later integration evidence."
+      ]
+    }
+  ]
+}

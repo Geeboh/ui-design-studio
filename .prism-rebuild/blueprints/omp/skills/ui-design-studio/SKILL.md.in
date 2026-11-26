@@ -1,0 +1,30 @@
+---
+name: ui-design-studio
+description: "Direct a scoped UI Design Studio run through assessment, planning, design, production and finalization. Use for starting or resuming an end-to-end product workflow while preserving existing ui-design-studio routing."
+---
+
+# Direct the Studio run
+
+Implementation target: materialize this project skill only with compatible engine commands.
+
+## Inputs and scope
+
+Resolve project root, goal, run identity, applicable repository instructions and current capabilities. On resume, read persisted stage/scope, exact versions, decisions, budget exposure and settings before acting. Preserve existing aliases.
+
+Read `.prism-rebuild/docs/PRODUCT-AND-UX.md` only for the workflow in scope and `.prism-rebuild/docs/SKILLS-AND-CONTEXT.md` for packet/routing details. In a shipped product, resolve these through its packaged reference locations.
+
+## Workflow
+
+Route stages `assess`, `plan`, `design`, `produce`, `finalize` to the matching skill. Read its inputs/outputs, not every skill body. Use a bounded packet with exact accepted inputs, owned targets, permitted creation, dependencies, checks and relevant rule IDs.
+
+Persist Guided or YOLO mode. Guided obtains the relevant concrete user design decision; YOLO may make delegated agent decisions within scope and budget. Accept actual user decisions in either mode. Neither expands publication/tool authority.
+
+Apply model precedence: invocation override, resumed run policy, project defaults, personal defaults, capability/cost auto selection. Support current-model mode and report observed assignments.
+
+Admit paid design work through its currency/reservation policy. Implementation spend is separate. Unknown cost remains unknown; unbounded/uncontrolled charging cannot be called hard enforcement.
+
+Dispatch only dependency-ready work within available slots. Preserve independent accepted components, pinned revision bases and durable receipts. If a required command is absent, report the capability gap; do not imitate transitions by editing storage files.
+
+## Outputs and exit
+
+Return real artifacts, decisions, costs, evidence status and the next allowed action. Design-only scope ends with design/handoff evidence; it does not imply production passed. Exit when the requested scope is complete or a precise external blocker remains. Continue routine authorized work without redundant confirmation; never label agent review as human approval.

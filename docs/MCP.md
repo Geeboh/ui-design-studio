@@ -88,7 +88,7 @@ The first command prints the live links again. An explicit stop inhibits automat
 
 ## Choose network exposure
 
-The default `--dashboard-host 0.0.0.0` permits trusted-LAN access. HTTP does not encrypt bearer credentials or project content. Use only trusted networks. To disable LAN exposure, add `--dashboard-host 127.0.0.1` to the server arguments.
+The default `--dashboard-host 127.0.0.1` keeps the dashboard on loopback. Use `--dashboard-host 0.0.0.0` only for explicit trusted-LAN access. HTTP does not encrypt bearer credentials or project content.
 
 `--dashboard-port` accepts 0 through 65535 and defaults to an ephemeral port. An occupied explicit port fails. `--lan-address ADDRESS` selects an IPv4 address from an active local interface. The adapter never guesses an address, opens a tunnel, or edits a firewall. Address changes refresh advertised URLs and allowed origins. Existing CLI servers keep their owner's configured exposure when reused.
 

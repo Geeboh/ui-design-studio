@@ -1,0 +1,230 @@
+{
+  "schemaVersion": "1.0.0",
+  "kind": "prism-rebuild-progress",
+  "packVersion": "1.0.0",
+  "targetProductVersion": "2.0.0",
+  "status": "NOT_STARTED",
+  "sourceCommit": null,
+  "sourceFingerprintSha256": null,
+  "updatedAt": null,
+  "completionTarget": "verified-release-candidate",
+  "humanParticipantValidation": "DEFERRED",
+  "milestones": [
+    {
+      "id": "M0",
+      "title": "Baseline and safe implementation context",
+      "state": "pending",
+      "owner": null,
+      "requirementIds": [
+        "REQ-DOCS-001",
+        "REQ-EVIDENCE-001"
+      ],
+      "gateIds": [
+        "G0"
+      ],
+      "evidencePaths": [],
+      "openFindings": [],
+      "nextAction": null
+    },
+    {
+      "id": "M1",
+      "title": "Authoritative domain and transport contracts",
+      "state": "pending",
+      "owner": null,
+      "requirementIds": [
+        "REQ-CORE-001",
+        "REQ-CORE-002",
+        "REQ-CORE-003",
+        "REQ-CORE-004",
+        "REQ-CORE-005",
+        "REQ-CORE-006",
+        "REQ-CORE-007"
+      ],
+      "gateIds": [
+        "G1"
+      ],
+      "evidencePaths": [],
+      "openFindings": [],
+      "nextAction": null
+    },
+    {
+      "id": "M2",
+      "title": "Migration and recovery foundation",
+      "state": "pending",
+      "owner": null,
+      "requirementIds": [
+        "REQ-MIGRATION-001",
+        "REQ-MIGRATION-002",
+        "REQ-MIGRATION-003",
+        "REQ-MIGRATION-004",
+        "REQ-MIGRATION-005"
+      ],
+      "gateIds": [
+        "G2"
+      ],
+      "evidencePaths": [],
+      "openFindings": [],
+      "nextAction": null
+    },
+    {
+      "id": "M3",
+      "title": "Approval and focused revision workflow",
+      "state": "pending",
+      "owner": null,
+      "requirementIds": [
+        "REQ-APPROVAL-001",
+        "REQ-APPROVAL-002",
+        "REQ-APPROVAL-003",
+        "REQ-APPROVAL-004",
+        "REQ-APPROVAL-005",
+        "REQ-APPROVAL-006",
+        "REQ-REVISION-001",
+        "REQ-REVISION-002",
+        "REQ-REVISION-003",
+        "REQ-REVISION-004",
+        "REQ-REVISION-005",
+        "REQ-REVISION-006"
+      ],
+      "gateIds": [
+        "G3"
+      ],
+      "evidencePaths": [],
+      "openFindings": [],
+      "nextAction": null
+    },
+    {
+      "id": "M4",
+      "title": "Design budget, model policy and worker control",
+      "state": "pending",
+      "owner": null,
+      "requirementIds": [
+        "REQ-BUDGET-001",
+        "REQ-BUDGET-002",
+        "REQ-BUDGET-003",
+        "REQ-BUDGET-004",
+        "REQ-BUDGET-005",
+        "REQ-BUDGET-006",
+        "REQ-BUDGET-007",
+        "REQ-MODEL-001",
+        "REQ-MODEL-002",
+        "REQ-MODEL-003",
+        "REQ-MODEL-004",
+        "REQ-MODEL-005",
+        "REQ-WORKER-001",
+        "REQ-WORKER-002",
+        "REQ-WORKER-003",
+        "REQ-WORKER-004",
+        "REQ-WORKER-005"
+      ],
+      "gateIds": [
+        "G4"
+      ],
+      "evidencePaths": [],
+      "openFindings": [],
+      "nextAction": null
+    },
+    {
+      "id": "M5",
+      "title": "Dashboard and accessible interactions",
+      "state": "pending",
+      "owner": null,
+      "requirementIds": [
+        "REQ-UX-001",
+        "REQ-UX-002",
+        "REQ-UX-003",
+        "REQ-UX-004",
+        "REQ-UX-005",
+        "REQ-UX-006",
+        "REQ-A11Y-001",
+        "REQ-A11Y-002",
+        "REQ-A11Y-003",
+        "REQ-A11Y-004",
+        "REQ-A11Y-005"
+      ],
+      "gateIds": [
+        "G5"
+      ],
+      "evidencePaths": [],
+      "openFindings": [],
+      "nextAction": null
+    },
+    {
+      "id": "M6",
+      "title": "Knowledge, themes and measured performance",
+      "state": "pending",
+      "owner": null,
+      "requirementIds": [
+        "REQ-PERF-001",
+        "REQ-PERF-002",
+        "REQ-PERF-003",
+        "REQ-PERF-004",
+        "REQ-KNOWLEDGE-001",
+        "REQ-KNOWLEDGE-002",
+        "REQ-KNOWLEDGE-003",
+        "REQ-KNOWLEDGE-004",
+        "REQ-THEME-001",
+        "REQ-THEME-002",
+        "REQ-THEME-003"
+      ],
+      "gateIds": [
+        "G6"
+      ],
+      "evidencePaths": [],
+      "openFindings": [],
+      "nextAction": null
+    },
+    {
+      "id": "M7",
+      "title": "Distribution, host integration and operational security",
+      "state": "pending",
+      "owner": null,
+      "requirementIds": [
+        "REQ-INSTALL-001",
+        "REQ-INSTALL-002",
+        "REQ-INSTALL-003",
+        "REQ-INSTALL-004",
+        "REQ-INSTALL-005",
+        "REQ-INSTALL-006",
+        "REQ-INSTALL-007",
+        "REQ-SECURITY-001",
+        "REQ-SECURITY-002",
+        "REQ-SECURITY-003",
+        "REQ-SECURITY-004",
+        "REQ-SECURITY-005",
+        "REQ-SECURITY-006",
+        "REQ-SECURITY-007",
+        "REQ-DOCS-002"
+      ],
+      "gateIds": [
+        "G7"
+      ],
+      "evidencePaths": [],
+      "openFindings": [],
+      "nextAction": null
+    },
+    {
+      "id": "M8",
+      "title": "Release readiness and auditable handoff",
+      "state": "pending",
+      "owner": null,
+      "requirementIds": [
+        "REQ-EVIDENCE-002",
+        "REQ-EVIDENCE-003",
+        "REQ-EVIDENCE-004",
+        "REQ-EVIDENCE-005",
+        "REQ-EVIDENCE-006",
+        "REQ-DOCS-003"
+      ],
+      "gateIds": [
+        "G8"
+      ],
+      "evidencePaths": [],
+      "openFindings": [],
+      "nextAction": null
+    }
+  ],
+  "activeWork": [],
+  "decisionsPath": "decisions.md",
+  "blockers": [],
+  "note": "Template only. A status edit is not observed verification. Keep distinct case IDs and current evidence in the actual completion ledger."
+}

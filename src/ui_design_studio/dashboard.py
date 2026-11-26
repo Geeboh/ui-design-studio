@@ -525,7 +525,7 @@ class _LandingHandler(BaseHTTPRequestHandler):
 
 
 class DashboardSession:
-    def __init__(self, repo: Path | str, host: str = "0.0.0.0", port: int = 0, lan_address: str | None = None):
+    def __init__(self, repo: Path | str, host: str = "127.0.0.1", port: int = 0, lan_address: str | None = None):
         self.repo = _repo(repo)
         if host not in ("0.0.0.0", "127.0.0.1"):
             raise ValueError("Dashboard host must be 0.0.0.0 or 127.0.0.1")

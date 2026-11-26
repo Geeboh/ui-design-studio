@@ -1,0 +1,26 @@
+---
+name: ui-theme
+description: "Inspect, preview, install, activate, restore or remove a specified Studio, generated-design or OMP host theme. Use for explicit theme work with reversible ownership and capability checks."
+---
+
+# Manage the specified theme
+
+Implementation target: activate with compatible Studio and host commands.
+
+## Inputs and scope
+
+Identify the requested operation and scope: dashboard appearance, generated product tokens, or OMP host theme. Resolve current theme, desired theme, ownership receipt, relevant artifact versions and host capabilities. A colour preference alone does not authorize host replacement.
+
+## Workflow
+
+Read the theme section of `.prism-rebuild/docs/PRODUCT-AND-UX.md` and relevant accessibility checks. Preview changes and verify semantic tokens, contrast, focus, state distinctions and reduced motion.
+
+For generated design tokens, create a versioned design change with dependency impact and design-budget admission when paid work is needed. Dashboard preference changes do not rewrite approved artifacts.
+
+For host installation, stage validated files, detect conflicts, preserve originals and record ownership. Verify activation through the actual host; a copied file is insufficient. Restore/uninstall only unchanged receipt-owned additions. Keep unrelated settings and user-modified files intact; report conflicts with a recovery path.
+
+## Mode, outputs and exit
+
+Guided obtains any relevant material design choice; YOLO may choose within existing scope. Both honour installation authority and budget. Use the installed host's supported operations; do not invent syntax or claim unavailable capabilities.
+
+Return preview/result, scope, versions, validation and install/activation/restore receipts as applicable. Exit when the requested operation is verified or its exact blocker is recorded. Never claim a theme is active solely because template files were produced.

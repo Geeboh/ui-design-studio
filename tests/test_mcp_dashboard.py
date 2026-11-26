@@ -172,7 +172,7 @@ class DashboardTests(unittest.TestCase):
 
     def test_landing_open_auth_origin_host_and_body_guards(self):
         self.inventory.return_value = ("192.0.2.8",)
-        session = self.session()
+        session = self.session(host="0.0.0.0")
         root, relative = self.new_run()
         url = session.local_url
         origin = "http://" + urlsplit(url).netloc
@@ -233,7 +233,7 @@ class DashboardTests(unittest.TestCase):
         with mock.patch.object(dashboard.psutil, "net_if_addrs", return_value={}), mock.patch.object(dashboard.psutil, "net_if_stats", return_value={}):
             self.assertEqual(self.real_inventory(), ())
         self.inventory.return_value = ("10.0.0.2", "10.0.0.12")
-        selected = self.session(lan_address="10.0.0.12")
+        selected = self.session(host="0.0.0.0", lan_address="10.0.0.12")
         self.assertEqual([urlsplit(value).hostname for value in selected.info()["lanUrls"]], ["10.0.0.12"])
         self.assertEqual(selected.info()["qrUrl"], selected.info()["lanUrls"][0])
         loopback = self.session(host="127.0.0.1")
@@ -244,7 +244,7 @@ class DashboardTests(unittest.TestCase):
 
     def test_refresh_replaces_owned_aliases_and_revokes_removed_origins(self):
         self.inventory.return_value = ("192.0.2.8", "192.0.2.9")
-        session = self.session()
+        session = self.session(host="0.0.0.0")
         root, relative = self.new_run()
         session.open_run(relative)
         owned = session._handles[root].server
@@ -682,7 +682,7 @@ class DashboardTests(unittest.TestCase):
             self.skipTest("No up non-loopback IPv4 interface exists for the real LAN listener check")
         address = available[0]
         self.inventory.return_value = (address,)
-        session = self.session()
+        session = self.session(host="0.0.0.0")
         code, unused, identity = self.request(session.lan_urls[0], "/api/identity")
         self.assertEqual(code, 200)
         self.assertEqual(identity["instanceId"], session.instance_id)
@@ -697,7 +697,7 @@ class DashboardTests(unittest.TestCase):
 
     def test_cli_json_and_human_output_share_independently_decodable_qr(self):
         self.inventory.return_value = ("192.0.2.8",)
-        session = self.session()
+        session = self.session(host="0.0.0.0")
         root, relative = self.new_run()
         session.open_run(relative)
         source = Path(__file__).resolve().parents[1] / "src"
@@ -792,7 +792,7 @@ class DashboardTests(unittest.TestCase):
 
     def test_refresh_retries_owned_alias_publication_before_committing_session_addresses(self):
         self.inventory.return_value = ("192.0.2.8",)
-        session = self.session()
+        session = self.session(host="0.0.0.0")
         root, relative = self.new_run()
         session.open_run(relative)
         owned = session._handles[root].server
@@ -824,7 +824,7 @@ class DashboardTests(unittest.TestCase):
 
     def test_refresh_reconciles_each_owned_server_when_inventory_returns_after_partial_failure(self):
         self.inventory.return_value = ("192.0.2.8",)
-        session = self.session()
+        session = self.session(host="0.0.0.0")
         first_root, first_run = self.new_run()
         second_root, second_run = self.new_run()
         session.open_run(first_run)

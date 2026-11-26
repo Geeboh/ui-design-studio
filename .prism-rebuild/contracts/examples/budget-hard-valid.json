@@ -1,0 +1,17 @@
+{
+  "recordType": "budgetAccount",
+  "schemaVersion": "2.0.0",
+  "budgetAccountId": "budget_design",
+  "runId": "run_demo",
+  "revision": 1,
+  "category": "design",
+  "currencyCode": "USD",
+  "currencyExponent": 2,
+  "capMinor": 10000,
+  "enforcement": "hard",
+  "controlledDispatch": true,
+  "boundedCharges": true,
+  "critiqueCountsTowardDesign": true,
+  "createdAt": "2026-11-26T00:00:00Z",
+  "updatedAt": "2026-11-26T00:00:00Z"
+}

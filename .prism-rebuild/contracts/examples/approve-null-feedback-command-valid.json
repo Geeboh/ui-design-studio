@@ -1,0 +1,37 @@
+{
+  "recordType": "commandEnvelope",
+  "schemaVersion": "2.0.0",
+  "command": "approval.decide",
+  "operationId": "operation_approve",
+  "idempotencyKey": "example-decision-1",
+  "actor": {
+    "actorId": "actor_human",
+    "kind": "human",
+    "displayName": "Example reviewer"
+  },
+  "scope": {
+    "projectId": "project_demo",
+    "runId": "run_demo",
+    "purpose": "component",
+    "componentIds": [
+      "component_header"
+    ],
+    "artifactVersionIds": [
+      "artifact_version_one"
+    ],
+    "stage": "design"
+  },
+  "expectedVersions": [
+    {
+      "entityType": "ApprovalRequest",
+      "entityId": "request_one",
+      "revision": 1
+    }
+  ],
+  "payload": {
+    "requestId": "request_one",
+    "scopeFingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "outcome": "approved",
+    "feedback": null
+  }
+}

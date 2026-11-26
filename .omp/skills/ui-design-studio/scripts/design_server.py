@@ -82,6 +82,14 @@ def timestamp():
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="microseconds")
 
 
+def approval_run_digest(run):
+    material = {key: run.get(key) for key in (
+        "id", "mode", "scope", "scopeSchemaVersion", "scopeRationale", "themeAction",
+        "themeId", "projectContext", "modelPolicy", "modelRouting", "themeDigest",
+    )}
+    return digest(canonical(material))
+
+
 def need(studio, condition, message):
     studio.require(condition, message)
 
@@ -446,8 +454,9 @@ def current_decision(studio, root, run, decision):
     actor = decision.get("actor")
     if actor not in ("user", "agent-yolo") or (run.get("mode") == "guided" and actor != "user"):
         return False
-    if not isinstance(decision.get("rationale"), str) or not decision["rationale"].strip():
-        return False
+    if decision.get("outcome") in ("changes", "rejected") or actor == "agent-yolo":
+        if not isinstance(decision.get("rationale"), str) or not decision["rationale"].strip():
+            return False
     return decision.get("inputsDigest") == studio.file_digest(root, decision.get("inputs"))
 
 
@@ -490,7 +499,7 @@ def publish_request(studio, root, request_id, stage, title, context, files, choi
             seen.add(option["id"])
         request = {"schemaVersion": "1.0", "id": request_id, "stage": stage, "title": title, "context": context,
                    "inputs": inputs, "inputsDigest": studio.file_digest(root, inputs), "options": choices,
-                   "decisionsDigest": digest(canonical(decisions)), "runDigest": digest(canonical(run)),
+                   "decisionsDigest": digest(canonical(decisions)), "runDigest": approval_run_digest(run),
                    "createdAt": timestamp(), "status": "pending"}
         path = studio.safe_path(root, f"approval-requests/{request_id}.json", must_exist=False)
         if path.exists():
@@ -522,7 +531,7 @@ def approve(studio, root, payload, repo=None):
             current_inputs = expanded_inputs(studio, root, request["inputs"])
             current_inputs = bind_theme_sources(studio, root, current_inputs, source_record)
             fresh = (current_inputs == request["inputs"] and studio.file_digest(root, current_inputs) == request["inputsDigest"]
-                     and digest(canonical(decisions)) == request["decisionsDigest"] and digest(canonical(run)) == request["runDigest"])
+                     and digest(canonical(decisions)) == request["decisionsDigest"] and approval_run_digest(run) == request["runDigest"])
         except (studio.StudioError, OSError, UnicodeError, ValueError, KeyError):
             fresh = False
         if not fresh or payload.get("inputsDigest") != request.get("inputsDigest"):
@@ -1086,7 +1095,7 @@ class DesignState:
                     decision = latest.get(request["stage"], {})
                     try:
                         inputs = expanded_inputs(studio, root, request["inputs"])
-                        changed = inputs != request["inputs"] or studio.file_digest(root, inputs) != request["inputsDigest"] or digest(canonical(run)) != request["runDigest"]
+                        changed = inputs != request["inputs"] or studio.file_digest(root, inputs) != request["inputsDigest"] or approval_run_digest(run) != request["runDigest"]
                     except (studio.StudioError, OSError, UnicodeError, ValueError, TypeError):
                         changed = True
                     if changed:
@@ -1469,7 +1478,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             path = self.request_path()
             shutdown = self.server.shutdown_only
-            if (shutdown and path != "/api/shutdown") or (not shutdown and path != "/api/approval"):
+            if (shutdown and path != "/api/shutdown") or (not shutdown and path not in ("/api/approval", "/api/command")):
                 self.respond(404, {"error": "Not found"})
                 return
             if not self.authorized(owner.shutdown_token if shutdown else owner.token):
@@ -1492,6 +1501,8 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self.respond(200, {"status": "PASS", "instanceId": owner.instance_id})
                 owner.stop.set()
+            elif path == "/api/command":
+                self.respond(200, owner.dispatch_command(payload))
             else:
                 self.respond(200, approve(owner.studio, owner.root, payload, owner.repo))
         except ApprovalConflict as exc:
@@ -1518,6 +1529,13 @@ class DesignServer:
         self.close_lock = threading.RLock()
         self.http = self.local = self.run_lock = self.temporary = self.state = None
         self.threads = []
+
+    def dispatch_command(self, payload):
+        from ui_design_studio.application import dispatch
+        from ui_design_studio.storage import StateStore
+
+        state_root = Path(self.repo or self.root) / ".ui-design-studio" / "prism" / "state.sqlite3"
+        return dispatch(StateStore(state_root), payload)
 
     @property
     def addresses(self):
