@@ -389,6 +389,32 @@ class DashboardBrowserTests(unittest.TestCase):
         page.locator('[data-usage-range="7d"]').focus()
         page.locator('[data-usage-range="7d"]').press("Enter")
         expect(page.locator('[data-usage-range="7d"]')).to_have_attribute("aria-pressed", "true")
+    def test_narrow_reflow_reduced_motion_and_text_contrast(self):
+        root = self.new_run()
+        server = self.backend.DesignServer(self.engine, root, interval=0.05)
+        self.addCleanup(server.close)
+        server.start()
+        page = self.page()
+        page.set_viewport_size({"width": 320, "height": 800})
+        page.emulate_media(reduced_motion="reduce")
+        page.goto(server.url)
+        expect(page.locator("#connection-status")).to_have_text("Connected")
+        self.assertTrue(page.evaluate("matchMedia('(prefers-reduced-motion: reduce)').matches"))
+        self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth"))
+        transition = page.locator("#refresh-snapshot").evaluate("(node) => getComputedStyle(node).transitionDuration")
+        self.assertIn(transition, {"0s", "0ms"})
+        contrast = page.evaluate("""() => {
+            const style = getComputedStyle(document.documentElement);
+            const parse = value => value.match(/[0-9a-f]{2}/gi).map(part => parseInt(part, 16) / 255);
+            const [r1, g1, b1] = parse(style.getPropertyValue('--text'));
+            const [r2, g2, b2] = parse(style.getPropertyValue('--canvas'));
+            const lum = (r, g, b) => [r, g, b].map(value => value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+            const light = Math.max(lum(r1, g1, b1), lum(r2, g2, b2));
+            const dark = Math.min(lum(r1, g1, b1), lum(r2, g2, b2));
+            return (light + 0.05) / (dark + 0.05);
+        }""")
+        self.assertGreaterEqual(contrast, 4.5)
+
 
     def test_cancel_and_reconcile_render_unknown_remote_outcome(self):
         root = self.new_run()
