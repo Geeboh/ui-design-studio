@@ -4,7 +4,7 @@
 
 - Branch: `overhaul/prism-v2`.
 - Candidate commit: the clean `HEAD` is recorded by the release runner and `.prism-state/progress.json`.
-- Source fingerprint: `7989b907fe0e422bc3f73fbb50ada53d6cfc23c205ab9a067ee6e7dec3cdc655`.
+- Source fingerprint: recorded in `.prism-state/progress.json` and the release receipt.
 - Verification plan: `.prism-state/verification-plan.json`.
 - Human participant research: deferred by project policy.
 
