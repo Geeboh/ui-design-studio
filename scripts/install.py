@@ -389,7 +389,7 @@ def ensure_venv(root: Path) -> bool:
         _ensure_venv_python(target)
         return False
     try:
-        subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(target)], check=True)
+        subprocess.run([sys.executable, "-m", "venv", "--without-pip", "--copies", str(target)], check=True)
         _ensure_venv_python(target)
     except (subprocess.CalledProcessError, OSError) as exc:
         import shutil
