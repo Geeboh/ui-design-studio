@@ -11,14 +11,14 @@
 ## Evidence
 
 - Current focused M0 preflight, M1 core, M2 migration, M3 workflow, M4 governance, M5 browser, M6 knowledge/theme/performance, M7 distribution/security, and M8 artifact checks passed.
-- The dashboard browser matrix passed 13 tests in each of Chromium, Firefox, and WebKit. A Playwright Fast visual capture produced `.prism-state/dashboard-visual.png`.
+- The dashboard browser matrix passed 14 tests in each of Chromium, Firefox, and WebKit. A Playwright Fast visual capture produced `.prism-state/dashboard-visual.png`.
 - The standalone OMP host regression passed 52 of 52 tests.
 - The current artifact hashes are recorded in `.prism-state/release-artifacts.txt`.
 - The wheel rebuilt from the extracted sdist matched the direct wheel hash. The source ZIP extracted without private runtime paths.
 
 ## Open release blocker
 
-The release profile remains blocked by `.prism-state/release-review.json`. The current sequential review cannot substantiate late-completion reconciliation, full theme install/activation/upgrade integration, bounded snapshot performance, the required browser matrix, knowledge integration into worker packets, and complete current-candidate acceptance mapping.
+The release profile remains blocked by `.prism-state/release-review.json`. The remaining gaps are full zoom/state accessibility coverage, live OMP session qualification, complete acceptance mapping, and substantive release evidence for every mapped case.
 
 The release runner reports:
 
