@@ -726,6 +726,7 @@
     view.annotationFuture = [];
     view.draft.annotations = copyAnnotations(annotations);
     renderAnnotationEditor(view);
+    persistDraft(view);
   }
 
   function createAnnotationEditor(view, prefix) {
@@ -769,6 +770,24 @@
     const clear = element("button", "button button-quiet", "Clear marks");
     for (const button of [undo, redo, clear]) button.type = "button";
     toolbar.append(colorLabel, textLabel, undo, redo, clear);
+    const coordinateFields = element("fieldset", "annotation-coordinates");
+    coordinateFields.append(element("legend", "", "Add a mark without dragging"));
+    const coordinateInputs = {};
+    for (const [name, label] of [["startX", "Start X"], ["startY", "Start Y"], ["endX", "End X"], ["endY", "End Y"]]) {
+      const field = element("label", "", label);
+      const input = element("input");
+      input.type = "number";
+      input.min = "0";
+      input.max = "1";
+      input.step = "0.001";
+      input.inputMode = "decimal";
+      field.append(input);
+      coordinateFields.append(field);
+      coordinateInputs[name] = input;
+    }
+    const coordinateAdd = element("button", "button button-quiet", "Add from coordinates");
+    coordinateAdd.type = "button";
+    coordinateFields.append(coordinateAdd);
     const stage = element("div", "annotation-stage");
     stage.tabIndex = 0;
     stage.setAttribute("role", "application");
@@ -777,7 +796,7 @@
     image.alt = "Uploaded feedback image";
     const svg = annotationSvgElement("svg", { viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true" });
     stage.append(image, svg);
-    feedback.append(uploadLabel, attachmentList, toolbar, stage);
+    feedback.append(uploadLabel, attachmentList, toolbar, coordinateFields, stage);
     view.feedback = feedback;
     view.attachmentUpload = upload;
     view.attachmentList = attachmentList;
@@ -790,6 +809,8 @@
     view.annotationStage = stage;
     view.annotationImage = image;
     view.annotationSvg = svg;
+    view.annotationCoordinateInputs = coordinateInputs;
+    view.annotationCoordinateAdd = coordinateAdd;
     view.annotationPast = [];
     view.annotationFuture = [];
     view.annotationPreview = null;
@@ -810,10 +831,26 @@
           view.draft.attachments.push({ id, name: file.name, mimeType: file.type, data, previewUrl });
           view.draft.activeAttachmentId = id;
           renderAnnotationEditor(view);
+          persistDraft(view);
         });
         reader.readAsDataURL(file);
       }
       upload.value = "";
+    });
+    coordinateAdd.addEventListener("click", () => {
+      const active = view.draft.attachments.find((item) => item.id === view.draft.activeAttachmentId);
+      const values = Object.fromEntries(Object.entries(coordinateInputs).map(([name, input]) => [name, Number(input.value)]));
+      const valid = active && Object.values(values).every((value) => Number.isFinite(value) && value >= 0 && value <= 1);
+      if (!valid) {
+        view.message.hidden = false;
+        view.message.dataset.state = "error";
+        view.message.textContent = "Select an image and enter coordinates from 0 through 1.";
+        return;
+      }
+      const first = [values.startX, values.startY];
+      const second = [values.endX, values.endY];
+      const points = view.draft.annotationTool === "text" ? [first] : [first, second];
+      setAnnotations(view, [...view.draft.annotations, { attachmentId: active.id, tool: view.draft.annotationTool, points, text: text.value.trim(), color: color.value, width: 3 }]);
     });
     stage.addEventListener("pointerdown", (event) => {
       const active = view.draft.attachments.find((item) => item.id === view.draft.activeAttachmentId);
@@ -1067,6 +1104,8 @@
     view.annotationRedo.disabled = feedbackDisabled || !view.annotationFuture.length;
     view.annotationClear.disabled = feedbackDisabled || !draft.annotations.some((item) => item.attachmentId === draft.activeAttachmentId);
     view.annotationStage.dataset.disabled = String(feedbackDisabled);
+    Object.values(view.annotationCoordinateInputs).forEach((input) => { input.disabled = feedbackDisabled; });
+    view.annotationCoordinateAdd.disabled = feedbackDisabled;
     view.confirmation.disabled = draft.submitting || stale || terminal || !guided;
     if (stale && draft.reviewed) {
       draft.reviewed = false;
