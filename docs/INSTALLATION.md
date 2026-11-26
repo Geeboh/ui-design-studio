@@ -1,6 +1,6 @@
 # Installation, configuration and maintenance
 
-**UI Design Studio 1.4.3**
+**UI Design Studio 2.0.0**
 
 This guide covers the project-local OMP installation. For the standalone Python package and a local MCP stdio client, use [Connect UI Design Studio through local MCP](MCP.md). MCP installation does not copy OMP instructions or modify client configuration.
 
@@ -42,7 +42,7 @@ The designer inspects available OMP capabilities at runtime. A particular Figma 
 
 ## 2. Select the project and install
 
-Extract the release. Open a shell in its `ui-design-studio-v1.4.3` directory. Point `--project` at the existing repository containing the application you want to redesign:
+Extract the release. Open a shell in its `ui-design-studio-v2.0.0` directory. Point `--project` at the existing repository containing the application you want to redesign:
 
 ```bash
 bash ./install.sh --project /absolute/path/to/project --dry-run
@@ -193,7 +193,7 @@ The updater preflights changes, checks package ownership, backs up replaced/reti
 
 After updating, use `/reload-plugins` in the project session. Resume an existing design run when that is the intended work; do not begin a second overlapping run accidentally.
 
-Version 1.1.0 reads existing 1.0 run dossiers without rewriting their accepted history. Completed dossiers stay immutable. When an incomplete 1.0 run needs the new workflow or model helpers, the director creates a linked 1.1 continuation, preserving the old dossier and recording its path/digest as provenance. It reuses the existing theme scaffold, retains the theme identity/action where valid, re-reads current requirements, resolves model routing, reconciles coverage and revalidates evidence. Authentic still-valid design choices remain traceable; final acceptance is never imported. Legacy TADA continuations retain the offline requirement. See [Continue interrupted work](RUN-TYPES.md#11-continue-interrupted-work) for the full procedure.
+Legacy 1.0 and 1.1 run dossiers are read without rewriting accepted history. Completed dossiers stay immutable. When an incomplete legacy run needs the current workflow or model helpers, the director creates a linked continuation, preserving the old dossier and recording its path and digest as provenance. It reuses the existing theme scaffold, retains the theme identity and action where valid, re-reads current requirements, resolves model routing, reconciles coverage and revalidates evidence. Authentic still-valid design choices remain traceable; final acceptance is never imported. Legacy TADA continuations retain the offline requirement. See [Continue interrupted work](RUN-TYPES.md#11-continue-interrupted-work) for the full procedure.
 
 Use the ordinary resume prompt: you do not need to edit schemas or run migration commands. This is a procedure performed by the director, not a separate automatic migration utility. A successful installation update does not refresh old application test evidence by itself.
 

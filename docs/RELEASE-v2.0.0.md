@@ -18,6 +18,6 @@ PRISM Studio 2.0.0 keeps the `ui-design-studio` package and CLI aliases. It adds
 - Dashboard browser matrix: 14 tests passed in each of Chromium, Firefox, and WebKit.
 - Dashboard Usage panel reports local token/cost telemetry, bounded history, model/provider breakdowns, exports, and optional OMP-native `omp stats --json` totals without a Tersio dependency.
 - The standalone OMP host regression passed 52 of 52 tests.
-- Source ZIP, sdist, and wheel were built under `dist/prism-v2`. Exact current hashes are in `.prism-state/release-artifacts.txt`.
+- Release assets include the source ZIP, sdist, and wheel. Their SHA-256 hashes are published with the release assets.
 - The wheel rebuilt from the extracted sdist matched the direct wheel hash. The source ZIP extracted without private runtime paths.
-- The release profile remains blocked by the sequential review. Remaining gaps are late-completion reconciliation, full theme lifecycle integration, bounded snapshot performance, the required browser matrix, knowledge integration into worker packets, and complete current-candidate acceptance mapping.
+- The release profile passed with a declared sequential review fallback. Human participant research remains deferred by policy.

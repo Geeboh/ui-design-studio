@@ -1,10 +1,10 @@
 # Distribution and release maintenance
 
-UI Design Studio 1.4.3 is a complete project-local OMP skills distribution with an optional standalone local MCP adapter. It may be copied, modified and redistributed under the included MIT license. Keep the copyright and license with copies. Imported reference images and assets used in future design runs retain their own licenses; this package's license does not change them.
+UI Design Studio 2.0.0 is the complete project-local OMP skills distribution and optional standalone local MCP adapter. It may be copied, modified and redistributed under the included MIT license. Keep copyright and license copies. Imported reference images and assets used in future design runs retain their own licenses; the package's license does not change them.
 
 ## What recipients receive
 
-The ZIP contains one top-level `ui-design-studio-v1.4.3/` directory. Start at `README.md`; follow `docs/INSTALLATION.md` and `docs/RUN-TYPES.md`. `release.json` identifies the version, default policies and compatibility scope. `docs/VALIDATION.md` states what was actually checked.
+The ZIP contains one top-level `ui-design-studio-v2.0.0/` directory. Start at `README.md`; follow `docs/INSTALLATION.md` and `docs/RUN-TYPES.md`. `release.json` identifies version, default policies and compatibility scope. `docs/VALIDATION.md` states what was actually checked.
 
 Included: nine skills, seven native OMP specialist definitions, two convenience commands, a native status extension, the Design Server and dashboard, focused reference documents, installation/update/restore utilities, project/run/model-routing helpers, theme schema/compiler/validator, an original CSS/SVG specimen, copy-and-paste run prompts, regression tests and a reproducible release builder.
 
@@ -41,7 +41,7 @@ The only use of system Python is creating the virtual environment. The OMP helpe
 After reviewing and testing the complete source tree:
 
 ```bash
-.venv-release/bin/python scripts/package_release.py --output dist/UI-Design-Studio-OMP-v1.4.3.zip
+.venv-release/bin/python scripts/package_release.py --output dist/PRISM-Studio-2.0.0.zip
 ```
 
 The builder regenerates `MANIFEST.sha256`, writes the ZIP and a SHA-256 sidecar, reopens the ZIP, checks every entry against its source bytes and checks CRCs. Entries have deterministic ordering, release-date timestamps and portable file modes. `install.sh` and the project wrapper retain executable permissions.
@@ -51,7 +51,7 @@ Only the declared source directories and root release files are packaged. Virtua
 The source ZIP also includes `src`, `pyproject.toml`, the build hook, and the [MCP adapter guide](MCP.md). Build the standalone wheel with `python -m build --wheel`. Hatchling maps the same authored `.omp/skills` and `.omp/agents` files into `ui_design_studio/payload`; no second source copy is maintained. Wheel builds reject symlinks and exclude bytecode, caches, private runtime records, and credentials. The wheel carries no OMP installation step or client configuration mutation.
 
 
-For another release, update the release version/date, code version constants, release notes and user-facing commands consistently; run the meaningful checks again and rebuild. Theme versions are independent of the designer package version. Fieldstone's theme version remains 1.0.0 for its unchanged runtime styling; the distribution's surrounding guidance has been updated.
+For another release, update the release version and date, code version constants, release notes and user-facing commands consistently; run meaningful checks again and rebuild. Theme versions are independent designer package versions. Fieldstone's theme version remains 1.0.0 because its runtime styling is unchanged; distribution guidance around it may change.
 
 ## Compatibility and support record
 
