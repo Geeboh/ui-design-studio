@@ -27,6 +27,8 @@ if not 1 <= args.iterations <= 1000:
     raise SystemExit("iterations must be between 1 and 1000")
 if not 1 <= args.snapshot_files <= 500:
     raise SystemExit("snapshot-files must be between 1 and 500")
+SNAPSHOT_P95_BUDGET_MS = 250.0
+PAGING_P95_BUDGET_MS = 25.0
 
 
 def percentile(samples, value):
@@ -81,6 +83,11 @@ with tempfile.TemporaryDirectory(prefix="prism-performance-") as temporary:
     finally:
         server.close()
 
+snapshot_p95 = percentile(snapshot_samples, 0.95)
+paging_p95 = percentile(page_samples, 0.95)
+if snapshot_p95 > SNAPSHOT_P95_BUDGET_MS or paging_p95 > PAGING_P95_BUDGET_MS:
+    raise SystemExit(f"performance budget exceeded: snapshot_p95={snapshot_p95:.2f}ms, paging_p95={paging_p95:.2f}ms")
+
 print(json.dumps({
     "status": "PASS",
     "fixture": str(path),
@@ -89,6 +96,6 @@ print(json.dumps({
     "iterations": len(knowledge_samples),
     "errors": 0,
     "knowledge": {"p50Ms": percentile(knowledge_samples, 0.5), "p95Ms": percentile(knowledge_samples, 0.95), "samplesMs": knowledge_samples},
-    "snapshot": {"fixtureFiles": args.snapshot_files, "p50Ms": percentile(snapshot_samples, 0.5), "p95Ms": percentile(snapshot_samples, 0.95), "samplesMs": snapshot_samples},
-    "paging": {"pageSize": 10, "historyFiles": args.snapshot_files + 3, "p95Ms": percentile(page_samples, 0.95), "staleCursorRejected": stale_cursor_rejected},
+    "snapshot": {"fixtureFiles": args.snapshot_files, "p50Ms": percentile(snapshot_samples, 0.5), "p95Ms": snapshot_p95, "budgetP95Ms": SNAPSHOT_P95_BUDGET_MS, "samplesMs": snapshot_samples},
+    "paging": {"pageSize": 10, "historyFiles": args.snapshot_files + 3, "p95Ms": paging_p95, "budgetP95Ms": PAGING_P95_BUDGET_MS, "staleCursorRejected": stale_cursor_rejected},
 }, sort_keys=True))

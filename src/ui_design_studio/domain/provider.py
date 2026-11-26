@@ -61,7 +61,9 @@ class ProviderReconciler:
 
     def reconcile(self, attempt_id: str, provider_receipt: str, charge: Money, *, reserved_minor: int) -> ProviderAttempt:
         if provider_receipt in self.receipts:
-            return self._get(self.receipts[provider_receipt])
+            if self.receipts[provider_receipt] != attempt_id:
+                raise ProviderError("provider receipt belongs to a different attempt")
+            return self._get(attempt_id)
         attempt = self._get(attempt_id)
         if attempt.charge is not None and attempt.charge != charge:
             raise ProviderError("attempt was reconciled with a different charge")

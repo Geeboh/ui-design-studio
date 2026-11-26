@@ -98,6 +98,15 @@ class ThemeLifecycle:
         active_path = self.state_root / "active.json"
         active = json.loads(active_path.read_text(encoding="utf-8")) if active_path.is_file() else {}
         managed_files = active.get("installedFiles", {}) if isinstance(active, dict) else {}
+        if not managed_files:
+            for receipt_path in sorted(self.state_root.glob("*.json"), key=lambda path: path.stat().st_mtime_ns, reverse=True):
+                try:
+                    candidate_receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+                except (OSError, UnicodeError, json.JSONDecodeError):
+                    continue
+                if candidate_receipt.get("target") == str(target) and isinstance(candidate_receipt.get("installedFiles"), dict):
+                    managed_files = candidate_receipt["installedFiles"]
+                    break
         staging = Path(tempfile.mkdtemp(prefix="theme-upgrade-", dir=self.state_root))
         backup = self.state_root / f"{receipt_id}.previous"
         had_target = target.exists()
@@ -105,6 +114,14 @@ class ThemeLifecycle:
         try:
             shutil.copytree(source, staging / "theme")
             candidate = staging / "theme"
+            for relative in sorted(set(managed_files) - set(current_files)):
+                replacement = staging / "theme" / relative
+                if replacement.is_file():
+                    replacement.unlink()
+                    preserved.append(f"deleted:{relative}")
+                elif replacement.is_dir():
+                    shutil.rmtree(replacement)
+                    preserved.append(f"deleted:{relative}")
             for relative, current_digest in current_files.items():
                 current = target / relative
                 replacement = candidate / relative

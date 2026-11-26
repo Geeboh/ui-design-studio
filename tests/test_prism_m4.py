@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 import unittest
 
 from ui_design_studio.domain.governance import BudgetAccount, BudgetError, BudgetLedger, GovernanceError, InstructionSnapshot, LeaseManager, Money, build_worker_packet, resolve_model
-from ui_design_studio.domain.provider import ProviderAttempt, ProviderReconciler
+from ui_design_studio.domain.provider import ProviderAttempt, ProviderError, ProviderReconciler
 
 
 class GovernanceTests(unittest.TestCase):
@@ -62,6 +62,13 @@ class GovernanceTests(unittest.TestCase):
         duplicate = reconciler.reconcile(attempt.attempt_id, "receipt-1", Money(55, "USD", 2), reserved_minor=50)
         self.assertEqual((settled.execution_state, settled.billing_state, settled.discrepancy_minor), ("succeeded", "settled", 5))
         self.assertIs(duplicate, settled)
+    def test_provider_receipt_cannot_cross_attempts(self):
+        reconciler = ProviderReconciler()
+        first = reconciler.prepare(ProviderAttempt("attempt-1", "request-1", "fixture", "model-a", None, "reservation-1"))
+        second = reconciler.prepare(ProviderAttempt("attempt-2", "request-2", "fixture", "model-a", None, "reservation-2"))
+        reconciler.reconcile(first.attempt_id, "receipt-1", Money(5, "USD", 2), reserved_minor=5)
+        with self.assertRaisesRegex(ProviderError, "different attempt"):
+            reconciler.reconcile(second.attempt_id, "receipt-1", Money(5, "USD", 2), reserved_minor=5)
 
 
 if __name__ == "__main__":

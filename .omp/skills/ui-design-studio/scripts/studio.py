@@ -1412,6 +1412,15 @@ def _knowledge_packet(repo, objective):
     try:
         document = read_json(catalog)
         rules = document.get("rules", [])
+        require(isinstance(document, dict) and document.get("schemaVersion") in {"1.0", "1.0.0"} and isinstance(rules, list), "Knowledge catalog is malformed")
+        for rule in rules:
+            require(isinstance(rule, dict) and all(isinstance(rule.get(key), str) and rule[key].strip() for key in ("id", "topic", "principle", "appliesWhen", "action", "check", "authority")), "Knowledge rule is incomplete")
+            sources = rule.get("sourceIds", [])
+            locators = rule.get("sourceLocators", {})
+            exceptions = rule.get("exceptions", [])
+            require(isinstance(sources, list) and isinstance(locators, dict) and isinstance(exceptions, list), "Knowledge provenance is malformed")
+            require(all(isinstance(source, str) and source.strip() for source in sources) and all(isinstance(exception, str) and exception.strip() for exception in exceptions), "Knowledge provenance is malformed")
+            require(all(source in locators and isinstance(locators[source], str) and locators[source].strip() for source in sources), "Knowledge source IDs require matching locators")
         terms = {term for term in re.findall(r"[a-z0-9]+", objective.lower()) if len(term) > 2}
         ranked = []
         for rule in rules:
