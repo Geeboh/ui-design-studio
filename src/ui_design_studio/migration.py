@@ -2,7 +2,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import StrEnum
+from enum import Enum
+try:
+    from enum import StrEnum
+except ImportError:
+    class StrEnum(str, Enum):
+        def __str__(self) -> str:
+            return self.value
 import hashlib
 import json
 import os
