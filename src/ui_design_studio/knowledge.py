@@ -38,8 +38,10 @@ def load_rules(path: str | Path) -> tuple[KnowledgeRule, ...]:
             raise KnowledgeError("knowledge rule is incomplete")
         sources = item.get("sourceIds", [])
         locators = item.get("sourceLocators", {})
-        if not isinstance(sources, list) or not isinstance(locators, dict) or any(not isinstance(source, str) for source in sources):
+        if not isinstance(sources, list) or not isinstance(locators, dict) or any(not isinstance(source, str) or not source.strip() for source in sources):
             raise KnowledgeError("knowledge provenance is malformed")
+        if not sources and item["authority"] != "engineering-proposal":
+            raise KnowledgeError("source-informed knowledge requires provenance")
         rules.append(KnowledgeRule(item["id"], item["topic"], item["principle"], item["appliesWhen"], item["action"], item["check"], item["authority"], tuple(sources), {str(key): str(value) for key, value in locators.items()}))
     return tuple(rules)
 

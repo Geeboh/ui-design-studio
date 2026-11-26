@@ -398,6 +398,21 @@ class DesignServerTests(unittest.TestCase):
         self.assertEqual(result["runStatus"], "cancelled")
         self.assertEqual(result["remoteOutcome"], "unknown")
         self.assertEqual(studio.read_json(self.root / "run.json")["status"], "cancelled")
+    def test_reconcile_records_pending_remote_outcome(self):
+        server = self.start()
+        self.request(server, "/api/cancel", "POST", {})
+        code, unused, result = self.request(server, "/api/reconcile", "POST", {})
+        self.assertEqual(code, 200)
+        self.assertEqual(result["runStatus"], "reconciling")
+        self.assertEqual(result["cancellation"]["remoteOutcome"], "unknown")
+    def test_snapshot_reuses_unchanged_artwork_dependencies(self):
+        (self.root / "sample.png").write_bytes(PNG)
+        server = self.start()
+        with mock.patch.object(backend, "dependency_bundle", wraps=backend.dependency_bundle) as bundle:
+            server.state.snapshot()
+            server.state.snapshot()
+        self.assertEqual(bundle.call_count, 0)
+
     def test_rejected_approval_status_is_persisted_for_other_consumers(self):
         request = self.plan("rejected-review")
         server = self.start()

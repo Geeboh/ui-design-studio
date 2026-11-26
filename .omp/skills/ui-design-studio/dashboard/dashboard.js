@@ -205,8 +205,11 @@
     byId("refresh-snapshot").disabled = state.inFlight || !state.token;
     byId("refresh-snapshot").textContent = state.inFlight ? "Refreshing" : "Refresh";
     const statusValue = state.snapshot?.run.status;
-    const terminal = ["completed", "passed", "cancelled"].includes(statusValue);
+    const cancellation = state.snapshot?.run.cancellation;
+    const terminal = ["completed", "passed", "cancelled", "reconciling"].includes(statusValue);
     byId("cancel-run").disabled = !snapshotFresh() || terminal || state.inFlight || !state.token;
+    byId("reconcile-run").hidden = !cancellation;
+    byId("reconcile-run").disabled = !snapshotFresh() || !cancellation || cancellation.remoteOutcome !== "unknown" || state.inFlight || !state.token;
     byId("snapshot-age").textContent = state.snapshot
       ? `Observed ${formatTime(state.snapshot.observedAt)} · received ${formatElapsed(Math.max(0, (performance.now() - state.lastSuccess) / 1000))} ago · revision ${state.snapshot.revision}`
       : "No snapshot received.";
@@ -305,13 +308,41 @@
       updateConnection();
     }
   }
+  async function reconcileRun() {
+    const button = byId("reconcile-run");
+    if (button.disabled) return;
+    button.disabled = true;
+    try {
+      const response = await fetch(new URL("api/reconcile", baseUrl), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${state.token}`, "Content-Type": "application/json", Accept: "application/json" },
+        body: "{}",
+        cache: "no-store", credentials: "omit", redirect: "error",
+      });
+      if (!response.ok) throw new Error(await responseError(response));
+      byId("connection-notice").hidden = false;
+      byId("connection-notice").dataset.state = "pending";
+      byId("connection-notice").textContent = "Reconciliation requested. Remote completion and billing remain unresolved until authoritative evidence arrives.";
+      await refreshSnapshot();
+    } catch (error) {
+      byId("connection-notice").hidden = false;
+      byId("connection-notice").dataset.state = "error";
+      byId("connection-notice").textContent = `Reconciliation was not requested. ${error.message || "Refresh and retry."}`;
+      updateConnection();
+    }
+  }
+
+  function cancellationDetail(snapshot) {
+    const cancellation = snapshot.run.cancellation;
+    return cancellation ? ` · cancellation ${cancellation.status} · remote outcome ${cancellation.remoteOutcome}` : "";
+  }
 
   function renderSnapshot() {
     const snapshot = state.snapshot;
     if (byId("server-url").textContent !== snapshot.server.url) byId("server-url").textContent = snapshot.server.url;
     byId("run-summary").textContent = `${snapshot.run.themeId} · ${snapshot.run.id}`;
     const mode = snapshot.run.mode === "yolo" ? "Autonomous yolo mode" : snapshot.run.mode === "guided" ? "Guided mode" : "Run mode unverified";
-    byId("run-detail").textContent = `Phase ${snapshot.run.phase || "unverified"} · ${mode} · server started ${formatTime(snapshot.server.startedAt)}`;
+    byId("run-detail").textContent = `Phase ${snapshot.run.phase || "unverified"} · ${mode} · server started ${formatTime(snapshot.server.startedAt)}${cancellationDetail(snapshot)}`;
     byId("run-status").textContent = snapshot.run.status;
     byId("run-status").dataset.state = snapshot.run.status;
     document.title = `${snapshot.run.themeId} · Design workspace`;
@@ -1534,6 +1565,7 @@
   });
   byId("refresh-snapshot").addEventListener("click", refreshSnapshot);
   byId("cancel-run").addEventListener("click", cancelRun);
+  byId("reconcile-run").addEventListener("click", reconcileRun);
   byId("viewer-compare").addEventListener("click", toggleViewerComparison);
   byId("server-url").textContent = window.location.href;
 

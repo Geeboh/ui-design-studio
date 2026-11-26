@@ -4,28 +4,29 @@
 
 - Branch: `overhaul/prism-v2`.
 - Candidate commit: the clean `HEAD` is recorded by the release runner and `.prism-state/progress.json`.
-- Source fingerprint: `86bd014ad4a38edd2655ecbfec3711078feda205c6dc90ab2a031693ed1f0269`.
+- Source fingerprint: `7989b907fe0e422bc3f73fbb50ada53d6cfc23c205ab9a067ee6e7dec3cdc655`.
 - Verification plan: `.prism-state/verification-plan.json`.
 - Human participant research: deferred by project policy.
 
 ## Evidence
 
-- Core G0-G4 passed before the final clean commit. The same command bindings, source bytes and test receipts are retained under `.prism-state/evidence/`.
-- Web G0-G7 passed before the final clean commit. The dashboard browser suite passed 10 tests. The Playwright Fast capture produced `.prism-state/dashboard-visual.png`.
-- Package, install, MCP, dashboard security, and source distribution checks passed in the isolated `.venv-prism` environment.
-- Final artifact hashes are in `.prism-state/release-artifacts.txt`.
+- Current focused M0 preflight, M1 core, M2 migration, M3 workflow, M4 governance, M5 browser, M6 knowledge/theme/performance, M7 distribution/security, and M8 artifact checks passed.
+- The Chromium dashboard suite passed 10 tests. A Playwright Fast visual capture produced `.prism-state/dashboard-visual.png`.
+- The standalone OMP host regression passed 52 of 52 tests.
+- The current artifact hashes are recorded in `.prism-state/release-artifacts.txt`.
+- The wheel rebuilt from the extracted sdist matched the direct wheel hash. The source ZIP extracted without private runtime paths.
 
 ## Open release blocker
 
-The actual OMP host regression remains open. `node --test tests/test_progress_extension.mjs` fails 17 of 52 tests. Several cases do not observe dashboard child readiness or run selection. The failures reproduce in a standalone run without concurrent gate activity.
+The release profile remains blocked by `.prism-state/release-review.json`. The current sequential review cannot substantiate late-completion reconciliation, full theme install/activation/upgrade integration, bounded snapshot performance, the required browser matrix, knowledge integration into worker packets, and complete current-candidate acceptance mapping.
 
-The release profile is therefore intentionally blocked by `.prism-state/release-review.json` and reports:
+The release runner reports:
 
 ```text
-Release review has unresolved severe findings or does not recommend readiness
+Review has unresolved severe findings or does not recommend readiness
 ```
 
-Recovery action. Trace `dashboardRuntime()` and readiness handling in `.omp/extensions/ui-design-progress.ts` with the failing fixtures. Fix the root cause. Rerun the complete Node host regression and the `release` profile against the same clean candidate. Do not mark the review ready before that result.
+Recovery action. Resolve the listed semantic gaps. Refresh every acceptance mapping against the clean candidate. Run the release profile and the required browser matrix. Do not mark the review ready before those results.
 
 ## Rollback
 

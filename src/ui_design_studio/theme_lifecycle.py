@@ -48,21 +48,43 @@ class ThemeLifecycle:
             raise ThemeLifecycleError("theme source and target must be separate directories")
         previous = _digest_tree(target) if target.is_dir() else None
         staging = Path(tempfile.mkdtemp(prefix="theme-stage-", dir=self.state_root))
+        backup = self.state_root / f"{receipt_id}.previous"
+        had_target = target.exists()
         try:
             shutil.copytree(source, staging / "theme")
             installed = _digest_tree(staging / "theme")
             target.parent.mkdir(parents=True, exist_ok=True)
-            backup = self.state_root / f"{receipt_id}.previous"
-            if target.exists():
-                if backup.exists():
-                    shutil.rmtree(backup)
+            if backup.exists():
+                shutil.rmtree(backup)
+            if had_target:
                 target.rename(backup)
             (staging / "theme").rename(target)
             receipt = ThemeReceipt(receipt_id, theme_id, scope, str(target), installed, previous)
             (self.state_root / f"{receipt_id}.json").write_text(json.dumps(receipt.as_dict(), sort_keys=True) + "\n", encoding="utf-8")
             return receipt
+        except BaseException:
+            if target.exists():
+                shutil.rmtree(target)
+            if had_target and backup.exists():
+                backup.rename(target)
+            raise
         finally:
             shutil.rmtree(staging, ignore_errors=True)
+
+    def activate(self, receipt: ThemeReceipt) -> dict[str, Any]:
+        target = Path(receipt.target).resolve()
+        if not target.is_dir() or _digest_tree(target) != receipt.installed_digest:
+            raise ThemeLifecycleError("theme target changed before activation; refusing to activate")
+        active = {"schemaVersion": "2.0.0", "receiptId": receipt.receipt_id, "themeId": receipt.theme_id, "scope": receipt.scope, "target": str(target), "installedDigest": receipt.installed_digest}
+        temporary = self.state_root / ".active.json.tmp"
+        temporary.write_text(json.dumps(active, sort_keys=True) + "\n", encoding="utf-8")
+        temporary.replace(self.state_root / "active.json")
+        return active
+
+    def upgrade(self, source: str | Path, target: str | Path, *, theme_id: str, scope: str, receipt_id: str) -> ThemeReceipt:
+        receipt = self.install(source, target, theme_id=theme_id, scope=scope, receipt_id=receipt_id)
+        self.activate(receipt)
+        return receipt
 
     def restore(self, receipt: ThemeReceipt) -> None:
         target = Path(receipt.target).resolve()
@@ -73,3 +95,11 @@ class ThemeLifecycle:
             shutil.rmtree(target)
         if backup.exists():
             backup.rename(target)
+        active = self.state_root / "active.json"
+        if active.is_file():
+            try:
+                if json.loads(active.read_text(encoding="utf-8")).get("receiptId") == receipt.receipt_id:
+                    active.unlink()
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                pass
+

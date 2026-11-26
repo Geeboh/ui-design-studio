@@ -30,13 +30,17 @@ class DashboardBrowserTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.playwright = sync_playwright().start()
-        cls.addClassCleanup(cls.playwright.stop)
-        options = {"headless": True, "args": ["--no-sandbox"],
-                   "ignore_default_args": ["--disable-back-forward-cache"]}
+        engine_name = os.environ.get("UI_DESIGN_TEST_ENGINE", "chromium").lower()
+        if engine_name not in {"chromium", "firefox", "webkit"}:
+            raise unittest.SkipTest(f"Unsupported browser engine: {engine_name}")
+        options = {"headless": True, "ignore_default_args": ["--disable-back-forward-cache"]}
+        if engine_name != "webkit":
+            options["args"] = ["--no-sandbox"]
         executable = os.environ.get("UI_DESIGN_TEST_BROWSER")
         if executable:
             options["executable_path"] = executable
-        cls.browser = cls.playwright.chromium.launch(**options)
+        cls.browser_engine = engine_name
+        cls.browser = getattr(cls.playwright, engine_name).launch(**options)
         cls.addClassCleanup(cls.browser.close)
 
     def setUp(self):
@@ -101,7 +105,7 @@ class DashboardBrowserTests(unittest.TestCase):
                 expect(page.locator("#run-list")).to_contain_text(later_run.name, timeout=6000)
                 expect(page.locator("#run-count")).to_have_text("2 recorded runs")
                 expect(page.locator("#connection-status")).to_have_text("Connected")
-                print(f"Real history navigation in Chromium {self.browser.version}: {observed}")
+                print(f"Real history navigation in {self.browser_engine} {self.browser.version}: {observed}")
             finally:
                 away.shutdown()
                 thread.join()
@@ -346,6 +350,23 @@ class DashboardBrowserTests(unittest.TestCase):
         compare.click()
         expect(page.locator("#viewer-content img")).to_be_visible()
         self.assertGreater(image.evaluate("(node) => node.naturalWidth"), 0)
+
+    def test_cancel_and_reconcile_render_unknown_remote_outcome(self):
+        root = self.new_run()
+        server = self.backend.DesignServer(self.engine, root, interval=0.05)
+        self.addCleanup(server.close)
+        server.start()
+        page = self.page()
+        page.goto(server.url)
+        expect(page.locator("#connection-status")).to_have_text("Connected")
+        expect(page.locator("#cancel-run")).to_be_enabled()
+        page.locator("#cancel-run").click()
+        expect(page.locator("#run-status")).to_have_text("cancelled")
+        expect(page.locator("#run-detail")).to_contain_text("remote outcome unknown")
+        expect(page.locator("#reconcile-run")).to_be_visible()
+        page.locator("#reconcile-run").click()
+        expect(page.locator("#run-status")).to_have_text("reconciling")
+        expect(page.locator("#run-detail")).to_contain_text("cancellation reconciling")
 
     def test_artwork_close_focus_survives_concurrent_approval(self):
         root = self.new_run()

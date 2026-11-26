@@ -595,18 +595,42 @@ def cancel_run(studio, root):
     with records_lock(studio, root):
         run_path = studio.safe_path(root, "run.json")
         run = studio.read_json(run_path)
-        if run.get("status") not in ("completed", "passed", "cancelled"):
+        if run.get("status") not in ("completed", "passed", "cancelled", "reconciling"):
             run["status"] = "cancelled"
             run["cancelledAt"] = timestamp()
             run["cancellation"] = {"status": "requested", "remoteOutcome": "unknown"}
             studio.atomic_json(run_path, run)
         return {"status": "PASS", "run": run.get("id"), "runStatus": run.get("status"), "remoteOutcome": run.get("cancellation", {}).get("remoteOutcome")}
+def reconcile_run(studio, root):
+    with records_lock(studio, root):
+        run_path = studio.safe_path(root, "run.json")
+        run = studio.read_json(run_path)
+        cancellation = run.get("cancellation")
+        need(studio, isinstance(cancellation, dict), "No cancellation is available for reconciliation")
+        if cancellation.get("remoteOutcome") == "unknown":
+            cancellation = dict(cancellation)
+            cancellation["status"] = "reconciling"
+            cancellation["requestedAt"] = cancellation.get("requestedAt") or timestamp()
+            run["cancellation"] = cancellation
+            if run.get("status") == "cancelled":
+                run["status"] = "reconciling"
+            studio.atomic_json(run_path, run)
+        return {"status": "PASS", "run": run.get("id"), "runStatus": run.get("status"), "cancellation": run.get("cancellation")}
 
 
 class ArtworkLibrary:
     def __init__(self, studio, root, repo=None):
         self.studio, self.root, self.repo = studio, Path(root), repo
         self.directory = studio.safe_path(root, "artwork-library", must_exist=False, allow_dir=True)
+        self._source_signatures = {}
+
+    def _dependency_signature(self, record):
+        signature = []
+        for relative in sorted(record.get("files", {})):
+            path = self.studio.safe_path(self.root, relative)
+            observed = path.stat()
+            signature.append((relative, observed.st_mtime_ns, observed.st_size))
+        return tuple(signature)
 
     def publication_index(self):
         index = read_record(self.studio, self.directory, "index.json", {"schemaVersion": "1.0", "current": {}, "versions": []})
@@ -667,6 +691,7 @@ class ArtworkLibrary:
         studio, root = self.studio, self.root
         warnings = []
         import_theme_art(studio, root, self.repo)
+        index = self.publication_index()
         for directory, dirs, names in os.walk(root, followlinks=False):
             base = Path(directory)
             dirs[:] = sorted(name for name in dirs if name not in EXCLUDED and not name.startswith(".") and not (base / name).is_symlink())
@@ -675,8 +700,18 @@ class ArtworkLibrary:
                 if source.is_symlink() or source.suffix.lower() not in VISUAL or name.startswith("."):
                     continue
                 relative = source.relative_to(root).as_posix()
+                current = index["current"].get(relative)
+                if current:
+                    try:
+                        record = self._manifest(studio.safe_path(self.directory, current, allow_dir=True))
+                        signature = self._dependency_signature(record)
+                        if self._source_signatures.get(relative) == signature:
+                            continue
+                    except (studio.StudioError, OSError, UnicodeError, ValueError, TypeError):
+                        pass
                 try:
-                    unused_record, dependency_warnings = self.retain(relative, strict=False)
+                    record, dependency_warnings = self.retain(relative, strict=False)
+                    self._source_signatures[relative] = self._dependency_signature(record)
                     warnings.extend(dependency_warnings)
                 except (studio.StudioError, OSError, UnicodeError, ValueError, TypeError) as exc:
                     warnings.append(f"Artwork {relative}: {exc}")
@@ -1144,6 +1179,8 @@ class DesignState:
                 "artworks": published_art, "evidence": published_evidence, "approvals": approvals,
                 "decisions": [{key: decision[key] for key in ("stage", "actor", "outcome", "rationale", "recordedAt", "optionId", "inputsDigest", "attachments", "annotations") if key in decision}
                               for decision in decisions["decisions"]]}
+        if isinstance(run.get("cancellation"), dict):
+            snap["run"]["cancellation"] = dict(run["cancellation"])
         stable = {key: value for key, value in snap.items() if key != "statistics"}
         stable["statistics"] = {key: value for key, value in snap["statistics"].items() if key != "elapsedSeconds"}
         revision = digest(canonical(stable))
@@ -1488,7 +1525,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             path = self.request_path()
             shutdown = self.server.shutdown_only
-            if (shutdown and path != "/api/shutdown") or (not shutdown and path not in ("/api/approval", "/api/command", "/api/cancel")):
+            if (shutdown and path != "/api/shutdown") or (not shutdown and path not in ("/api/approval", "/api/command", "/api/cancel", "/api/reconcile")):
                 self.respond(404, {"error": "Not found"})
                 return
             if not self.authorized(owner.shutdown_token if shutdown else owner.token):
@@ -1515,6 +1552,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(200, owner.dispatch_command(payload))
             elif path == "/api/cancel":
                 self.respond(200, cancel_run(owner.studio, owner.root))
+            elif path == "/api/reconcile":
+                self.respond(200, reconcile_run(owner.studio, owner.root))
             else:
                 self.respond(200, approve(owner.studio, owner.root, payload, owner.repo))
         except ApprovalConflict as exc:
