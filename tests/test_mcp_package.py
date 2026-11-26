@@ -44,7 +44,7 @@ class WheelTests(unittest.TestCase):
                              for name in self.names for part in Path(name).parts))
         metadata = next(name for name in self.names if name.endswith(".dist-info/METADATA"))
         with zipfile.ZipFile(self.wheel) as archive:
-            self.assertIn("Version: 2.0.0", archive.read(metadata).decode())
+            self.assertIn("Version: 2.0.1", archive.read(metadata).decode())
             self.assertEqual(archive.read("ui_design_studio/payload/skills/ui-design-studio/scripts/studio.py"), (ROOT / ".omp/skills/ui-design-studio/scripts/studio.py").read_bytes())
 
     def test_installed_cli_and_mcp_work_without_project_omp_install(self):
@@ -61,7 +61,7 @@ from mcp.client.stdio import stdio_client
 from ui_design_studio.runtime import PAYLOAD, studio
 installed, repo = sys.argv[1:]
 assert PAYLOAD.is_relative_to(Path(installed))
-assert studio().VERSION == '2.0.0'
+assert studio().VERSION == '2.0.1'
 command = "import sys; sys.path.insert(0, " + repr(installed) + "); from ui_design_studio.cli import mcp_main; mcp_main()"
 async def main():
     params = StdioServerParameters(command=sys.executable, args=['-I', '-c', command, '--repo', repo, '--dashboard-host', '127.0.0.1'])
@@ -69,7 +69,7 @@ async def main():
         async with ClientSession(*streams) as client:
             initialized = await client.initialize()
             assert initialized.serverInfo.name == 'UI Design Studio'
-            assert initialized.serverInfo.version == '2.0.0'
+            assert initialized.serverInfo.version == '2.0.1'
             guide = await client.call_tool('ui_design_read_guide', {'name':'skills/ui-design-studio/SKILL.md'})
             assert not guide.isError, guide
             assert 'UI Design Studio' in str(guide)
