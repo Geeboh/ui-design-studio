@@ -1006,6 +1006,20 @@ class DesignServerTests(unittest.TestCase):
         page = backend.status_page(snapshot, "artworks", 1)
         with self.assertRaisesRegex(ValueError, "stale or invalid"):
             backend.status_page(snapshot, "artworks", 1, "old-revision:0")
+    def test_status_page_cursor_rejects_concurrent_addition(self):
+        root = fixture_run(self.repo, self.theme)
+        (root / "a.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><rect width="1" height="1"/></svg>', encoding="utf-8")
+        backend.publish_artwork(studio, root, "a.svg", "Synthetic paging fixture.")
+        state = backend.DesignState(studio, root)
+        snapshot = state.snapshot()
+        page = backend.status_page(snapshot, "artworks", 1)
+        (root / "b.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><circle r="1"/></svg>', encoding="utf-8")
+        backend.publish_artwork(studio, root, "b.svg", "Concurrent addition fixture.")
+        changed = state.snapshot()
+        self.assertNotEqual(snapshot["revision"], changed["revision"])
+        with self.assertRaisesRegex(ValueError, "stale or invalid"):
+            backend.status_page(changed, "artworks", 1, page["nextCursor"])
+
 
     def test_status_page_rejects_malformed_inputs(self):
         snapshot = backend.DesignState(studio, fixture_run(self.repo, self.theme)).snapshot()

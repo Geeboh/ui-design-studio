@@ -21,7 +21,7 @@ from test_design_server import backend
 parser = argparse.ArgumentParser()
 parser.add_argument("--iterations", type=int, default=50)
 parser.add_argument("--rules", default=".prism-rebuild/knowledge/rules.json")
-parser.add_argument("--snapshot-files", type=int, default=40)
+parser.add_argument("--snapshot-files", type=int, default=100)
 args = parser.parse_args()
 if not 1 <= args.iterations <= 1000:
     raise SystemExit("iterations must be between 1 and 1000")
@@ -58,11 +58,26 @@ with tempfile.TemporaryDirectory(prefix="prism-performance-") as temporary:
     try:
         server.state.snapshot()
         snapshot_samples = []
+        page_samples = []
         for _ in range(args.iterations):
             started = time.perf_counter()
             snapshot = server.state.snapshot()
             snapshot_samples.append((time.perf_counter() - started) * 1000)
             assert snapshot["statistics"]["artworks"] >= args.snapshot_files
+        first_page = backend.status_page(snapshot, "artworks", 10)
+        (root / "late.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><circle r="1"/></svg>\n', encoding="utf-8")
+        backend.publish_artwork(studio, root, "late.svg", "Concurrent history fixture.")
+        changed = server.state.snapshot()
+        stale_cursor_rejected = False
+        try:
+            backend.status_page(changed, "artworks", 10, first_page["nextCursor"])
+        except ValueError:
+            stale_cursor_rejected = True
+        assert stale_cursor_rejected
+        for _ in range(args.iterations):
+            started = time.perf_counter()
+            backend.status_page(changed, "artworks", 10)
+            page_samples.append((time.perf_counter() - started) * 1000)
     finally:
         server.close()
 
@@ -75,4 +90,5 @@ print(json.dumps({
     "errors": 0,
     "knowledge": {"p50Ms": percentile(knowledge_samples, 0.5), "p95Ms": percentile(knowledge_samples, 0.95), "samplesMs": knowledge_samples},
     "snapshot": {"fixtureFiles": args.snapshot_files, "p50Ms": percentile(snapshot_samples, 0.5), "p95Ms": percentile(snapshot_samples, 0.95), "samplesMs": snapshot_samples},
+    "paging": {"pageSize": 10, "historyFiles": args.snapshot_files + 3, "p95Ms": percentile(page_samples, 0.95), "staleCursorRejected": stale_cursor_rejected},
 }, sort_keys=True))
