@@ -405,6 +405,58 @@ class DesignServerTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual(result["runStatus"], "reconciling")
         self.assertEqual(result["cancellation"]["remoteOutcome"], "unknown")
+    def test_usage_records_are_idempotent_and_exposed_without_tersio(self):
+        server = self.start()
+        observed_at = backend.timestamp()
+        payload = {
+            "usageId": "usage-observed", "idempotencyKey": "attempt-1", "sessionId": "session-1",
+            "providerRequested": "fixture-provider", "providerObserved": "fixture-provider",
+            "modelRequested": "fixture-model", "modelObserved": "fixture-model", "agentId": "director",
+            "executionStatus": "completed", "tokens": {"input": 100, "output": 25, "cacheRead": 40, "cacheWrite": 5},
+            "compression": {"before": 20, "after": 12, "source": "fixture-compressor"},
+            "cost": {
+                "actual": {"status": "observed", "amountMinor": 123, "currencyCode": "USD", "currencyExponent": 2, "source": "fixture-meter", "observedAt": observed_at},
+                "estimate": {"status": "estimated", "amountMinor": 200, "currencyCode": "USD", "currencyExponent": 2, "source": "fixture-quote", "observedAt": observed_at},
+                "providerCacheDiscount": {"status": "observed", "amountMinor": 10, "currencyCode": "USD", "currencyExponent": 2, "source": "fixture-cache", "observedAt": observed_at},
+            },
+        }
+        code, unused, first = self.request(server, "/api/usage", "POST", payload)
+        self.assertEqual(code, 200)
+        self.assertFalse(first["replayed"])
+        code, unused, replay = self.request(server, "/api/usage", "POST", payload)
+        self.assertEqual(code, 200)
+        self.assertTrue(replay["replayed"])
+        unknown = {"usageId": "usage-unknown", "idempotencyKey": "attempt-2", "executionStatus": "outcome_unknown", "tokens": {"input": 10}, "cost": {"actual": {"status": "unknown"}}}
+        self.assertEqual(self.request(server, "/api/usage", "POST", unknown)[0], 200)
+        snapshot = self.request(server)[2]
+        usage = snapshot["usage"]
+        self.assertEqual(usage["session"]["requests"], 2)
+        self.assertEqual(usage["session"]["inputTokens"], 110)
+        self.assertIsNone(usage["session"]["outputTokens"])
+        self.assertEqual(usage["session"]["unknownCostRequests"], 1)
+        self.assertEqual(usage["session"]["costs"][0]["actualMinor"], 123)
+        self.assertEqual(usage["session"]["costs"][0]["estimatedMinor"], 200)
+        self.assertEqual(self.request(server, "/api/usage/7d")[2]["range"], "7d")
+        code, headers, exported = self.request(server, "/api/usage/export.csv")
+        self.assertEqual(code, 200)
+        self.assertIn("attachment", headers["Content-Disposition"].lower())
+        self.assertIn(b"usageId", exported)
+    def test_omp_usage_endpoint_reads_native_stats_without_tersio(self):
+        command = self.repo / "omp-stats-fixture"
+        command.write_text(
+            "#!/usr/bin/env python3\nimport json\nprint(json.dumps({'overall': {'totalRequests': 3, 'totalInputTokens': 100, 'totalOutputTokens': 25, 'totalCacheReadTokens': 40, 'totalCost': 1.23}, 'byModel': [{'model': 'fixture-model', 'provider': 'fixture-provider', 'totalRequests': 3, 'totalInputTokens': 100, 'totalOutputTokens': 25, 'totalCost': 1.23}], 'byFolder': [], 'byAgentType': [], 'bySideChannel': [], 'timeSeries': []}))\n",
+            encoding="utf-8",
+        )
+        command.chmod(0o700)
+        with mock.patch.dict(os.environ, {"PRISM_OMP_COMMAND": str(command)}):
+            server = self.start()
+            server.state.omp_usage._refresh()
+            code, unused, content = self.request(server, "/api/usage/omp")
+        self.assertEqual(code, 200)
+        self.assertEqual(content["status"], "ready")
+        self.assertEqual(content["overall"]["totalRequests"], 3)
+        self.assertEqual(content["byModel"][0]["model"], "fixture-model")
+
     def test_snapshot_reuses_unchanged_artwork_dependencies(self):
         (self.root / "sample.png").write_bytes(PNG)
         server = self.start()

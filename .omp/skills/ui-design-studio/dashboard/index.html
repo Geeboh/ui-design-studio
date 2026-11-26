@@ -38,6 +38,7 @@
       <button id="nav-feed" type="button" data-view="feed" aria-controls="feed-panel">Working feed</button>
       <button id="nav-library" type="button" data-view="library" aria-controls="library-panel">Library</button>
       <button id="nav-approvals" type="button" data-view="approvals" aria-controls="approvals-panel">Approvals <span id="approval-count" class="nav-count" hidden></span></button>
+      <button id="nav-usage" type="button" data-view="usage" aria-controls="usage-panel">Usage</button>
     </nav>
   </header>
 
@@ -175,6 +176,66 @@
         <p class="muted">Actual decision records, newest first. These records do not replace acceptance gates.</p>
         <ol id="decision-list" class="decision-list"><li class="empty-state">Waiting for recorded decisions.</li></ol>
         <nav class="pagination" aria-label="Decision history pages"><button id="decision-previous" type="button" class="button button-quiet" disabled>Newer</button><span id="decision-page" aria-live="polite">No pages loaded</span><button id="decision-next" type="button" class="button button-quiet" disabled>Older</button></nav>
+      </section>
+    </section>
+    <section id="usage-panel" data-view-panel="usage" aria-labelledby="usage-heading" hidden aria-busy="true">
+      <div class="section-heading">
+        <div><p class="eyebrow">Tokens and cost</p><h2 id="usage-heading" tabindex="-1">Usage</h2><p id="usage-summary" class="muted">No usage records have been loaded.</p></div>
+        <span id="usage-status" class="status-badge" data-state="pending">Not loaded</span>
+      </div>
+      <div class="usage-toolbar" role="group" aria-label="Usage controls">
+        <div class="usage-ranges" role="group" aria-label="Usage range">
+          <button type="button" class="button button-quiet" data-usage-range="1h">1 hour</button>
+          <button type="button" class="button button-quiet" data-usage-range="24h" aria-pressed="true">24 hours</button>
+          <button type="button" class="button button-quiet" data-usage-range="7d">7 days</button>
+          <button type="button" class="button button-quiet" data-usage-range="30d">30 days</button>
+          <button type="button" class="button button-quiet" data-usage-range="all">All retained</button>
+        </div>
+        <span id="usage-source-note" class="muted">Local run telemetry. Unknown values remain unknown.</span>
+        <button id="usage-omp-refresh" type="button" class="button button-quiet">Refresh OMP stats</button>
+        <button id="usage-export-json" type="button" class="button button-quiet">Export JSON</button>
+        <button id="usage-export-csv" type="button" class="button button-quiet">Export CSV</button>
+      </div>
+      <div class="usage-card-grid">
+        <section class="panel usage-card"><h3>Requests</h3><p id="usage-requests">Unknown</p><span id="usage-request-detail" class="muted">No records</span></section>
+        <section class="panel usage-card"><h3>Failed</h3><p id="usage-failed">Unknown</p><span id="usage-failure-detail" class="muted">No records</span></section>
+        <section class="panel usage-card"><h3>Input tokens</h3><p id="usage-input">Unknown</p><span class="muted">Observed request input</span></section>
+        <section class="panel usage-card"><h3>Output tokens</h3><p id="usage-output">Unknown</p><span class="muted">Observed response output</span></section>
+        <section class="panel usage-card"><h3>Cache reads</h3><p id="usage-cache-read">Unknown</p><span class="muted">Provider-reported reads</span></section>
+        <section class="panel usage-card"><h3>Cache writes</h3><p id="usage-cache-write">Unknown</p><span class="muted">Provider-reported writes</span></section>
+        <section class="panel usage-card"><h3>Tokens saved</h3><p id="usage-saved">Unknown</p><span class="muted">Measured compression only</span></section>
+        <section class="panel usage-card"><h3>Actual cost</h3><p id="usage-actual-cost">Unknown</p><span id="usage-cost-detail" class="muted">Observed costs only</span></section>
+        <section class="panel usage-card"><h3>Estimated cost</h3><p id="usage-estimated-cost">Unknown</p><span class="muted">Never included in actual</span></section>
+        <section class="panel usage-card"><h3>Unknown cost</h3><p id="usage-unknown-cost">Unknown</p><span class="muted">Records needing reconciliation</span></section>
+      </div>
+      <section class="panel" aria-labelledby="usage-history-heading">
+        <div class="panel-heading"><h3 id="usage-history-heading">Usage over time</h3><span class="muted">UTC buckets from retained records</span></div>
+        <div id="usage-history-chart" class="usage-history-chart"><p class="empty-state">No usage history.</p></div>
+        <div class="table-scroll"><table><thead><tr><th scope="col">UTC day</th><th scope="col">Requests</th><th scope="col">Input</th><th scope="col">Output</th><th scope="col">Saved</th><th scope="col">Actual cost</th></tr></thead><tbody id="usage-history-rows"></tbody></table></div>
+      </section>
+      <div class="usage-breakdown-grid">
+        <section class="panel" aria-labelledby="usage-model-heading"><div class="panel-heading"><h3 id="usage-model-heading">By model</h3><span class="muted">Observed identity preferred</span></div><div class="table-scroll"><table><thead><tr><th scope="col">Model</th><th scope="col">Requests</th><th scope="col">Input</th><th scope="col">Output</th><th scope="col">Actual cost</th></tr></thead><tbody id="usage-model-rows"></tbody></table></div></section>
+        <section class="panel" aria-labelledby="usage-provider-heading"><div class="panel-heading"><h3 id="usage-provider-heading">By provider</h3><span class="muted">Observed identity preferred</span></div><div class="table-scroll"><table><thead><tr><th scope="col">Provider</th><th scope="col">Requests</th><th scope="col">Input</th><th scope="col">Output</th><th scope="col">Actual cost</th></tr></thead><tbody id="usage-provider-rows"></tbody></table></div></section>
+      </div>
+      <section class="panel" aria-labelledby="usage-recent-heading">
+        <div class="panel-heading"><h3 id="usage-recent-heading">Recent requests</h3><span class="muted">Metadata only. Prompt and tool payloads are never retained here.</span></div>
+        <div class="table-scroll"><table><thead><tr><th scope="col">Recorded</th><th scope="col">Status</th><th scope="col">Provider</th><th scope="col">Model</th><th scope="col">Agent</th><th scope="col">Tokens</th><th scope="col">Cost</th></tr></thead><tbody id="usage-recent-rows"></tbody></table></div>
+      </section>
+      <section class="panel" aria-labelledby="omp-usage-heading">
+        <div class="panel-heading"><h3 id="omp-usage-heading">OMP native usage</h3><span id="omp-usage-status" class="muted">Not requested</span></div>
+        <p id="omp-usage-note" class="muted">PRISM reads `omp stats --json` when available. Tersio is not required.</p>
+        <div class="usage-card-grid usage-card-grid-compact">
+          <section class="usage-card"><h4>Requests</h4><p id="omp-requests">Unknown</p></section>
+          <section class="usage-card"><h4>Input tokens</h4><p id="omp-input">Unknown</p></section>
+          <section class="usage-card"><h4>Output tokens</h4><p id="omp-output">Unknown</p></section>
+          <section class="usage-card"><h4>Cache reads</h4><p id="omp-cache-read">Unknown</p></section>
+          <section class="usage-card"><h4>Cost</h4><p id="omp-cost">Unknown</p></section>
+        </div>
+        <div class="table-scroll"><table><thead><tr><th scope="col">OMP model</th><th scope="col">Provider</th><th scope="col">Requests</th><th scope="col">Input</th><th scope="col">Output</th><th scope="col">Cost</th></tr></thead><tbody id="omp-model-rows"></tbody></table></div>
+        <div class="usage-breakdown-grid">
+          <section class="panel"><div class="panel-heading"><h4>OMP projects</h4><span class="muted">Folder totals</span></div><div class="table-scroll"><table><thead><tr><th scope="col">Project</th><th scope="col">Requests</th><th scope="col">Tokens</th><th scope="col">Cost</th></tr></thead><tbody id="omp-folder-rows"></tbody></table></div></section>
+          <section class="panel"><div class="panel-heading"><h4>OMP agent types</h4><span class="muted">Main and subagent totals</span></div><div class="table-scroll"><table><thead><tr><th scope="col">Agent</th><th scope="col">Requests</th><th scope="col">Input</th><th scope="col">Cost</th></tr></thead><tbody id="omp-agent-rows"></tbody></table></div></section>
+        </div>
       </section>
     </section>
   </main>

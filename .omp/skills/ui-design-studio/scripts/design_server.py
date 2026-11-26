@@ -24,6 +24,7 @@ LAN updates replace advertised URLs, permitted Hosts and permitted Origins.
 from __future__ import annotations
 
 from contextlib import contextmanager
+import importlib.util
 import base64
 import datetime as dt
 import errno
@@ -68,6 +69,27 @@ MAX_ANNOTATIONS = 256
 ATTACHMENT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._ -]{0,159}\Z")
 ATTACHMENT_MIME = {"image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "image/webp": ".webp"}
 ANNOTATION_TOOLS = {"arrow", "line", "curve", "rectangle", "ellipse", "text"}
+def _usage_backend():
+    if not hasattr(_usage_backend, "module"):
+        path = Path(__file__).with_name("usage.py")
+        spec = importlib.util.spec_from_file_location("ui_design_studio_usage", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _usage_backend.module = module
+    return _usage_backend.module
+
+
+def record_usage(studio, root, payload):
+    return _usage_backend().record_usage(studio, Path(root), payload, records_lock)
+
+
+def usage_projection(studio, root, *, omp_probe=None, range_key="24h"):
+    return _usage_backend().project(studio, Path(root), omp_probe=omp_probe, range_key=range_key)
+
+
+def usage_export(studio, root, *, omp_probe=None, format_name="json"):
+    return _usage_backend().export_data(studio, Path(root), omp_probe=omp_probe, format_name=format_name)
+
 
 
 def digest(data):
@@ -982,6 +1004,7 @@ class DesignState:
         self.preview_capability = preview_capability
         self.started_at = timestamp()
         self.library = ArtworkLibrary(studio, self.root, repo)
+        self.omp_usage = _usage_backend().OMPUsageProbe(self.root)
         self.lock = threading.RLock()
         self.history = []
         self.last_revision = None
@@ -1020,6 +1043,8 @@ class DesignState:
         studio, root = self.studio, self.root
         warnings = ["Worker statuses are reported records, not proof of process liveness."]
         run = studio.read_json(studio.safe_path(root, "run.json"))
+        usage = usage_projection(studio, root, omp_probe=self.omp_usage)
+        warnings.extend(usage.get("warnings", []))
         coverage = studio.read_json(studio.safe_path(root, "coverage.json"))
         decisions, latest = latest_decisions(studio, root)
         evidence = run.get("evidence", [])
@@ -1179,10 +1204,17 @@ class DesignState:
                 "artworks": published_art, "evidence": published_evidence, "approvals": approvals,
                 "decisions": [{key: decision[key] for key in ("stage", "actor", "outcome", "rationale", "recordedAt", "optionId", "inputsDigest", "attachments", "annotations") if key in decision}
                               for decision in decisions["decisions"]]}
+        snap["usage"] = usage
         if isinstance(run.get("cancellation"), dict):
             snap["run"]["cancellation"] = dict(run["cancellation"])
         stable = {key: value for key, value in snap.items() if key != "statistics"}
         stable["statistics"] = {key: value for key, value in snap["statistics"].items() if key != "elapsedSeconds"}
+        if isinstance(stable.get("usage"), dict):
+            stable["usage"] = dict(stable["usage"])
+            stable["usage"]["generatedAt"] = None
+            if isinstance(stable["usage"].get("omp"), dict):
+                stable["usage"]["omp"] = dict(stable["usage"]["omp"])
+                stable["usage"]["omp"]["observedAt"] = None
         revision = digest(canonical(stable))
         if revision != self.last_revision:
             self.history.append({"at": timestamp(), "verified": counts["verified"], "required": counts["required"], "passedGates": sum(g["status"] == "passed" for g in gates)})
@@ -1476,6 +1508,32 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self.respond(200, owner.state.snapshot())
                 return
+            if path == "/api/usage":
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                self.respond(200, owner.state.snapshot().get("usage", {}))
+                return
+            if path in {"/api/usage/1h", "/api/usage/24h", "/api/usage/7d", "/api/usage/30d", "/api/usage/90d", "/api/usage/all"}:
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                self.respond(200, usage_projection(owner.studio, owner.root, omp_probe=owner.state.omp_usage, range_key=path.rsplit("/", 1)[1]))
+                return
+            if path == "/api/usage/omp":
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                self.respond(200, owner.state.omp_usage.snapshot(start=True))
+                return
+            if path in ("/api/usage/export.json", "/api/usage/export.csv"):
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                format_name = "csv" if path.endswith(".csv") else "json"
+                content, content_type, filename = usage_export(owner.studio, owner.root, omp_probe=owner.state.omp_usage, format_name=format_name)
+                self.respond(200, content, content_type, extra={"Content-Disposition": f'attachment; filename="{filename}"'})
+                return
             if path.startswith("/preview/"):
                 self.preview(path)
                 return
@@ -1525,7 +1583,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             path = self.request_path()
             shutdown = self.server.shutdown_only
-            if (shutdown and path != "/api/shutdown") or (not shutdown and path not in ("/api/approval", "/api/command", "/api/cancel", "/api/reconcile")):
+            if (shutdown and path != "/api/shutdown") or (not shutdown and path not in ("/api/approval", "/api/command", "/api/cancel", "/api/reconcile", "/api/usage")):
                 self.respond(404, {"error": "Not found"})
                 return
             if not self.authorized(owner.shutdown_token if shutdown else owner.token):
@@ -1554,6 +1612,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(200, cancel_run(owner.studio, owner.root))
             elif path == "/api/reconcile":
                 self.respond(200, reconcile_run(owner.studio, owner.root))
+            elif path == "/api/usage":
+                self.respond(200, record_usage(owner.studio, owner.root, payload))
             else:
                 self.respond(200, approve(owner.studio, owner.root, payload, owner.repo))
         except ApprovalConflict as exc:

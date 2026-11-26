@@ -351,6 +351,30 @@ class DashboardBrowserTests(unittest.TestCase):
         expect(page.locator("#viewer-content img")).to_be_visible()
         self.assertGreater(image.evaluate("(node) => node.naturalWidth"), 0)
 
+    def test_usage_panel_shows_recorded_tokens_and_cost(self):
+        root = self.new_run()
+        self.backend.record_usage(self.engine, root, {
+            "usageId": "browser-usage", "idempotencyKey": "browser-attempt", "sessionId": "browser-session",
+            "providerObserved": "fixture-provider", "modelObserved": "fixture-model", "agentId": "director",
+            "executionStatus": "completed", "tokens": {"input": 100, "output": 25, "cacheRead": 40, "cacheWrite": 5},
+            "cost": {"actual": {"status": "observed", "amountMinor": 123, "currencyCode": "USD", "currencyExponent": 2, "source": "fixture", "observedAt": self.backend.timestamp()}},
+        })
+        server = self.backend.DesignServer(self.engine, root, interval=0.05)
+        self.addCleanup(server.close)
+        server.start()
+        page = self.page()
+        page.goto(server.url)
+        expect(page.locator("#connection-status")).to_have_text("Connected")
+        page.locator("#nav-usage").click()
+        expect(page.locator("#usage-heading")).to_be_visible()
+        expect(page.locator("#usage-requests")).to_have_text("1")
+        expect(page.locator("#usage-input")).to_have_text("100")
+        expect(page.locator("#usage-output")).to_have_text("25")
+        expect(page.locator("#usage-actual-cost")).to_contain_text("USD 1.23")
+        expect(page.locator("#usage-export-json")).to_be_visible()
+        page.locator('[data-usage-range="7d"]').click()
+        expect(page.locator("#usage-status")).to_have_text("Recorded")
+
     def test_cancel_and_reconcile_render_unknown_remote_outcome(self):
         root = self.new_run()
         server = self.backend.DesignServer(self.engine, root, interval=0.05)
