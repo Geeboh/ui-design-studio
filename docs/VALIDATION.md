@@ -1,5 +1,21 @@
 # Release validation
 
+## Version 2.0.0 candidate · 26 November 2026 UTC
+
+This release record covers the PRISM Studio rebuild, the standalone MCP adapter, the project-local installer, the authenticated dashboard, and release packaging. Human participant research remains deferred by project policy.
+
+| Check | Observed result | Scope |
+| --- | --- | --- |
+| Core and web receipts | PASS | M0-M8 focused gates on the clean candidate |
+| Dashboard browser matrix | PASS; 14 tests each | Chromium, Firefox, and WebKit |
+| Standalone OMP host regression | PASS; 52 tests | Live no-tools RPC readiness and UI Design Studio discovery |
+| Acceptance mapping | PASS; 96 cases | Current-candidate mapping with declared sequential review fallback |
+| Python distributions | PASS | Wheel, sdist, and source ZIP built from the current source |
+| Manifest and archive verification | PASS; 185 source hashes | `scripts/package_release.py --check`, ZIP CRC, sidecar, and private-path exclusion |
+| Installer regression | PASS; 32 tests | Project-local install, update, restore, conflict, and portability behavior |
+
+The release review records `PASS_WITH_DECLARED_REVIEW_FALLBACK`. This is not human participant research or recipient-application acceptance evidence. Native Windows/macOS, physical devices, and target-application usability remain outside this package validation.
+
 ## Version 1.4.3 candidate · 16 November 2026 UTC
 
 This patch release publishes the initial source-grounded documentation library and aligns package metadata. It adds no runtime dependency or run-schema migration.

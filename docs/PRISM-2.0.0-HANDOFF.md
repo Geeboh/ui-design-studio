@@ -16,17 +16,11 @@
 - The current artifact hashes are recorded in `.prism-state/release-artifacts.txt`.
 - The wheel rebuilt from the extracted sdist matched the direct wheel hash. The source ZIP extracted without private runtime paths.
 
-## Open release blocker
+## Release status
 
-The release profile remains blocked by `.prism-state/release-review.json`. The remaining gaps are full zoom/state accessibility coverage, live OMP session qualification, complete acceptance mapping, and substantive release evidence for every mapped case.
+The release profile passed with a declared sequential review fallback. The dashboard browser matrix, standalone OMP host regression, acceptance mapping, artifact checks, and package parity checks passed. Human participant research remains deferred by project policy.
 
-The release runner reports:
-
-```text
-Review has unresolved severe findings or does not recommend readiness
-```
-
-Recovery action. Resolve the listed semantic gaps. Refresh every acceptance mapping against the clean candidate. Run the release profile and the required browser matrix. Do not mark the review ready before those results.
+The release receipt records `PASS_WITH_DECLARED_REVIEW_FALLBACK`. Re-run the release profile after any source change.
 
 ## Rollback
 
