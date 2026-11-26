@@ -591,6 +591,16 @@ def approve(studio, root, payload, repo=None):
                 raise RuntimeError("Approval persistence failed and rollback failed") from rollback_error
             raise
     return {"status": "PASS", "decision": decision}
+def cancel_run(studio, root):
+    with records_lock(studio, root):
+        run_path = studio.safe_path(root, "run.json")
+        run = studio.read_json(run_path)
+        if run.get("status") not in ("completed", "passed", "cancelled"):
+            run["status"] = "cancelled"
+            run["cancelledAt"] = timestamp()
+            run["cancellation"] = {"status": "requested", "remoteOutcome": "unknown"}
+            studio.atomic_json(run_path, run)
+        return {"status": "PASS", "run": run.get("id"), "runStatus": run.get("status"), "remoteOutcome": run.get("cancellation", {}).get("remoteOutcome")}
 
 
 class ArtworkLibrary:
@@ -1478,7 +1488,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             path = self.request_path()
             shutdown = self.server.shutdown_only
-            if (shutdown and path != "/api/shutdown") or (not shutdown and path not in ("/api/approval", "/api/command")):
+            if (shutdown and path != "/api/shutdown") or (not shutdown and path not in ("/api/approval", "/api/command", "/api/cancel")):
                 self.respond(404, {"error": "Not found"})
                 return
             if not self.authorized(owner.shutdown_token if shutdown else owner.token):
@@ -1503,6 +1513,8 @@ class Handler(BaseHTTPRequestHandler):
                 owner.stop.set()
             elif path == "/api/command":
                 self.respond(200, owner.dispatch_command(payload))
+            elif path == "/api/cancel":
+                self.respond(200, cancel_run(owner.studio, owner.root))
             else:
                 self.respond(200, approve(owner.studio, owner.root, payload, owner.repo))
         except ApprovalConflict as exc:

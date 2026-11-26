@@ -23,6 +23,7 @@
       <div class="connection-controls">
         <span id="connection-status" class="status-badge" data-state="loading" role="status">Connecting</span>
         <button id="refresh-snapshot" type="button" class="button button-quiet">Refresh</button>
+      <button id="cancel-run" type="button" class="button button-quiet" disabled>Cancel run</button>
       </div>
     </div>
     <div class="server-address">
@@ -179,7 +180,7 @@
 
   <dialog id="artwork-dialog" class="artwork-dialog" aria-labelledby="viewer-title" aria-describedby="viewer-context viewer-policy">
     <div class="viewer-header"><div><h2 id="viewer-title"></h2><p id="viewer-context" class="muted"></p></div><button id="viewer-close" type="button" class="button button-quiet" autofocus>Close <span aria-hidden="true">Esc</span></button></div>
-    <div class="viewer-toolbar" role="group" aria-label="Artwork display controls"><button id="viewer-fit" type="button" class="button button-quiet" aria-pressed="true">Fit</button><button id="viewer-natural" type="button" class="button button-quiet" aria-pressed="false">Natural size</button><button id="viewer-zoom-out" type="button" class="button button-quiet" aria-label="Zoom out">−</button><output id="viewer-scale" aria-live="polite">Not loaded</output><button id="viewer-zoom-in" type="button" class="button button-quiet" aria-label="Zoom in">+</button><button id="viewer-expand" type="button" class="button button-quiet" aria-pressed="false">Full viewport</button><a id="viewer-download" class="button button-quiet" download>Save artifact</a></div>
+    <div class="viewer-toolbar" role="group" aria-label="Artwork display controls"><button id="viewer-fit" type="button" class="button button-quiet" aria-pressed="true">Fit</button><button id="viewer-natural" type="button" class="button button-quiet" aria-pressed="false">Natural size</button><button id="viewer-zoom-out" type="button" class="button button-quiet" aria-label="Zoom out">−</button><output id="viewer-scale" aria-live="polite">Not loaded</output><button id="viewer-zoom-in" type="button" class="button button-quiet" aria-label="Zoom in">+</button><button id="viewer-compare" type="button" class="button button-quiet" aria-pressed="false" hidden>Compare previous</button><button id="viewer-expand" type="button" class="button button-quiet" aria-pressed="false">Full viewport</button><a id="viewer-download" class="button button-quiet" download>Save artifact</a></div>
     <div id="viewer-stage" class="viewer-stage" tabindex="0" aria-label="Artwork preview. Scroll to inspect artwork larger than the viewport."><div id="viewer-content" class="viewer-content"></div></div>
     <div class="viewer-footer"><p id="viewer-metadata" class="monospace"></p><p id="viewer-dimensions" class="muted"></p><p id="viewer-policy" class="muted"></p><p id="viewer-load-status" class="muted" role="status"></p></div>
   </dialog>

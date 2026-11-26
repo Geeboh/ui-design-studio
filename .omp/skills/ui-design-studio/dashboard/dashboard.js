@@ -204,6 +204,9 @@
     if (notice.textContent !== message) notice.textContent = message;
     byId("refresh-snapshot").disabled = state.inFlight || !state.token;
     byId("refresh-snapshot").textContent = state.inFlight ? "Refreshing" : "Refresh";
+    const statusValue = state.snapshot?.run.status;
+    const terminal = ["completed", "passed", "cancelled"].includes(statusValue);
+    byId("cancel-run").disabled = !snapshotFresh() || terminal || state.inFlight || !state.token;
     byId("snapshot-age").textContent = state.snapshot
       ? `Observed ${formatTime(state.snapshot.observedAt)} · received ${formatElapsed(Math.max(0, (performance.now() - state.lastSuccess) / 1000))} ago · revision ${state.snapshot.revision}`
       : "No snapshot received.";
@@ -275,6 +278,31 @@
       const delay = state.refreshQueued ? 0 : POLL_INTERVAL;
       state.refreshQueued = false;
       if (!state.stopped) state.pollTimer = setTimeout(refreshSnapshot, delay);
+    }
+  }
+  async function cancelRun() {
+    if (byId("cancel-run").disabled) return;
+    const button = byId("cancel-run");
+    button.disabled = true;
+    try {
+      const response = await fetch(new URL("api/cancel", baseUrl), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${state.token}`, "Content-Type": "application/json", Accept: "application/json" },
+        body: "{}",
+        cache: "no-store",
+        credentials: "omit",
+        redirect: "error",
+      });
+      if (!response.ok) throw new Error(await responseError(response));
+      byId("connection-notice").hidden = false;
+      byId("connection-notice").dataset.state = "pending";
+      byId("connection-notice").textContent = "Cancellation recorded. Remote work remains unresolved until reconciliation.";
+      await refreshSnapshot();
+    } catch (error) {
+      byId("connection-notice").hidden = false;
+      byId("connection-notice").dataset.state = "error";
+      byId("connection-notice").textContent = `Cancellation was not recorded. ${error.message || "Refresh and retry."}`;
+      updateConnection();
     }
   }
 
@@ -1335,44 +1363,80 @@
     byId("viewer-zoom-out").disabled = viewer.scale <= 0.01;
     byId("viewer-zoom-in").disabled = viewer.scale >= 8;
   }
+  function previousArtwork(artwork) {
+    const index = state.artworks.findIndex((candidate) => candidate.id === artwork.id);
+    if (index < 0) return null;
+    return state.artworks.slice(index + 1).find((candidate) => candidate.path === artwork.path) || null;
+  }
 
-  function openArtwork(artwork, returnFocus) {
-    const dialog = byId("artwork-dialog");
+  function buildViewerMedia(artwork) {
     let url;
     try {
       url = artifactUrl(artwork);
     } catch (error) {
-      byId("connection-notice").hidden = false;
-      byId("connection-notice").dataset.state = "error";
-      byId("connection-notice").textContent = error.message;
-      return;
+      return { error };
     }
-    if (state.viewer?.node) state.viewer.node.removeAttribute("src");
-    const content = byId("viewer-content");
-    content.replaceChildren();
-    dialog.classList.remove("is-expanded");
-    byId("viewer-expand").setAttribute("aria-pressed", "false");
-    byId("viewer-title").textContent = artwork.title;
-    byId("viewer-context").textContent = artwork.context;
-    byId("viewer-metadata").textContent = `${artwork.path} · version ${artwork.version} · retained ${formatTime(artwork.createdAt)}`;
-    byId("viewer-download").href = url;
-    byId("viewer-download").download = artwork.path.split("/").pop() || "artwork";
-    byId("viewer-scale").textContent = "Loading";
-    byId("viewer-dimensions").textContent = artwork.kind === "image" ? "Natural image dimensions will be read from this retained file." : `Preview viewport ${DOCUMENT_WIDTH} × ${DOCUMENT_HEIGHT} CSS pixels. This is a viewer size, not the document's source dimensions.`;
-    byId("viewer-policy").textContent = artwork.kind === "image"
-      ? "Image-only display. Natural size shows one image pixel per CSS pixel."
-      : artwork.kind === "html" ? "Sandboxed static HTML. Scripts, forms, and navigation are disabled. Script-rendered content needs a published screenshot."
-        : "Sandboxed PDF. Browser PDF support varies. Save the retained PDF if this preview is blank or unavailable.";
-    byId("viewer-load-status").textContent = "Loading the retained artifact.";
-    byId("viewer-natural").textContent = artwork.kind === "image" ? "Natural size" : "100% scale";
-    for (const id of ["viewer-fit", "viewer-natural", "viewer-zoom-in", "viewer-zoom-out"]) byId(id).disabled = true;
-    const viewer = { artwork, returnFocus, node: null, wrapper: null, width: 0, height: 0, scale: 1, mode: "fit", ready: false };
-    state.viewer = viewer;
     const media = document.createElement(artwork.kind === "image" ? "img" : "iframe");
-    viewer.node = media;
     media.referrerPolicy = "no-referrer";
     if (artwork.kind === "image") {
       media.alt = artwork.title;
+    } else {
+      media.setAttribute("sandbox", "");
+      media.title = `${artwork.title}, sandboxed ${artwork.kind.toUpperCase()} with scripts disabled`;
+      media.style.width = `${DOCUMENT_WIDTH}px`;
+      media.style.height = `${DOCUMENT_HEIGHT}px`;
+    }
+    return { media, url };
+  }
+
+  function renderViewer(viewer) {
+    if (viewer.node) viewer.node.removeAttribute("src");
+    const content = byId("viewer-content");
+    content.replaceChildren();
+    viewer.node = null;
+    viewer.wrapper = null;
+    viewer.width = 0;
+    viewer.height = 0;
+    viewer.ready = false;
+    if (viewer.comparing && viewer.previous) {
+      const comparison = element("div", "viewer-comparison");
+      for (const [label, artwork] of [["Previous", viewer.previous], ["Current", viewer.artwork]]) {
+        const figure = element("figure", "viewer-comparison-item");
+        figure.append(element("figcaption", "viewer-comparison-label", `${label}: ${artwork.title} · version ${artwork.version}`));
+        const frame = element("div", "viewer-comparison-media");
+        const built = buildViewerMedia(artwork);
+        if (built.error) {
+          frame.append(element("p", "preview-error", built.error.message));
+        } else {
+          if (artwork.kind !== "image") {
+            built.media.style.width = "100%";
+            built.media.style.height = "32rem";
+          }
+          built.media.addEventListener("error", () => {
+            frame.append(element("p", "preview-error", "Preview unavailable. Save the retained artifact to inspect it."));
+          }, { once: true });
+          frame.append(built.media);
+          built.media.src = built.url;
+        }
+        figure.append(frame);
+        comparison.append(figure);
+      }
+      content.append(comparison);
+      byId("viewer-scale").textContent = "Before / after";
+      byId("viewer-dimensions").textContent = "Previous and current retained versions are shown side by side.";
+      byId("viewer-load-status").textContent = "Comparison loaded from retained artifacts.";
+      for (const id of ["viewer-fit", "viewer-natural", "viewer-zoom-in", "viewer-zoom-out"]) byId(id).disabled = true;
+      return;
+    }
+    const built = buildViewerMedia(viewer.artwork);
+    if (built.error) {
+      byId("viewer-load-status").textContent = built.error.message;
+      for (const id of ["viewer-fit", "viewer-natural", "viewer-zoom-in", "viewer-zoom-out"]) byId(id).disabled = true;
+      return;
+    }
+    const media = built.media;
+    viewer.node = media;
+    if (viewer.artwork.kind === "image") {
       media.addEventListener("load", () => {
         if (state.viewer !== viewer) return;
         viewer.width = media.naturalWidth;
@@ -1389,30 +1453,73 @@
       viewer.height = DOCUMENT_HEIGHT;
       viewer.ready = true;
       viewer.wrapper = element("div", "viewer-document");
-      media.setAttribute("sandbox", "");
-      media.title = `${artwork.title}, sandboxed ${artwork.kind.toUpperCase()} with scripts disabled`;
-      media.style.width = `${DOCUMENT_WIDTH}px`;
-      media.style.height = `${DOCUMENT_HEIGHT}px`;
-      media.addEventListener("load", () => {
-        if (state.viewer !== viewer) return;
-        byId("viewer-load-status").textContent = artwork.kind === "html"
-          ? "The sandboxed document response loaded. Blank script-rendered content needs a published screenshot."
-          : "The sandboxed PDF response loaded. If the browser cannot display it, save the retained PDF.";
-      }, { once: true });
       viewer.wrapper.append(media);
       content.append(viewer.wrapper);
       for (const id of ["viewer-fit", "viewer-natural"]) byId(id).disabled = false;
+      media.addEventListener("load", () => {
+        if (state.viewer !== viewer) return;
+        byId("viewer-load-status").textContent = viewer.artwork.kind === "html"
+          ? "The sandboxed document response loaded. Blank script-rendered content needs a published screenshot."
+          : "The sandboxed PDF response loaded. If the browser cannot display it, save the retained PDF.";
+      }, { once: true });
     }
     media.addEventListener("error", () => {
       if (state.viewer !== viewer) return;
       byId("viewer-load-status").textContent = "The preview could not be loaded. Save the retained artifact or refresh the server snapshot.";
     }, { once: true });
+    media.src = built.url;
+    applyViewerScale();
+  }
+
+  function toggleViewerComparison() {
+    const viewer = state.viewer;
+    if (!viewer?.previous) return;
+    viewer.comparing = !viewer.comparing;
+    const button = byId("viewer-compare");
+    button.setAttribute("aria-pressed", String(viewer.comparing));
+    button.textContent = viewer.comparing ? "Show current" : "Compare previous";
+    renderViewer(viewer);
+  }
+
+  function openArtwork(artwork, returnFocus) {
+    const dialog = byId("artwork-dialog");
+    let url;
+    try {
+      url = artifactUrl(artwork);
+    } catch (error) {
+      byId("connection-notice").hidden = false;
+      byId("connection-notice").dataset.state = "error";
+      byId("connection-notice").textContent = error.message;
+      return;
+    }
+    if (state.viewer?.node) state.viewer.node.removeAttribute("src");
+    dialog.classList.remove("is-expanded");
+    byId("viewer-expand").setAttribute("aria-pressed", "false");
+    byId("viewer-title").textContent = artwork.title;
+    byId("viewer-context").textContent = artwork.context;
+    byId("viewer-metadata").textContent = `${artwork.path} · version ${artwork.version} · retained ${formatTime(artwork.createdAt)}`;
+    byId("viewer-download").href = url;
+    byId("viewer-download").download = artwork.path.split("/").pop() || "artwork";
+    byId("viewer-scale").textContent = "Loading";
+    byId("viewer-dimensions").textContent = artwork.kind === "image" ? "Natural image dimensions will be read from this retained file." : `Preview viewport ${DOCUMENT_WIDTH} × ${DOCUMENT_HEIGHT} CSS pixels. This is a viewer size, not the document's source dimensions.`;
+    byId("viewer-policy").textContent = artwork.kind === "image"
+      ? "Image-only display. Natural size shows one image pixel per CSS pixel."
+      : artwork.kind === "html" ? "Sandboxed static HTML. Scripts, forms, and navigation are disabled. Script-rendered content needs a published screenshot."
+        : "Sandboxed PDF. Browser PDF support varies. Save the retained PDF if this preview is blank or unavailable.";
+    byId("viewer-load-status").textContent = "Loading the retained artifact.";
+    byId("viewer-natural").textContent = artwork.kind === "image" ? "Natural size" : "100% scale";
+    const viewer = { artwork, previous: previousArtwork(artwork), comparing: false, returnFocus, node: null, wrapper: null, width: 0, height: 0, scale: 1, mode: "fit", ready: false };
+    state.viewer = viewer;
+    const compare = byId("viewer-compare");
+    compare.hidden = !viewer.previous;
+    compare.disabled = !viewer.previous;
+    compare.setAttribute("aria-pressed", "false");
+    compare.textContent = "Compare previous";
     dialog.showModal();
     byId("viewer-close").focus();
     byId("viewer-stage").scrollTo(0, 0);
     viewerResize?.observe(byId("viewer-stage"));
-    media.src = url;
-    applyViewerScale();
+    renderViewer(viewer);
   }
 
   function closeArtwork() {
@@ -1426,7 +1533,10 @@
     byId("workspace-main").focus();
   });
   byId("refresh-snapshot").addEventListener("click", refreshSnapshot);
+  byId("cancel-run").addEventListener("click", cancelRun);
+  byId("viewer-compare").addEventListener("click", toggleViewerComparison);
   byId("server-url").textContent = window.location.href;
+
   byId("copy-address").addEventListener("click", async () => {
     const address = byId("server-url").textContent;
     try {

@@ -391,6 +391,13 @@ class DesignServerTests(unittest.TestCase):
         server = self.start()
         self.assertEqual(self.request(server, "/api/approval", "POST", self.payload(request))[0], 200)
         self.assertEqual(studio.read_json(self.root / "approval-requests/shared-review.json")["status"], "approved")
+    def test_cancel_records_local_terminal_state_and_unknown_remote_outcome(self):
+        server = self.start()
+        code, unused, result = self.request(server, "/api/cancel", "POST", {})
+        self.assertEqual(code, 200)
+        self.assertEqual(result["runStatus"], "cancelled")
+        self.assertEqual(result["remoteOutcome"], "unknown")
+        self.assertEqual(studio.read_json(self.root / "run.json")["status"], "cancelled")
     def test_rejected_approval_status_is_persisted_for_other_consumers(self):
         request = self.plan("rejected-review")
         server = self.start()

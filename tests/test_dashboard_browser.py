@@ -301,7 +301,12 @@ class DashboardBrowserTests(unittest.TestCase):
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
             encoding="utf-8",
         )
-        artwork = self.backend.publish_artwork(self.engine, root, "diagram.svg", "Synthetic SVG preview.")["artwork"]
+        self.backend.publish_artwork(self.engine, root, "diagram.svg", "Synthetic SVG baseline.", title="Diagram baseline")
+        (root / "diagram.svg").write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="5" height="10"/></svg>',
+            encoding="utf-8",
+        )
+        artwork = self.backend.publish_artwork(self.engine, root, "diagram.svg", "Synthetic SVG preview.", title="Diagram current")["artwork"]
         self.backend.publish_request(
             self.engine, root, "z-review", "plan", "Newer review",
             "Synthetic approval fixture.", ["plan.html"],
@@ -332,6 +337,14 @@ class DashboardBrowserTests(unittest.TestCase):
         card.locator(".artwork-open").click()
         image = page.locator("#viewer-content img")
         expect(image).to_be_visible()
+        compare = page.locator("#viewer-compare")
+        expect(compare).to_be_visible()
+        compare.click()
+        expect(page.locator(".viewer-comparison-item")).to_have_count(2)
+        expect(page.locator(".viewer-comparison-label").nth(0)).to_contain_text("Previous")
+        expect(page.locator(".viewer-comparison-label").nth(1)).to_contain_text("Current")
+        compare.click()
+        expect(page.locator("#viewer-content img")).to_be_visible()
         self.assertGreater(image.evaluate("(node) => node.naturalWidth"), 0)
 
     def test_artwork_close_focus_survives_concurrent_approval(self):
