@@ -614,6 +614,7 @@ class StudioTests(unittest.TestCase):
         first_run = fixture_run(self.repo, self.theme)
         first = studio.register_theme(self.repo, "fixture", first_run)
         self.assertEqual(first["defaultTheme"], "fixture")
+        self.assertEqual(first["activeTheme"]["id"], "fixture")
         other = fixture_theme(self.repo, "second")
         second_run = fixture_run(self.repo, other)
         second = studio.register_theme(self.repo, "second", second_run)
@@ -625,6 +626,10 @@ class StudioTests(unittest.TestCase):
         third_run = fixture_run(self.repo, third)
         changed = studio.register_theme(self.repo, "third", third_run, make_default=True)
         self.assertEqual(changed["defaultTheme"], "third")
+        self.assertEqual(changed["activeTheme"]["id"], "third")
+        restored = studio.restore_theme(self.repo, changed["backup"])
+        self.assertEqual(restored["defaultTheme"], "fixture")
+        self.assertEqual(restored["activeTheme"]["id"], "fixture")
         self.assertTrue(Path(changed["backup"]).is_file())
 
     def test_new_registration_collision_is_rechecked_at_finalization(self):

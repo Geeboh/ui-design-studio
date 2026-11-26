@@ -315,6 +315,10 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
         _, themes, _ = engine.config_paths(root)
         path_in((themes / theme).relative_to(root).as_posix(), "theme")
         return engine.register_theme(root, theme, path_in(run, "run"), make_default)
+    @tool(destructive=True, idempotent=True)
+    def ui_design_restore_theme(backup: str) -> dict[str, Any]:
+        """Restore a prior theme registry backup and its active-theme selection."""
+        return engine.restore_theme(root, backup)
 
     @tool()
     def ui_design_status(run: str, interval: float = 1.0) -> dict[str, Any]:

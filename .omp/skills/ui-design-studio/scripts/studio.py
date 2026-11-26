@@ -1680,6 +1680,10 @@ def register_theme(repo, theme_id, run_path, make_default=False):
         registry["themes"] = [item for item in registry["themes"] if item["id"] != theme_id] + [record]
         if first or make_default:
             registry["defaultTheme"] = theme_id
+        if first or make_default or run_document["themeAction"] == "modify-default":
+            registry["activeTheme"] = {"id": theme_id, "version": verification["version"],
+                                       "themeDigest": verification["themeDigest"], "activatedAt": now(),
+                                       "activationReceipt": run_result["runId"]}
         path = themes / "registry.json"
         backup = None
         if path.exists():
@@ -1692,10 +1696,23 @@ def register_theme(repo, theme_id, run_path, make_default=False):
         os.close(fd)
         lock.unlink(missing_ok=True)
     return _registered_result({"status": "PASS", "registry": str(path), "defaultTheme": registry["defaultTheme"],
-            "backup": str(backup) if backup else None,
-            "message": "Registry updated atomically. The app's reviewed adapter must consume this registry; this command does not deploy or activate a running application."}, run_path, repo)
+            "activeTheme": registry.get("activeTheme"), "backup": str(backup) if backup else None,
+            "message": "Registry and active-theme selection updated atomically; the application adapter resolves this record before loading local theme assets."}, run_path, repo)
 
 
+def restore_theme(repo, backup):
+    repo = Path(repo).resolve()
+    _, themes, _ = config_paths(repo)
+    candidate = Path(backup).expanduser().resolve()
+    require(candidate.is_file() and candidate.is_relative_to(themes / ".registry-backups"), "Theme registry backup must be inside .registry-backups")
+    restored = read_json(candidate)
+    require(isinstance(restored, dict) and restored.get("schemaVersion") == "1.0" and isinstance(restored.get("themes"), list), "Theme registry backup is malformed")
+    ids = [item.get("id") for item in restored["themes"] if isinstance(item, dict)]
+    require(len(ids) == len(restored["themes"]) and len(ids) == len(set(ids)), "Theme registry backup contains duplicate IDs")
+    require(restored.get("defaultTheme") is None or restored["defaultTheme"] in ids, "Theme registry backup has an invalid default")
+    path = themes / "registry.json"
+    atomic_json(path, restored)
+    return {"status": "PASS", "registry": str(path), "restoredFrom": str(candidate), "defaultTheme": restored.get("defaultTheme"), "activeTheme": restored.get("activeTheme")}
 def semver_newer(candidate, previous):
     """Compare SemVer precedence without runtime dependencies; build metadata is ignored."""
     require(isinstance(previous, str) and SEMVER.fullmatch(previous), "Existing registered semantic version is invalid")

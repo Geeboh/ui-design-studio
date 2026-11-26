@@ -158,7 +158,7 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             expected = {"ui_design_" + name.replace("-", "_") for name in COMMANDS}
             expected.add("ui_design_command")
             expected.update({"ui_design_status_compact", "ui_design_status_page"})
-            expected.update({"ui_design_start_run", "ui_design_resume_run", "ui_design_dashboard_info", "ui_design_read_guide"})
+            expected.update({"ui_design_start_run", "ui_design_resume_run", "ui_design_dashboard_info", "ui_design_read_guide", "ui_design_restore_theme"})
             self.assertEqual(set(tools), expected)
             parser = studio.parser()
             parsers = next(action.choices for action in parser._actions if isinstance(action, argparse._SubParsersAction))
