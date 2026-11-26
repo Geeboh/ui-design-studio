@@ -238,6 +238,10 @@ class DashboardBrowserTests(unittest.TestCase):
             "buffer": base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aT9sAAAAASUVORK5CYII="),
         })
         expect(card.locator(".annotation-stage")).to_be_visible()
+        coordinate_fields = card.locator(".annotation-coordinates input")
+        for field, value in zip([coordinate_fields.nth(index) for index in range(4)], ("0.1", "0.2", "0.8", "0.9")):
+            field.fill(value)
+        card.get_by_role("button", name="Add from coordinates").click()
         stage = card.locator(".annotation-stage")
         stage.scroll_into_view_if_needed()
         box = stage.bounding_box()
@@ -258,6 +262,7 @@ class DashboardBrowserTests(unittest.TestCase):
         decision = self.engine.read_json(root / "decisions.json")["decisions"][-1]
         self.assertEqual(decision["attachments"][0]["name"], "feedback.png")
         self.assertEqual(decision["annotations"][0]["tool"], "arrow")
+        self.assertEqual(decision["annotations"][0]["points"], [[0.1, 0.2], [0.8, 0.9]])
 
     def test_nested_configured_theme_approval_persists_through_browser_form(self):
         theme = self.repo / "branding/themes/fixture"
@@ -414,6 +419,17 @@ class DashboardBrowserTests(unittest.TestCase):
             return (light + 0.05) / (dark + 0.05);
         }""")
         self.assertGreaterEqual(contrast, 4.5)
+        if self.browser_engine == "chromium":
+            cdp = page.context.new_cdp_session(page)
+            cdp.send("Emulation.setPageScaleFactor", {"pageScaleFactor": 2})
+            self.assertEqual(page.evaluate("visualViewport.scale"), 2)
+            cdp.send("Emulation.setPageScaleFactor", {"pageScaleFactor": 4})
+            self.assertEqual(page.evaluate("visualViewport.scale"), 4)
+            cdp.send("Emulation.setPageScaleFactor", {"pageScaleFactor": 1})
+        page.locator("#nav-usage").focus()
+        target = page.locator("#nav-usage").bounding_box()
+        self.assertGreaterEqual(target["width"], 40)
+        self.assertGreaterEqual(target["height"], 40)
 
 
     def test_cancel_and_reconcile_render_unknown_remote_outcome(self):
