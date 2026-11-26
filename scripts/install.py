@@ -369,15 +369,28 @@ def reverse_changes(changes: list[Change]) -> list[Change]:
     return [Change(c.relative, c.after, c.after_mode, c.before, c.before_mode) for c in reversed(changes)]
 
 
+def _ensure_venv_python(target: Path) -> Path:
+    canonical = target / "bin" / "python"
+    if canonical.is_file() and os.access(canonical, os.X_OK):
+        return canonical
+    alternatives = sorted(path for path in (target / "bin").glob("python3*") if path.is_file() and os.access(path, os.X_OK))
+    if alternatives:
+        canonical.symlink_to(alternatives[0].name)
+        return canonical
+    raise InstallError("Project venv has no executable Python entry point.")
+
+
 def ensure_venv(root: Path) -> bool:
     target = ensure_plain_directory(root, ".venv-ui-design")
     python = target / "bin" / "python"
     if target.exists():
-        if not (target / "pyvenv.cfg").is_file() or not python.is_file() or not os.access(python, os.X_OK):
+        if not (target / "pyvenv.cfg").is_file():
             raise InstallError("Existing .venv-ui-design is incomplete. Repair or move it before installing.")
+        _ensure_venv_python(target)
         return False
     try:
         subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(target)], check=True)
+        _ensure_venv_python(target)
     except (subprocess.CalledProcessError, OSError) as exc:
         import shutil
         if target.exists():
@@ -389,8 +402,10 @@ def ensure_venv(root: Path) -> bool:
 def install(root: Path, update: bool, dry_run: bool) -> None:
     changes, payload = install_plan(root, update)
     venv = root / ".venv-ui-design"
-    if venv.exists() and (not (venv / "pyvenv.cfg").is_file() or not (venv / "bin" / "python").is_file() or not os.access(venv / "bin" / "python", os.X_OK)):
+    if venv.exists() and not (venv / "pyvenv.cfg").is_file():
         raise InstallError("Existing .venv-ui-design is incomplete. Repair or move it before installing.")
+    if venv.exists():
+        _ensure_venv_python(venv)
     if dry_run:
         print(f"Dry run: {len(changes)} file changes in {root}")
         for change in changes:
