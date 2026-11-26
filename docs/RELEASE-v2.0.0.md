@@ -15,7 +15,7 @@ PRISM Studio 2.0.0 keeps the `ui-design-studio` package and CLI aliases. It adds
 - Dashboard drafts persist locally across reloads without storing bearer tokens.
 - Product version is `2.0.0`; existing `ui-design-mcp`, `ui-design`, `ui-design-studio`, and `ui-design-studio-mcp` names remain available.
 - Core and web receipts must be rerun after any source change. Current focused M0-M8 checks passed on the clean candidate.
-- Dashboard browser matrix: 11 tests passed in each of Chromium, Firefox, and WebKit.
+- Dashboard browser matrix: 13 tests passed in each of Chromium, Firefox, and WebKit.
 - Dashboard Usage panel reports local token/cost telemetry, bounded history, model/provider breakdowns, exports, and optional OMP-native `omp stats --json` totals without a Tersio dependency.
 - The standalone OMP host regression passed 52 of 52 tests.
 - Source ZIP, sdist, and wheel were built under `dist/prism-v2`. Exact current hashes are in `.prism-state/release-artifacts.txt`.
