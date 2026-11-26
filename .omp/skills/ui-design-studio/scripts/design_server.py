@@ -381,8 +381,15 @@ def project_theme(studio, root, repo=None):
         try:
             unused, themes, runs = studio.config_paths(candidate)
             if root != runs and root.is_relative_to(runs):
-                theme = studio.safe_path(themes, run["themeId"], must_exist=False, allow_dir=True)
-                return candidate, theme, run["themeId"]
+                theme_id = run["themeId"]
+                registry_path = themes / "registry.json"
+                if registry_path.is_file():
+                    registry = studio.registry_read(themes)
+                    registered = next((item for item in registry["themes"] if item["id"] == theme_id), None)
+                    need(studio, registered is not None, f"Theme {theme_id} is not registered")
+                    theme_id = registered["id"]
+                theme = studio.safe_path(themes, theme_id, must_exist=False, allow_dir=True)
+                return candidate, theme, theme_id
         except (studio.StudioError, OSError, ValueError):
             if repo is not None:
                 raise
