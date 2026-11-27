@@ -389,7 +389,9 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
     def ui_design_build_theme(path: str) -> dict[str, Any]:
         """Compile a repository-relative theme under the configured themes directory."""
         theme = path_in(path, "theme")
-        source_digest = engine.check_theme(theme)["themeDigest"]
+        _, manifest, _ = engine.load_theme(theme)
+        _, source_files, _ = engine.theme_files(manifest)
+        source_digest = engine.file_digest(theme, [item for item in source_files if item != "tokens.css"])
         return public_mutation("theme.build", None, {"path": path, "sourceDigest": source_digest},
                                lambda: engine.build_theme(theme))
 
