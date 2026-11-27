@@ -125,6 +125,13 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
         if not isinstance(run_id, str) or not run_id:
             raise ValueError("Run identity is missing")
 
+        projection_payload = json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        projection_status = document.get("status", "pending")
+        projection_stage = document.get("phase", "assessment")
+        prior = command_store.get_run(run_id)
+        prior_revision = prior["revision"] if prior is not None else 0
+        projection_key = hashlib.sha256(projection_payload.encode("utf-8")).hexdigest()
+
         def apply(connection):
             project = connection.execute(
                 "SELECT project_id, source_root, state_root FROM projects WHERE project_id = ?",
@@ -135,41 +142,41 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
             elif (project["source_root"], project["state_root"]) != (str(root), str(state_directory)):
                 raise ValueError("Command project projection belongs to a different repository")
             existing = connection.execute(
-                "SELECT project_id FROM runs WHERE run_id = ?", (run_id,)
+                "SELECT project_id, status, stage, payload_json FROM runs WHERE run_id = ?", (run_id,)
             ).fetchone()
+            changed_projection = False
             if existing is None:
                 command_store.create_run_in_transaction(
                     connection, run_id, bound_project, document,
-                    stage=document.get("phase", "assessment"),
-                    status=document.get("status", "pending"),
+                    stage=projection_stage,
+                    status=projection_status,
                 )
+                changed_projection = True
             elif existing["project_id"] != bound_project:
                 raise ValueError("Run command projection belongs to a different repository")
-            else:
+            elif (existing["status"], existing["stage"], existing["payload_json"]) != (
+                projection_status, projection_stage, projection_payload
+            ):
                 changed = connection.execute(
                     "UPDATE runs SET status = ?, stage = ?, revision = revision + 1, payload_json = ? "
                     "WHERE run_id = ? AND project_id = ?",
-                    (
-                        document.get("status", "pending"),
-                        document.get("phase", "assessment"),
-                        json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False),
-                        run_id,
-                        bound_project,
-                    ),
+                    (projection_status, projection_stage, projection_payload, run_id, bound_project),
                 ).rowcount
                 if changed != 1:
                     raise ValueError("Run command projection could not be refreshed")
+                changed_projection = True
             return OperationResult(
                 {"runId": run_id, "projectId": bound_project},
-                (EventDraft(run_id, "RunProjectionSynchronized", {"runId": run_id, "projectId": bound_project}),),
+                (EventDraft(run_id, "RunProjectionSynchronized", {"runId": run_id, "projectId": bound_project}),)
+                if changed_projection else (),
             )
 
         command_store.run_operation(
             realm=bound_project,
             actor=bound_actor["principal"],
             command="run.create",
-            idempotency_key="run-sync-" + secrets.token_hex(16),
-            request={"runId": run_id, "projection": "refresh"},
+            idempotency_key=f"run-sync-{projection_key}-{prior_revision}",
+            request={"runId": run_id, "projectionSha256": projection_key, "priorRevision": prior_revision},
             callback=apply,
         )
     def public_mutation(command: str, run_root: Path | None, payload: dict[str, Any],
