@@ -19,7 +19,7 @@ import tempfile
 from datetime import datetime, timezone
 from dataclasses import dataclass
 
-VERSION = "2.0.8"
+VERSION = "2.0.9"
 PACKAGE = Path(__file__).resolve().parents[1]
 STATE = ".ui-design-studio/install-state.json"
 BACKUPS = ".ui-design-studio/backups"
