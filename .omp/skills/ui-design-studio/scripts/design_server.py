@@ -905,6 +905,7 @@ class SafeHTML(HTMLParser):
 def safe_svg(studio, root, source, content, files, prefix):
     document = ET.fromstring(content)
     forbidden = {"script", "foreignobject", "iframe", "object", "embed", "animate", "animatetransform", "animatemotion", "set"}
+    symbols = []
     for parent in document.iter():
         for child in list(parent):
             if child.tag.rsplit("}", 1)[-1].lower() in forbidden:
@@ -919,6 +920,17 @@ def safe_svg(studio, root, source, content, files, prefix):
                 parent.attrib[key] = safe_css(studio, root, source, value, files, prefix)
         if parent.tag.rsplit("}", 1)[-1].lower() == "style" and parent.text:
             parent.text = safe_css(studio, root, source, parent.text, files, prefix)
+        if parent.tag.rsplit("}", 1)[-1].lower() == "symbol" and parent.attrib.get("id"):
+            symbols.append(parent.attrib["id"])
+    if symbols and document.attrib.get("width", "").strip() in {"0", "0px"} and document.attrib.get("height", "").strip() in {"0", "0px"}:
+        document.attrib["width"] = str(len(symbols) * 32)
+        document.attrib["height"] = "32"
+        document.attrib["viewBox"] = f"0 0 {len(symbols) * 32} 32"
+        namespace = "http://www.w3.org/2000/svg"
+        for index, symbol_id in enumerate(symbols):
+            document.append(ET.Element(f"{{{namespace}}}use", {
+                "href": f"#{symbol_id}", "x": str(index * 32 + 4), "y": "4", "width": "24", "height": "24",
+            }))
     ET.register_namespace("", "http://www.w3.org/2000/svg")
     return ET.tostring(document, encoding="utf-8", xml_declaration=True)
 

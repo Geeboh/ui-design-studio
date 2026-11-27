@@ -577,6 +577,12 @@ class DesignServerTests(unittest.TestCase):
         self.assertEqual(headers["Content-Type"], "image/svg+xml")
         self.assertIn(b"<svg", content)
 
+
+    def test_zero_viewport_svg_sprite_gets_visible_preview(self):
+        source = '<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0"><symbol id="one" viewBox="0 0 10 10"><rect width="10" height="10"/></symbol></svg>'
+        rendered = backend.safe_svg(studio, self.root, "icons.svg", source.encode(), {}, "/preview/")
+        self.assertIn(b'width="32"', rendered)
+        self.assertIn(b'<use href="#one"', rendered)
     def test_html_css_image_and_font_changes_make_approval_stale(self):
         (self.root / "board.css").write_text('@import "palette.css"; @font-face{font-family:test;src:url(font.woff2)}', encoding="utf-8")
         (self.root / "palette.css").write_text("body{color:#123456}", encoding="utf-8")
