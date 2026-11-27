@@ -101,6 +101,69 @@ class DesignServerTests(unittest.TestCase):
         write_json(root / ".design-server.json", locator)
         return locator, temporary
 
+    def test_reference_upload_is_atomic_idempotent_and_projected(self):
+        server = self.start()
+        source = b"# Design notes\n"
+        payload = {"id": "ref-notes", "category": "reference", "title": "Design notes",
+                   "notes": "Keep this context.", "originalName": "notes.md", "mimeType": "text/markdown",
+                   "data": base64.b64encode(source).decode("ascii")}
+        code, headers, result = self.request(server, "/api/reference", method="POST", body=payload)
+        self.assertEqual(code, 200)
+        self.assertFalse(result["idempotent"])
+        record = result["reference"]
+        self.assertEqual(record["path"], "references/ref-notes/source")
+        self.assertEqual((self.root / record["path"]).read_bytes(), source)
+        self.assertEqual(json.loads((self.root / "references/ref-notes/record.json").read_text())["sha256"], record["sha256"])
+        self.assertNotIn(server.token, json.dumps(record))
+        code, headers, repeated = self.request(server, "/api/reference", method="POST", body=payload)
+        self.assertEqual(code, 200)
+        self.assertTrue(repeated["idempotent"])
+        self.assertEqual(repeated["reference"], record)
+        changed = dict(payload, title="Different title")
+        self.assertEqual(self.request(server, "/api/reference", method="POST", body=changed)[0], 409)
+        snapshot = self.request(server)[2]
+        self.assertEqual(snapshot["statistics"]["references"], 1)
+        self.assertEqual(snapshot["references"][0]["id"], "ref-notes")
+        self.assertTrue(snapshot["references"][0]["url"].startswith("reference/"))
+
+    def test_reference_preview_sanitizes_html_and_downloads_unsafe_types(self):
+        server = self.start()
+        html = b"<html><script>alert(1)</script><body>Visible</body></html>"
+        upload = {"id": "ref-page", "category": "design", "title": "Page", "notes": "",
+                  "originalName": "page.html", "mimeType": "text/html",
+                  "data": base64.b64encode(html).decode("ascii")}
+        self.assertEqual(self.request(server, "/api/reference", method="POST", body=upload)[0], 200)
+        snapshot = self.request(server)[2]
+        path = snapshot["references"][0]["url"]
+        code, headers, content = self.request(server, path, authenticated=False)
+        self.assertEqual(code, 200)
+        self.assertTrue(headers["Content-Type"].startswith("text/html"))
+        self.assertNotIn(b"<script", content.lower())
+        archive = b"PK\x03\x04fixture"
+        upload = {"id": "ref-archive", "category": "inspiration", "title": "Archive", "notes": "",
+                  "originalName": "source.zip", "mimeType": "application/zip",
+                  "data": base64.b64encode(archive).decode("ascii")}
+        self.assertEqual(self.request(server, "/api/reference", method="POST", body=upload)[0], 200)
+        snapshot = self.request(server)[2]
+        archive_path = next(item["url"] for item in snapshot["references"] if item["id"] == "ref-archive")
+        code, headers, content = self.request(server, archive_path, authenticated=False)
+        self.assertEqual(code, 200)
+        self.assertEqual(headers["Content-Type"], "application/octet-stream")
+        self.assertIn("attachment;", headers["Content-Disposition"])
+        self.assertEqual(content, archive)
+
+    def test_reference_upload_rejects_invalid_metadata_and_data(self):
+        server = self.start()
+        base = {"id": "ref-invalid", "category": "reference", "title": "Invalid", "notes": "",
+                "originalName": "bad.exe", "mimeType": "application/octet-stream", "data": "not-base64"}
+        self.assertEqual(self.request(server, "/api/reference", method="POST", body=base)[0], 400)
+        base["originalName"] = "ok.txt"
+        base["mimeType"] = "text/plain"
+        base["data"] = "not-base64"
+        self.assertEqual(self.request(server, "/api/reference", method="POST", body=base)[0], 400)
+        base["data"] = base64.b64encode(b"ok").decode("ascii")
+        base["category"] = "other"
+        self.assertEqual(self.request(server, "/api/reference", method="POST", body=base)[0], 400)
     def test_lazy_sibling_loading_preserves_importlib_callers(self):
         specification = importlib.util.spec_from_file_location("isolated_studio_without_sys_modules", SCRIPT)
         isolated = importlib.util.module_from_spec(specification)

@@ -26,6 +26,6 @@ The repository declares seven specialist agent roles and nine UI skills. Agent c
 
 ## Run artifacts
 
-Run directories may contain run.json, locator and status files, evidence records, artwork, approvals, logs, locks, and theme sources. The exact accepted schema is implemented by the runtime and documented by references/run-records.md.
+Run directories may contain `run.json`, locator and status files, evidence records, immutable references, artwork, approvals, logs, locks, and theme sources. References use `references/<id>/record.json` and `references/<id>/source`; the authenticated dashboard endpoint validates category, filename, MIME type, base64 bytes, size and digest before atomic persistence. The exact accepted schema is implemented by the runtime and documented in [references/run-records.md](../../.omp/skills/ui-design-studio/references/run-records.md).
 
 Sources: pyproject.toml, .omp/commands/, .omp/extensions/ui-design-progress.ts, src/ui_design_studio/, references/run-records.md, release.json.

@@ -37,6 +37,7 @@
       <button id="nav-progress" type="button" data-view="progress" aria-controls="progress-panel" aria-current="page">Progress</button>
       <button id="nav-feed" type="button" data-view="feed" aria-controls="feed-panel">Working feed</button>
       <button id="nav-library" type="button" data-view="library" aria-controls="library-panel">Library</button>
+      <button id="nav-references" type="button" data-view="references" aria-controls="references-panel">References <span id="reference-count" class="nav-count" hidden></span></button>
       <button id="nav-approvals" type="button" data-view="approvals" aria-controls="approvals-panel">Approvals <span id="approval-count" class="nav-count" hidden></span></button>
       <button id="nav-usage" type="button" data-view="usage" aria-controls="usage-panel">Usage</button>
     </nav>
@@ -155,6 +156,33 @@
       <nav class="pagination" aria-label="Library pages"><button id="library-previous" type="button" class="button button-quiet" disabled>Previous</button><span id="library-page" aria-live="polite">No pages loaded</span><button id="library-next" type="button" class="button button-quiet" disabled>Next</button></nav>
     </section>
 
+    <section id="references-panel" data-view-panel="references" aria-labelledby="references-heading" hidden aria-busy="true">
+      <div class="section-heading">
+        <div><p class="eyebrow">Run-owned source material</p><h2 id="references-heading" tabindex="-1">References</h2><p class="muted">Upload websites, documents, notes, images and inspiration without mixing them into the artwork library.</p></div>
+        <span id="reference-panel-status" class="status-badge" data-state="pending">No references loaded</span>
+      </div>
+      <section class="panel" aria-labelledby="reference-upload-heading">
+        <div class="panel-heading"><h3 id="reference-upload-heading">Add a reference</h3><span class="muted">Maximum 8 MiB per file</span></div>
+        <form id="reference-upload-form">
+          <div class="reference-upload-grid">
+            <label for="reference-category">Category<select id="reference-category" required><option value="reference">Reference</option><option value="design">Design</option><option value="concept">Concept</option><option value="inspiration">Inspiration</option></select></label>
+            <label for="reference-title">Title<input id="reference-title" type="text" maxlength="200" required placeholder="What should reviewers call it?"></label>
+            <label for="reference-file">File<input id="reference-file" type="file" required accept=".html,.htm,.pdf,.txt,.text,.md,.markdown,.json,.csv,.xml,.css,.js,.mjs,.cjs,.ts,.tsx,.mts,.cts,.png,.jpg,.jpeg,.gif,.webp,.avif,.svg,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.rtf,.zip,.tar,.gz,.tgz,.7z,.rar"></label>
+            <label class="reference-notes" for="reference-notes">Notes<textarea id="reference-notes" maxlength="4000" placeholder="Optional context for the design team."></textarea></label>
+          </div>
+          <div class="reference-upload-actions"><button id="reference-upload-submit" type="submit" class="button button-primary">Upload reference</button><progress id="reference-upload-progress" max="100" value="0" hidden></progress><span id="reference-upload-status" class="muted" role="status"></span></div>
+        </form>
+      </section>
+      <section class="panel" aria-labelledby="reference-list-heading">
+        <div class="panel-heading"><h3 id="reference-list-heading">Reference library</h3><span id="reference-summary" class="muted">No references loaded.</span></div>
+        <div class="reference-filters">
+          <label for="reference-filter-category">Filter category<select id="reference-filter-category"><option value="all">All categories</option><option value="reference">Reference</option><option value="design">Design</option><option value="concept">Concept</option><option value="inspiration">Inspiration</option></select></label>
+          <label for="reference-search">Search<input id="reference-search" type="search" placeholder="Title, notes, or file name" autocomplete="off"></label>
+        </div>
+        <div id="reference-grid" class="reference-grid"><p class="empty-state">No reference records loaded.</p></div>
+      </section>
+    </section>
+
     <section id="approvals-panel" data-view-panel="approvals" aria-labelledby="approvals-heading" hidden aria-busy="true">
       <div class="section-heading"><div><p class="eyebrow">Digest-bound decisions</p><h2 id="approvals-heading" tabindex="-1">Approvals</h2><p id="approval-mode" class="muted">Run mode not loaded. No approval can be submitted.</p></div></div>
       <div id="approval-list">
@@ -240,6 +268,11 @@
     </section>
   </main>
 
+  <dialog id="reference-dialog" class="reference-dialog" aria-labelledby="reference-viewer-title" aria-describedby="reference-viewer-context reference-viewer-status">
+    <div class="viewer-header"><div><h2 id="reference-viewer-title"></h2><p id="reference-viewer-context" class="muted"></p></div><button id="reference-close" type="button" class="button button-quiet" autofocus>Close <span aria-hidden="true">Esc</span></button></div>
+    <div id="reference-viewer-stage" class="reference-viewer-stage" tabindex="0" aria-label="Reference preview"></div>
+    <div class="viewer-footer"><p id="reference-viewer-status" class="muted" role="status"></p><a id="reference-viewer-download" class="button button-quiet" download>Download original</a></div>
+  </dialog>
   <dialog id="artwork-dialog" class="artwork-dialog" aria-labelledby="viewer-title" aria-describedby="viewer-context viewer-policy">
     <div class="viewer-header"><div><h2 id="viewer-title"></h2><p id="viewer-context" class="muted"></p></div><button id="viewer-close" type="button" class="button button-quiet" autofocus>Close <span aria-hidden="true">Esc</span></button></div>
     <div class="viewer-toolbar" role="group" aria-label="Artwork display controls"><button id="viewer-fit" type="button" class="button button-quiet" aria-pressed="true">Fit</button><button id="viewer-natural" type="button" class="button button-quiet" aria-pressed="false">Natural size</button><button id="viewer-zoom-out" type="button" class="button button-quiet" aria-label="Zoom out">−</button><output id="viewer-scale" aria-live="polite">Not loaded</output><button id="viewer-zoom-in" type="button" class="button button-quiet" aria-label="Zoom in">+</button><button id="viewer-compare" type="button" class="button button-quiet" aria-pressed="false" hidden>Compare previous</button><button id="viewer-expand" type="button" class="button button-quiet" aria-pressed="false">Full viewport</button><a id="viewer-download" class="button button-quiet" download>Save artifact</a></div>

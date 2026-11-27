@@ -250,6 +250,31 @@ Pass `--choices plan/choices.json` to supply named concepts or palettes. The run
 The dashboard presents the artifacts and rationale field. Only a submitted guided choice appends an `actor: "user"` decision. Approving a listed existing concept records that selection. To request a combination that has not been rendered, submit Request changes with the desired elements in the rationale, then review a new request for the reconciled artifacts. Approval binds current input bytes and local dependencies; changed inputs require a new review. Design requests include all approved Plan inputs, the shared contract and the complete mockup set. Yolo displays actual autonomous decisions and never waits for a human artistic form.
 The authenticated `POST /api/approval` body may include `attachments` and `annotations`. Each attachment is `{ "id", "name", "mimeType", "data" }`, where `data` is base64 PNG, JPEG, GIF or WebP bytes, at most four images, 2 MiB each, and 8 MiB combined. Each annotation is `{ "attachmentId", "tool", "points", "text", "color", "width" }`; points use normalized coordinates, and supported tools are `arrow`, `line`, `curve`, `rectangle`, `ellipse` and `text`. The server stores content-addressed attachment files and records only validated metadata and vector marks in the decision. Browser edits remain in memory until submission.
 
+#### Run references
+
+The dashboard stores uploaded source material separately from artwork versions. Each reference is immutable and lives under `references/<id>/record.json` plus `references/<id>/source` in the selected run. Records use schema `1.0`:
+
+```json
+{
+  "schemaVersion": "1.0",
+  "id": "ref-EXACT_ID",
+  "category": "reference",
+  "title": "Observed source",
+  "notes": "Why this source matters",
+  "originalName": "source.pdf",
+  "extension": ".pdf",
+  "mimeType": "application/pdf",
+  "bytes": 12345,
+  "sha256": "ACTUAL_SHA256_OF_SOURCE_BYTES",
+  "createdAt": "ACTUAL_ISO_TIMESTAMP",
+  "path": "references/ref-EXACT_ID/source"
+}
+```
+
+The authenticated same-origin `POST /api/reference` endpoint accepts JSON fields `id`, `category`, `title`, `notes`, `originalName`, `mimeType`, and base64 `data`. `extension`, `bytes`, and `sha256` may be supplied as matching assertions. Categories are `reference`, `design`, `concept`, and `inspiration`. The server derives the digest and timestamp, rejects unsupported types, bounds each upload at 8 MiB, and writes metadata and bytes atomically. Repeating an identical ID and payload returns the existing record. Reusing an ID with different metadata or bytes is rejected.
+
+Accepted inline-preview types are HTML/HTM, PDF, plain or structured text, CSS, JavaScript/TypeScript, SVG, PNG, JPEG, GIF, WebP, and AVIF. HTML and SVG are sanitized before serving. Text is served as plain text. Office and archive types are retained as download-only `application/octet-stream` content. The server never writes its bearer token into a reference record. The snapshot projection exposes validated reference metadata plus opaque capability URLs for preview and download; those URLs are not persisted in run records.
+
 ### Clean up owned server resources
 
 ```bash

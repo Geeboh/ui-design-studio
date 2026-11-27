@@ -4,6 +4,8 @@
   const POLL_INTERVAL = 2000;
   const STALE_AFTER = 10000;
   const PAGE_SIZE = 12;
+ const REFERENCE_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
+ const REFERENCE_CATEGORIES = new Set(["reference", "design", "concept", "inspiration"]);
   const DOCUMENT_WIDTH = 1440;
   const DOCUMENT_HEIGHT = 900;
   const baseUrl = new URL(".", window.location.href);
@@ -13,6 +15,9 @@
     token: new URLSearchParams(window.location.hash.slice(1)).get("token") || "",
     snapshot: null,
     artworks: [],
+    references: [],
+    referenceCategory: "all",
+    referenceSearch: "",
     artworkById: new Map(),
     view: "progress",
     libraryPage: 1,
@@ -145,10 +150,12 @@
     requireValue(text(data.nextAction) && strings(data.blockers) && strings(data.warnings), "Progress messages are invalid.");
     requireValue(Array.isArray(data.workers) && data.workers.every((worker) => record(worker) && ["id", "task", "status", "message"].every((key) => text(worker[key])) && date(worker.updatedAt) && (worker.model === undefined || text(worker.model))), "Worker records are invalid.");
     requireValue(Array.isArray(data.tasks) && data.tasks.every((task) => record(task) && ["id", "title", "status"].every((key) => text(task[key])) && (task.progress === undefined || (typeof task.progress === "number" && Number.isFinite(task.progress) && task.progress >= 0 && task.progress <= 100)) && (task.nextAction === undefined || text(task.nextAction))), "Task records are invalid.");
-    requireValue(record(data.statistics) && ["artworks", "workers", "tasks", "evidence", "passedEvidence"].every((key) => count(data.statistics[key])) && typeof data.statistics.elapsedSeconds === "number" && Number.isFinite(data.statistics.elapsedSeconds) && data.statistics.elapsedSeconds >= 0, "Statistics are invalid.");
+    requireValue(record(data.statistics) && ["artworks", "references", "workers", "tasks", "evidence", "passedEvidence"].every((key) => count(data.statistics[key])) && typeof data.statistics.elapsedSeconds === "number" && Number.isFinite(data.statistics.elapsedSeconds) && data.statistics.elapsedSeconds >= 0, "Statistics are invalid.");
     requireValue(Array.isArray(data.history) && data.history.every((point) => record(point) && date(point.at) && ["verified", "required", "passedGates"].every((key) => count(point[key]))), "History records are invalid.");
     requireValue(Array.isArray(data.artworks) && data.artworks.every((artwork) => record(artwork) && ["id", "path", "title", "context", "version", "url"].every((key) => text(artwork[key])) && ["image", "html", "pdf"].includes(artwork.kind) && date(artwork.createdAt)), "Artwork records are invalid.");
     requireValue(new Set(data.artworks.map((artwork) => artwork.id)).size === data.artworks.length, "Artwork IDs must identify unique retained versions.");
+    requireValue(Array.isArray(data.references) && data.references.every((reference) => record(reference) && ["schemaVersion", "id", "category", "title", "notes", "originalName", "extension", "mimeType", "path", "url", "downloadUrl"].every((key) => text(reference[key])) && REFERENCE_CATEGORIES.has(reference.category) && count(reference.bytes) && reference.bytes > 0 && /^[0-9a-f]{64}$/.test(reference.sha256) && date(reference.createdAt)), "Reference records are invalid.");
+    requireValue(new Set(data.references.map((reference) => reference.id)).size === data.references.length, "Reference IDs must identify unique records.");
     requireValue(Array.isArray(data.approvals) && data.approvals.every((request) => record(request) && ["id", "title", "context", "inputsDigest"].every((key) => text(request[key])) && (request.createdAt === undefined || date(request.createdAt)) && ["assessment", "plan", "design"].includes(request.stage) && strings(request.inputs) && ["pending", "approved", "changes", "rejected", "stale"].includes(request.status) && Array.isArray(request.options) && request.options.every((option) => record(option) && text(option.id) && text(option.label) && strings(option.artworkIds)) && new Set(request.options.map((option) => option.id)).size === request.options.length), "Approval requests are invalid.");
     requireValue(new Set(data.approvals.map((request) => request.id)).size === data.approvals.length, "Approval request IDs are duplicated.");
     requireValue(data.decisions === undefined || (Array.isArray(data.decisions) && data.decisions.every((decision) => record(decision) && ["stage", "actor", "outcome", "rationale"].every((key) => text(decision[key])) && ["recordedAt", "optionId", "inputsDigest"].every((key) => decision[key] === undefined || text(decision[key])))), "Recorded decisions are invalid.");
@@ -267,6 +274,7 @@
       // Preserve publication order without truncating submillisecond version timestamps.
       state.artworks = snapshot.artworks.slice().reverse();
       state.artworkById = new Map(state.artworks.map((artwork) => [artwork.id, artwork]));
+      state.references = snapshot.references.slice().reverse();
       state.lastSuccess = performance.now();
       state.failure = null;
       renderSnapshot();
@@ -582,6 +590,7 @@
     renderApprovals(snapshot);
     renderDecisions(snapshot);
     renderActiveGallery();
+    renderReferences(snapshot);
     renderUsage(state.usage);
   }
 
@@ -901,8 +910,265 @@
     renderGrid(byId("library-grid"), current, state.artworks.length ? "No artwork matches these filters. Clear the filters to see all retained versions." : "No visual artifacts have been discovered in this run yet.");
   }
 
+  const referenceMimeByExtension = {
+    ".html": "text/html", ".htm": "text/html", ".pdf": "application/pdf",
+    ".txt": "text/plain", ".text": "text/plain", ".md": "text/markdown", ".markdown": "text/markdown",
+    ".json": "application/json", ".csv": "text/csv", ".xml": "application/xml", ".css": "text/css",
+    ".js": "text/javascript", ".mjs": "text/javascript", ".cjs": "text/javascript",
+    ".ts": "text/typescript", ".tsx": "text/typescript", ".mts": "text/typescript", ".cts": "text/typescript",
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
+    ".webp": "image/webp", ".avif": "image/avif", ".svg": "image/svg+xml",
+    ".doc": "application/msword", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel", ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".ppt": "application/vnd.ms-powerpoint", ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".odt": "application/vnd.oasis.opendocument.text", ".ods": "application/vnd.oasis.opendocument.spreadsheet",
+    ".odp": "application/vnd.oasis.opendocument.presentation", ".rtf": "application/rtf",
+    ".zip": "application/zip", ".tar": "application/x-tar", ".gz": "application/gzip", ".tgz": "application/gzip",
+    ".7z": "application/x-7z-compressed", ".rar": "application/vnd.rar",
+  };
+  const referenceTextExtensions = new Set([".txt", ".text", ".md", ".markdown", ".json", ".csv", ".xml", ".css", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"]);
+  const referencePreviewExtensions = new Set([".html", ".htm", ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".svg", ...referenceTextExtensions]);
+
+  function referenceUrl(reference, key = "url") {
+    const value = reference[key];
+    const url = new URL(value, baseUrl);
+    const root = new URL("reference/", baseUrl).pathname;
+    if (url.origin !== window.location.origin || !["http:", "https:"].includes(url.protocol) || url.username || url.password || !url.pathname.startsWith(root)) {
+      throw new Error("The reference URL is not a local capability.");
+    }
+    return url.href;
+  }
+
+  function referenceBytes(value) {
+    if (value < 1024) return `${numberFormat.format(value)} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
+    return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
+  }
+
+  function referenceCategoryLabel(value) {
+    return value.charAt(0).toUpperCase() + value.slice(1);
+  }
+
+  function filteredReferences() {
+    const search = state.referenceSearch.trim().toLocaleLowerCase();
+    return state.references.filter((reference) => (state.referenceCategory === "all" || reference.category === state.referenceCategory)
+      && (!search || [reference.title, reference.notes, reference.originalName, reference.category].some((value) => value.toLocaleLowerCase().includes(search))));
+  }
+
+  function renderReferences(snapshot) {
+    const references = filteredReferences();
+    const total = state.references.length;
+    const count = byId("reference-count");
+    count.hidden = total === 0;
+    count.textContent = numberFormat.format(total);
+    byId("reference-panel-status").textContent = total ? `${numberFormat.format(total)} stored` : "No references loaded";
+    byId("reference-panel-status").dataset.state = total ? "connected" : "pending";
+    byId("reference-summary").textContent = `${numberFormat.format(references.length)} matching · ${numberFormat.format(total)} total${references.length ? "" : " · upload source material to begin"}`;
+    const root = byId("reference-grid");
+    root.replaceChildren();
+    if (!references.length) {
+      root.append(element("p", "empty-state", total ? "No references match this filter." : "No references have been uploaded for this run."));
+      return;
+    }
+    for (const reference of references) {
+      const card = element("article", "reference-card");
+      const header = element("div", "reference-card-header");
+      const title = element("h4", "", reference.title);
+      const category = element("span", "kind-label", referenceCategoryLabel(reference.category));
+      header.append(title, category);
+      card.append(header);
+      card.append(element("p", "reference-card-meta", `${reference.originalName} · ${referenceBytes(reference.bytes)} · ${reference.extension}`));
+      card.append(element("p", "reference-card-notes", reference.notes || "No notes provided."));
+      const actions = element("div", "reference-card-actions");
+      const previewable = referencePreviewExtensions.has(reference.extension);
+      if (previewable) {
+        const preview = element("button", "button button-quiet", "Preview");
+        preview.type = "button";
+        preview.addEventListener("click", () => openReference(reference, preview));
+        actions.append(preview);
+      }
+      const download = element("a", "button button-quiet", previewable ? "Download" : "Download only");
+      download.href = referenceUrl(reference, "downloadUrl");
+      download.download = reference.originalName;
+      download.rel = "noreferrer";
+      actions.append(download);
+      card.append(actions);
+      root.append(card);
+    }
+  }
+
+  function bytesToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    }
+    return btoa(binary);
+  }
+
+  function referenceExtension(name) {
+    const dot = name.lastIndexOf(".");
+    return dot < 0 ? "" : name.slice(dot).toLocaleLowerCase();
+  }
+
+  function referenceUploadMime(file) {
+    return referenceMimeByExtension[referenceExtension(file.name)] || file.type || "application/octet-stream";
+  }
+
+  async function uploadReference(event) {
+    event.preventDefault();
+    const form = byId("reference-upload-form");
+    const file = byId("reference-file").files?.[0];
+    const status = byId("reference-upload-status");
+    const progress = byId("reference-upload-progress");
+    const submit = byId("reference-upload-submit");
+    if (!state.token || !snapshotFresh()) {
+      status.textContent = "Upload paused until a fresh authenticated snapshot is available.";
+      return;
+    }
+    if (!file) {
+      status.textContent = "Choose a file first.";
+      return;
+    }
+    if (file.size < 1 || file.size > REFERENCE_UPLOAD_MAX_BYTES) {
+      status.textContent = "File exceeds the 8 MiB upload limit.";
+      return;
+    }
+    const extension = referenceExtension(file.name);
+    if (!referenceMimeByExtension[extension]) {
+      status.textContent = "This file type is not supported.";
+      return;
+    }
+    submit.disabled = true;
+    progress.hidden = false;
+    progress.value = 0;
+    status.textContent = "Reading file.";
+    try {
+      const data = bytesToBase64(await file.arrayBuffer());
+      const uuid = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+      const body = JSON.stringify({
+        id: `ref-${uuid}`,
+        category: byId("reference-category").value,
+        title: byId("reference-title").value.trim() || file.name,
+        notes: byId("reference-notes").value,
+        originalName: file.name,
+        extension,
+        mimeType: referenceUploadMime(file),
+        data,
+      });
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", new URL("api/reference", baseUrl), true);
+        xhr.setRequestHeader("Authorization", `Bearer ${state.token}`);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.setRequestHeader("Accept", "application/json");
+        xhr.upload.addEventListener("progress", (event) => {
+          if (event.lengthComputable) {
+            progress.value = Math.round((event.loaded / event.total) * 100);
+            status.textContent = `Uploading ${progress.value}%`;
+          }
+        });
+        xhr.addEventListener("load", async () => {
+          if (xhr.status < 200 || xhr.status >= 300) {
+            let message = `The server returned HTTP ${xhr.status}.`;
+            try {
+              const result = JSON.parse(xhr.responseText);
+              if (typeof result.error === "string") message = result.error;
+            } catch {
+              // Keep the status-only error when the server response is not JSON.
+            }
+            reject(new Error(message));
+            return;
+          }
+          resolve();
+        });
+        xhr.addEventListener("error", () => reject(new Error("The reference upload failed.")));
+        xhr.addEventListener("abort", () => reject(new Error("The reference upload was cancelled.")));
+        xhr.send(body);
+      });
+      form.reset();
+      progress.value = 100;
+      status.textContent = "Reference stored. Refreshing run records.";
+      await refreshSnapshot();
+    } catch (error) {
+      status.textContent = error.message || "The reference upload failed.";
+    } finally {
+      submit.disabled = false;
+      if (progress.value === 100) setTimeout(() => { progress.hidden = true; }, 600);
+    }
+  }
+
+  async function openReference(reference, returnFocus) {
+    const dialog = byId("reference-dialog");
+    const stage = byId("reference-viewer-stage");
+    const status = byId("reference-viewer-status");
+    let url;
+    try {
+      url = referenceUrl(reference);
+    } catch (error) {
+      status.textContent = error.message;
+      return;
+    }
+    byId("reference-viewer-title").textContent = reference.title;
+    byId("reference-viewer-context").textContent = `${referenceCategoryLabel(reference.category)} · ${reference.originalName}`;
+    const download = byId("reference-viewer-download");
+    download.href = referenceUrl(reference, "downloadUrl");
+    download.download = reference.originalName;
+    stage.replaceChildren();
+    status.textContent = "Loading reference.";
+    const extension = reference.extension;
+    if (referenceTextExtensions.has(extension)) {
+      const pre = element("pre");
+      stage.append(pre);
+      try {
+        const response = await fetch(url, { cache: "no-store", credentials: "omit", redirect: "error" });
+        if (!response.ok) throw new Error(`The server returned HTTP ${response.status}.`);
+        pre.textContent = await response.text();
+        status.textContent = "Text preview. Content is escaped and not executed.";
+      } catch (error) {
+        status.textContent = error.message || "Text preview unavailable.";
+      }
+    } else if (extension === ".html" || extension === ".htm") {
+      const iframe = document.createElement("iframe");
+      iframe.sandbox = "";
+      iframe.referrerPolicy = "no-referrer";
+      iframe.title = `${reference.title}, sandboxed HTML preview`;
+      iframe.src = url;
+      stage.append(iframe);
+      status.textContent = "HTML preview sandboxed. Scripts and navigation are disabled.";
+    } else if (extension === ".pdf") {
+      const iframe = document.createElement("iframe");
+      iframe.referrerPolicy = "no-referrer";
+      iframe.title = `${reference.title}, PDF preview`;
+      iframe.src = url;
+      stage.append(iframe);
+      status.textContent = "PDF preview uses the browser PDF viewer.";
+    } else if (extension === ".svg" || [".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif"].includes(extension)) {
+      const image = document.createElement("img");
+      image.alt = reference.title;
+      image.decoding = "async";
+      image.referrerPolicy = "no-referrer";
+      image.src = url;
+      stage.append(image);
+      status.textContent = extension === ".svg" ? "SVG preview sanitized before delivery." : "Image preview.";
+    } else {
+      const message = element("div", "reference-download-only");
+      message.append(element("p", "", "This file is download-only for safety."));
+      message.append(download.cloneNode(true));
+      stage.append(message);
+      status.textContent = "Download-only reference.";
+    }
+    dialog.showModal();
+    byId("reference-close").focus();
+    state.referenceViewer = { returnFocus };
+  }
+
+  function closeReference() {
+    const dialog = byId("reference-dialog");
+    if (dialog.open) dialog.close();
+  }
   function setView(view, focus = true) {
-    if (!["progress", "feed", "library", "approvals", "usage"].includes(view)) return;
+    if (!["progress", "feed", "library", "references", "approvals", "usage"].includes(view)) return;
     if (state.view !== view) {
       if (state.view === "feed") disposeGrid(byId("feed-grid"));
       if (state.view === "library") disposeGrid(byId("library-grid"));
@@ -914,6 +1180,7 @@
     }
     for (const panel of document.querySelectorAll("[data-view-panel]")) panel.hidden = panel.dataset.viewPanel !== view;
     renderActiveGallery();
+    if (view === "references" && state.snapshot) renderReferences(state.snapshot);
     if (view === "usage") {
       renderUsage(state.usage);
     }
@@ -1837,6 +2104,36 @@
     state.libraryPage = 1;
     if (state.snapshot) renderLibrary();
     byId("library-search").focus();
+  });
+  byId("reference-upload-form").addEventListener("submit", uploadReference);
+  byId("reference-file").addEventListener("change", () => {
+    const title = byId("reference-title");
+    const file = byId("reference-file").files?.[0];
+    if (file && !title.value.trim()) title.value = file.name;
+  });
+  byId("reference-filter-category").addEventListener("change", (event) => {
+    state.referenceCategory = event.target.value;
+    if (state.snapshot) renderReferences(state.snapshot);
+  });
+  byId("reference-search").addEventListener("input", (event) => {
+    state.referenceSearch = event.target.value;
+    if (state.snapshot) renderReferences(state.snapshot);
+  });
+  byId("reference-close").addEventListener("click", closeReference);
+  byId("reference-dialog").addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeReference();
+  });
+  byId("reference-dialog").addEventListener("close", () => {
+    const viewer = state.referenceViewer;
+    byId("reference-viewer-stage").replaceChildren();
+    state.referenceViewer = null;
+    viewer?.returnFocus?.focus({ preventScroll: true });
+  });
+  byId("reference-dialog").addEventListener("click", (event) => {
+    if (event.target !== byId("reference-dialog")) return;
+    const bounds = byId("reference-dialog").getBoundingClientRect();
+    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closeReference();
   });
   for (const [id, direction] of [["library-previous", -1], ["library-next", 1]]) byId(id).addEventListener("click", () => {
     state.libraryPage += direction;
