@@ -7,7 +7,7 @@ db46ef81795732a2f3ff11ec6135ed7d126d20fef5d6d642f375d984dd19d438  .omp/agents/ui
 d3bea1f0b6906aea9f987c3f43312ce2d23f177a337385b123a3d71505cad58c  .omp/agents/ui-ux-researcher.md
 1dae8f8a26912367940f0c96f12a3f3331832974d8bda730b353fa94da116ba2  .omp/commands/ui-design.md
 9d39003b7f5e4406d1ad34721ddb2efb5f4ef12444120f4e55bc25b94bcb84e3  .omp/commands/ui-yolo.md
-90d06018e0e6fe943047b88819165db0990863194dc7e9a3c1884ecf413cca04  .omp/extensions/ui-design-progress.ts
+6d4e0ec425cca251d94a63f91c62852927fdce2ae4217ea993850d967d967989  .omp/extensions/ui-design-progress.ts
 efa62464352763281eb4f97a161bfebe837c13056a4d00d417c332dbe764d653  .omp/skills/ui-assess/SKILL.md
 160b32a330f17774bf8b1c24583f8e2931586644652a83c3c3e767d0f66245ad  .omp/skills/ui-design-studio/SKILL.md
 37e49ebde00cc165e87d13175376a9f3ae0fdfd61de50f78e15013986fdcd9e8  .omp/skills/ui-design-studio/assets/example-theme/CHANGELOG.md
@@ -19,8 +19,8 @@ c7a4c8acbf997f369ca43b1f4cc2d98fad4e36c3ccfe45a4a3929f07abc67444  .omp/skills/ui
 9b897b417bc73c2b633b8607cfeaa8ab6e517a9b17ea9391f24399fc6b6517f7  .omp/skills/ui-design-studio/assets/example-theme/theme.json
 461d3d657a0bf1ac1b0baa603d631f1224afc533e21c971365e26ecfadc0d9c5  .omp/skills/ui-design-studio/assets/example-theme/tokens.css
 227262c29ccf9803c32fc42b1167242ea542a4e8f9b65c1394db074587ef6195  .omp/skills/ui-design-studio/assets/example-theme/tokens.json
-840d20db5caab2fac275927462d3f35637f2cc768b7d8514fe8f64c979fe4472  .omp/skills/ui-design-studio/dashboard/dashboard.css
-bcd2e02cd3f24c6b86347a226f51d8bd2fe7beac511814d5ae5b1b27d43d8970  .omp/skills/ui-design-studio/dashboard/dashboard.js
+8904ad3b6f1c004afa7acdc00199ceaf11b395423776964c93d65b72dd69e709  .omp/skills/ui-design-studio/dashboard/dashboard.css
+81844db2f95bb2a499568a0c78fcfac5e6358fe84c0044ea30d3156db95ab634  .omp/skills/ui-design-studio/dashboard/dashboard.js
 f1d7d5ed11ebd5d86dae64ccbe85a58e802f77420b88b44971b693409c923564  .omp/skills/ui-design-studio/dashboard/index.html
 9ebceac67c044fddd96c5aec2862ad623d8af58868aea24577e0b4fe136356b1  .omp/skills/ui-design-studio/dashboard/landing.html
 a3d6c0c6e05edf8336c76ea51f68a8abeabda41b7c4fc5bcd81499c1572657bd  .omp/skills/ui-design-studio/dashboard/landing.js
@@ -36,7 +36,7 @@ bf05a8bb999d3df3807f38fdb00e8293e03f5794fe370fdbc73c9c94d2ac7dca  .omp/skills/ui
 d9d7eb33b05f80a8295c0c6bb87c07bc565de0c8ab52eaf2a7ddea40a4efb1c5  .omp/skills/ui-design-studio/references/visual-system.md
 e320ad53e7fdf62d9e1c63d9b43ba3cb8d85046901a74c99188d4cd7a4ea4e2c  .omp/skills/ui-design-studio/references/workflow.md
 41c45babfedfc2e94b162f43e24e7467fe54bdd7368fc07957b71ecfa7bd7d7b  .omp/skills/ui-design-studio/schemas/theme.schema.json
-fddc15f53997dff393cecbecbc648ec7e459b9e173046176af182de3d44ad287  .omp/skills/ui-design-studio/scripts/design_server.py
+039504cb79b6fb266711853adb491096f9f4fbfde4465140f8d6fdcdd4d197bd  .omp/skills/ui-design-studio/scripts/design_server.py
 3afb396c561df947f8b96dbf9b61f8dc8be53ddd202ac0afa4940d594f44175e  .omp/skills/ui-design-studio/scripts/optimization.py
 9c27d6520e7c335092a2c82c90907c0d1a4cb6cd668ed3e5d90a5e727e6e41df  .omp/skills/ui-design-studio/scripts/studio.py
 bee811d7fac51f6ae85488e60ec8c215881bba5289a8f80b8cdab6ed8ce342c9  .omp/skills/ui-design-studio/scripts/usage.py
@@ -164,7 +164,7 @@ cffc952c0233b560d8b1a59001bbfc2936c5b7e5a04562ee8e1609a26b248899  src/ui_design_
 0a55052a0cb33411b9de85093dff31f1b3a86ff5e6297be40ae6802f48d506db  src/ui_design_studio/storage/database.py
 b9201abe3fcfa38480b17200a22354e11b791873995237122c52f82cd4f84bf1  src/ui_design_studio/theme_lifecycle.py
 1ba4bc408537047cf6a17c54d808cf56a90548682dfbb353c0d2e1c9ef5d473f  tests/test_dashboard_browser.py
-dc8f43092f2563c93548aa2dbecc0e4045ec25eaa0a9f606453bf50b56862d4f  tests/test_design_server.py
+29cd15c836da6049bc4eb9fbe3d629530dd52f841c96b6e8d44f0267f5370be5  tests/test_design_server.py
 a7e5dea52bdce29e280906ff68ee695e50a4c451173819ffefde1ce5c26fb92d  tests/test_feature_freeze.py
 8ef0f104624e75d063ae62dfc92a74933a92a0b3adb68dfb55cf29c29cf2ad42  tests/test_freeze_acceptance.py
 1571f15527b6cb88392f35c533222f60705db28e3becf19d4c59ba48cfdd609f  tests/test_freeze_integrity.py

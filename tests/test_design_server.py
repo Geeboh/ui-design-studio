@@ -8,6 +8,8 @@ import importlib.util
 import io
 import json
 import os
+import shutil
+import subprocess
 from pathlib import Path
 import tempfile
 import threading
@@ -418,6 +420,57 @@ class DesignServerTests(unittest.TestCase):
         self.assertEqual(self.request(server, "/api/snapshot?token=" + server.token, authenticated=False)[0], 400)
         self.assertEqual(self.request(server, "/run.json")[0], 404)
         self.assertEqual(self.request(server, "/api/shutdown", "POST", {"instanceId": server.instance_id})[0], 404)
+    def test_snapshot_events_require_auth_and_publish_changes_until_close(self):
+        server = self.start(interval=0.01)
+        backend.publish_progress(studio, self.root, "Initial event fixture", [])
+        code, unused_headers, body = self.request(server, "/api/events", authenticated=False)
+        self.assertEqual(code, 401)
+        self.assertNotIn(server.token, json.dumps(body))
+        connection = http.client.HTTPConnection("127.0.0.1", server.http.server_port, timeout=3)
+        try:
+            connection.request("GET", "/api/events", headers={
+                "Authorization": "Bearer " + server.token,
+                "Accept": "text/event-stream",
+            })
+            response = connection.getresponse()
+            self.assertEqual(response.status, 200)
+            self.assertEqual(response.getheader("Content-Type"), "text/event-stream")
+            self.assertEqual(response.readline(), b"event: snapshot\n")
+            initial_data = response.readline()
+            self.assertTrue(initial_data.startswith(b"data: "))
+            self.assertEqual(response.readline(), b"\n")
+            initial = json.loads(initial_data[len(b"data: "):])
+            progress = studio.read_json(self.root / "progress.json")
+            progress["nextAction"] = "Event fixture changed."
+            write_json(self.root / "progress.json", progress)
+            server.publish_status()
+            self.assertEqual(response.readline(), b"event: snapshot\n")
+            changed_data = response.readline()
+            self.assertTrue(changed_data.startswith(b"data: "))
+            self.assertEqual(response.readline(), b"\n")
+            changed = json.loads(changed_data[len(b"data: "):])
+            self.assertNotEqual(changed["revision"], initial["revision"])
+            self.assertEqual(changed["nextAction"], "Event fixture changed.")
+            server.close()
+            self.assertTrue(server.closed.wait(3))
+            try:
+                self.assertEqual(response.readline(), b"")
+            except (ConnectionError, http.client.RemoteDisconnected):
+                pass
+        finally:
+            connection.close()
+    def test_dashboard_javascript_parses_without_snapshot_polling(self):
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("Node.js is not installed")
+        dashboard = SCRIPT.parent.parent / "dashboard" / "dashboard.js"
+        result = subprocess.run([node, "--check", str(dashboard)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        source = dashboard.read_text(encoding="utf-8")
+        self.assertNotIn("setTimeout(refreshSnapshot", source)
+        self.assertNotIn("setInterval(refreshSnapshot", source)
+
+
 
     def test_approval_csrf_origin_and_content_type_are_rejected(self):
         request = self.plan()

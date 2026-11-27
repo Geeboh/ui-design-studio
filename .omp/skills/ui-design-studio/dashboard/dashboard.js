@@ -1,7 +1,7 @@
 "use strict";
 
 (() => {
-  const POLL_INTERVAL = 2000;
+  const STREAM_RETRY_DELAYS = [500, 1000, 2000, 5000, 10000];
   const STALE_AFTER = 10000;
   const PAGE_SIZE = 12;
  const REFERENCE_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
@@ -27,7 +27,11 @@
     failure: null,
     inFlight: false,
     refreshQueued: false,
-    pollTimer: null,
+    streamConnected: false,
+    streamController: null,
+    streamRetryTimer: null,
+    streamAttempt: 0,
+    streamFallbackUsed: false,
     requestController: null,
     stopped: false,
     approvalViews: new Map(),
@@ -177,7 +181,7 @@
   }
 
   function snapshotFresh() {
-    return Boolean(state.snapshot && state.token && !state.failure && navigator.onLine !== false && performance.now() - state.lastSuccess < STALE_AFTER);
+    return Boolean(state.snapshot && state.token && state.streamConnected && !state.failure && navigator.onLine !== false && performance.now() - state.lastSuccess < STALE_AFTER);
   }
 
   function updateConnection() {
@@ -204,6 +208,13 @@
       kind = "loading";
       label = "Connecting";
       message = "Connecting to the design server. No run records have been loaded.";
+    } else if (!state.streamConnected) {
+      const stale = performance.now() - state.lastSuccess >= STALE_AFTER;
+      kind = stale ? "stale" : "reconnecting";
+      label = stale ? "Stale snapshot" : "Reconnecting";
+      message = stale
+        ? "No fresh snapshot has been received for more than 10 seconds. Approval submissions are paused; drafts are retained."
+        : "Live snapshot updates are disconnected. Reconnecting. Displayed records may be stale; approval submissions are paused.";
     } else if (!snapshotFresh()) {
       kind = "stale";
       label = "Stale snapshot";
@@ -240,16 +251,29 @@
     return detail || `The server returned HTTP ${response.status}.`;
   }
 
+  function applySnapshot(snapshot) {
+    state.snapshot = snapshot;
+    state.usage = snapshot.usage || null;
+    state.ompUsage = state.usage?.omp || null;
+    // Preserve publication order without truncating submillisecond version timestamps.
+    state.artworks = snapshot.artworks.slice().reverse();
+    state.artworkById = new Map(state.artworks.map((artwork) => [artwork.id, artwork]));
+    state.references = snapshot.references.slice().reverse();
+    if (!state.optimization && snapshot.optimization) state.optimization = snapshot.optimization;
+    state.lastSuccess = performance.now();
+    state.failure = null;
+    renderSnapshot();
+    updateConnection();
+  }
+
   async function refreshSnapshot() {
     if (state.stopped) return;
     if (state.inFlight) {
       state.refreshQueued = true;
       return;
     }
-    clearTimeout(state.pollTimer);
     if (!state.token || navigator.onLine === false) {
       updateConnection();
-      state.pollTimer = setTimeout(refreshSnapshot, POLL_INTERVAL);
       return;
     }
     state.inFlight = true;
@@ -270,17 +294,7 @@
       }
       const snapshot = validateSnapshot(await response.json());
       if (state.stopped || token !== state.token || state.requestController !== controller) return;
-      state.snapshot = snapshot;
-      state.usage = snapshot.usage || null;
-      state.ompUsage = state.usage?.omp || null;
-      // Preserve publication order without truncating submillisecond version timestamps.
-      state.artworks = snapshot.artworks.slice().reverse();
-      state.artworkById = new Map(state.artworks.map((artwork) => [artwork.id, artwork]));
-      state.references = snapshot.references.slice().reverse();
-      if (!state.optimization && snapshot.optimization) state.optimization = snapshot.optimization;
-      state.lastSuccess = performance.now();
-      state.failure = null;
-      renderSnapshot();
+      applySnapshot(snapshot);
     } catch (error) {
       if (!state.stopped && token === state.token && state.requestController === controller) {
         state.failure = {
@@ -294,9 +308,114 @@
       state.inFlight = false;
       state.requestController = null;
       updateConnection();
-      const delay = state.refreshQueued ? 0 : POLL_INTERVAL;
-      state.refreshQueued = false;
-      if (!state.stopped) state.pollTimer = setTimeout(refreshSnapshot, delay);
+      if (state.refreshQueued && !state.stopped) {
+        state.refreshQueued = false;
+        refreshSnapshot();
+      } else {
+        state.refreshQueued = false;
+      }
+    }
+  }
+
+  function snapshotFromEvent(frame) {
+    const eventLines = frame.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    let event = "";
+    const data = [];
+    for (const line of eventLines) {
+      if (!line || line.startsWith(":")) continue;
+      const separator = line.indexOf(":");
+      const field = separator < 0 ? line : line.slice(0, separator);
+      const value = separator < 0 ? "" : line.slice(separator + 1).replace(/^ /, "");
+      if (field === "event") event = value;
+      if (field === "data") data.push(value);
+    }
+    if (event !== "snapshot" || !data.length) return null;
+    return validateSnapshot(JSON.parse(data.join("\n")));
+  }
+
+  async function consumeSnapshotStream(response, token, controller) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const applyFrame = (frame) => {
+      const snapshot = snapshotFromEvent(frame);
+      if (snapshot && !state.stopped && token === state.token) applySnapshot(snapshot);
+    };
+    try {
+      while (!state.stopped && token === state.token && !controller.signal.aborted) {
+        const { done, value } = await reader.read();
+        if (done) {
+          buffer += decoder.decode();
+          if (buffer) applyFrame(buffer);
+          return;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        let match;
+        while ((match = buffer.match(/\r\n\r\n|\n\n|\r\r/))) {
+          const frame = buffer.slice(0, match.index);
+          buffer = buffer.slice(match.index + match[0].length);
+          applyFrame(frame);
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  function scheduleSnapshotStreamRetry() {
+    if (state.stopped || !state.token || navigator.onLine === false || state.failure?.kind === "unauthorized"
+        || state.streamRetryTimer || state.streamController) return;
+    const delay = STREAM_RETRY_DELAYS[Math.min(state.streamAttempt, STREAM_RETRY_DELAYS.length - 1)];
+    state.streamAttempt = Math.min(state.streamAttempt + 1, STREAM_RETRY_DELAYS.length - 1);
+    state.streamRetryTimer = setTimeout(() => {
+      state.streamRetryTimer = null;
+      startSnapshotStream();
+    }, delay);
+  }
+
+  async function startSnapshotStream() {
+    if (state.stopped || !state.token || navigator.onLine === false || state.streamController) return;
+    const token = state.token;
+    const controller = new AbortController();
+    state.streamController = controller;
+    state.streamConnected = false;
+    updateConnection();
+    try {
+      const response = await fetch(new URL("api/events", baseUrl), {
+        headers: { Authorization: `Bearer ${token}`, Accept: "text/event-stream" },
+        cache: "no-store", credentials: "omit", redirect: "error", signal: controller.signal,
+      });
+      if (!response.ok) {
+        const error = new Error(await responseError(response));
+        error.kind = [401, 403].includes(response.status) ? "unauthorized" : "error";
+        throw error;
+      }
+      if (!response.body || typeof response.body.getReader !== "function") {
+        if (!state.streamFallbackUsed) {
+          state.streamFallbackUsed = true;
+          await refreshSnapshot();
+        }
+        throw new Error("Live snapshot streaming is unavailable.");
+      }
+      if (state.stopped || token !== state.token || controller.signal.aborted) return;
+      state.streamConnected = true;
+      state.streamAttempt = 0;
+      state.failure = null;
+      updateConnection();
+      await consumeSnapshotStream(response, token, controller);
+      if (!state.stopped && token === state.token && !controller.signal.aborted) {
+        throw new Error("Live snapshot stream disconnected.");
+      }
+    } catch (error) {
+      if (state.stopped || token !== state.token || controller.signal.aborted) return;
+      state.failure = error.kind === "unauthorized"
+        ? { kind: "unauthorized", message: error.message || "Bearer authentication was rejected." }
+        : null;
+    } finally {
+      if (state.streamController !== controller) return;
+      state.streamController = null;
+      if (!state.stopped && token === state.token && !state.streamConnected) scheduleSnapshotStreamRetry();
+      updateConnection();
     }
   }
   async function cancelRun() {
@@ -2351,21 +2470,43 @@
     if (!previewResize) for (const preview of previewJobs.keys()) scaleThumbnail(preview);
     if (!viewerResize && state.viewer?.mode === "fit") applyViewerScale();
   });
-  window.addEventListener("online", refreshSnapshot);
-  window.addEventListener("offline", updateConnection);
+  window.addEventListener("online", () => {
+    state.failure = null;
+    refreshSnapshot();
+    startSnapshotStream();
+  });
+  window.addEventListener("offline", () => {
+    const controller = state.streamController;
+    state.streamController = null;
+    controller?.abort();
+    state.streamConnected = false;
+    updateConnection();
+  });
   window.addEventListener("hashchange", () => {
     const token = new URLSearchParams(window.location.hash.slice(1)).get("token") || "";
     if (token === state.token) return;
     state.token = token;
     byId("server-url").textContent = window.location.href;
     state.failure = null;
-    state.requestController?.abort();
+    state.streamConnected = false;
+    clearTimeout(state.streamRetryTimer);
+    state.streamRetryTimer = null;
+    const controller = state.streamController;
+    state.streamController = null;
+    controller?.abort();
+    state.streamAttempt = 0;
     refreshSnapshot();
+    startSnapshotStream();
   });
   let ageTimer = setInterval(updateConnection, 1000);
   window.addEventListener("pagehide", () => {
     state.stopped = true;
-    clearTimeout(state.pollTimer);
+    clearTimeout(state.streamRetryTimer);
+    state.streamRetryTimer = null;
+    const controller = state.streamController;
+    state.streamController = null;
+    controller?.abort();
+    state.streamConnected = false;
     clearInterval(ageTimer);
     state.requestController?.abort();
     state.requestController = null;
@@ -2385,6 +2526,8 @@
     }
     if (state.viewer) viewerResize?.observe(byId("viewer-stage"));
     refreshSnapshot();
+    startSnapshotStream();
   });
   refreshSnapshot();
+  startSnapshotStream();
 })();

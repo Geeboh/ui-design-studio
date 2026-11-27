@@ -1366,6 +1366,34 @@ class DesignState:
                     if isinstance(native_tasks, dict):
                         native_tasks = [dict(item, id=key) for key, item in native_tasks.items() if isinstance(key, str) and isinstance(item, dict)]
                     tasks.extend(item for item in task_records({"tasks": native_tasks}) if item["id"] not in known)
+        if not director:
+            candidates = []
+            for native_name in ("progress-pi-tasks", "progress-pi-tasks-observer"):
+                native_dir = studio.safe_path(root, native_name, must_exist=False, allow_dir=True)
+                if not native_dir.exists():
+                    continue
+                for path in native_dir.glob("*.json"):
+                    try:
+                        candidate = studio.read_json(studio.safe_path(native_dir, path.name))
+                        if isinstance(candidate, dict) and candidate.get("version") == 1 and candidate.get("runId") == run.get("id"):
+                            candidates.append(candidate)
+                    except (studio.StudioError, OSError, ValueError, TypeError):
+                        continue
+            if candidates:
+                latest_native = max(candidates, key=lambda item: item.get("updatedAt", ""))
+                native = latest_native.get("state", {})
+                native_tasks = native.get("tasks", {}) if isinstance(native, dict) else {}
+                if isinstance(native_tasks, dict):
+                    native_tasks = [dict(item, id=key) for key, item in native_tasks.items() if isinstance(key, str) and isinstance(item, dict)]
+                tasks.extend(item for item in task_records({"tasks": native_tasks}) if item["id"] not in known)
+        if not workers and tasks:
+            workers = [{
+                "id": f"task-{item['id']}",
+                "task": item["title"],
+                "status": "done" if item["status"] == "done" else "active" if item["status"] in ("active", "in_progress") else "pending",
+                "message": f"Observed OMP task status: {item['nextAction']}" if item.get("nextAction") else f"Observed OMP task status: {item['status']}.",
+                "updatedAt": timestamp(),
+            } for item in tasks]
         gates = []
         def gate(key, label, condition, detail, failed=False):
             gates.append({"id": key, "label": label, "status": "passed" if condition else "failed" if failed else "pending", "detail": detail})
@@ -1638,6 +1666,37 @@ def validated_lan_addresses(studio, addresses):
     return tuple(result)
 
 
+class SnapshotEventClient:
+    CLOSED = object()
+
+    def __init__(self):
+        self.condition = threading.Condition()
+        self.pending = None
+        self.closed = False
+
+    def publish(self, snapshot):
+        with self.condition:
+            if self.closed:
+                return
+            self.pending = snapshot
+            self.condition.notify()
+
+    def wait(self, timeout):
+        with self.condition:
+            if self.pending is None and not self.closed:
+                self.condition.wait(timeout)
+            if self.closed:
+                return self.CLOSED
+            snapshot, self.pending = self.pending, None
+            return snapshot
+
+    def close(self):
+        with self.condition:
+            self.closed = True
+            self.pending = None
+            self.condition.notify_all()
+
+
 class DesignHTTPServer(ThreadingHTTPServer):
     daemon_threads = False
     allow_reuse_address = True
@@ -1669,13 +1728,14 @@ class DesignHTTPServer(ThreadingHTTPServer):
             connections = tuple(self.connections)
         for connection in connections:
             try:
-                connection.shutdown(socket.SHUT_RD)
+                connection.shutdown(socket.SHUT_RDWR)
             except OSError:
                 pass
 
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "UIDesign/1.0"
+    protocol_version = "HTTP/1.1"
 
     def setup(self):
         super().setup()
@@ -1757,6 +1817,43 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Unsafe URL path")
         return value
 
+    def stream_events(self):
+        owner = self.owner
+        subscription = owner.subscribe_events()
+        if subscription is None:
+            self.respond(503, {"error": "Snapshot events are unavailable"})
+            return
+        client, initial = subscription
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store, no-transform")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("X-Accel-Buffering", "no")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(b"event: snapshot\ndata: " + canonical(initial) + b"\n\n")
+            self.wfile.flush()
+            revision = initial.get("revision")
+            while True:
+                snapshot = client.wait(15)
+                if snapshot is SnapshotEventClient.CLOSED:
+                    break
+                if snapshot is None:
+                    self.wfile.write(b": keepalive\n\n")
+                    self.wfile.flush()
+                    continue
+                if snapshot.get("revision") == revision:
+                    continue
+                self.wfile.write(b"event: snapshot\ndata: " + canonical(snapshot) + b"\n\n")
+                self.wfile.flush()
+                revision = snapshot.get("revision")
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+        finally:
+            owner.unsubscribe_events(client)
+
     def do_GET(self):
         owner = self.owner
         try:
@@ -1764,6 +1861,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(403, {"error": "Unadvertised request Host"})
                 return
             path = self.request_path()
+            if path == "/api/events":
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                self.stream_events()
+                return
             if path == "/api/identity":
                 if not self.authorized(owner.token):
                     self.respond(401, {"error": "Bearer authentication required"})
@@ -2031,6 +2134,45 @@ class DesignServer:
         self.close_lock = threading.RLock()
         self.http = self.local = self.run_lock = self.temporary = self.state = None
         self.threads = []
+        self._event_clients = set()
+        self._events_lock = threading.Lock()
+        self._event_revision = None
+
+    def subscribe_events(self):
+        client = SnapshotEventClient()
+        with self.state.lock:
+            if self.stop.is_set() or self.closed.is_set():
+                return None
+            snapshot = self.state.snapshot()
+            with self._events_lock:
+                if self.stop.is_set() or self.closed.is_set():
+                    return None
+                self._event_clients.add(client)
+        return client, snapshot
+
+    def unsubscribe_events(self, client):
+        with self._events_lock:
+            self._event_clients.discard(client)
+        client.close()
+
+    def publish_event_snapshot(self, snapshot):
+        revision = snapshot.get("revision")
+        if not isinstance(revision, str):
+            return
+        with self._events_lock:
+            if self.stop.is_set() or self.closed.is_set() or revision == self._event_revision:
+                return
+            self._event_revision = revision
+            clients = tuple(self._event_clients)
+        for client in clients:
+            client.publish(snapshot)
+
+    def close_event_clients(self):
+        with self._events_lock:
+            clients = tuple(self._event_clients)
+            self._event_clients.clear()
+        for client in clients:
+            client.close()
 
     def dispatch_command(self, payload):
         from ui_design_studio.application import dispatch
@@ -2160,6 +2302,9 @@ class DesignServer:
                 return None
             private_json(self.studio, self.studio.safe_path(self.root, ".design-status.json", must_exist=False),
                          {**snapshot, "lines": status_lines(snapshot), "instanceId": self.instance_id})
+            if self.stop.is_set() or self.closed.is_set():
+                return None
+            self.publish_event_snapshot(snapshot)
             return snapshot
 
     def watch(self):
@@ -2201,6 +2346,7 @@ class DesignServer:
             if self.closed.is_set():
                 return
             self.stop.set()
+            self.close_event_clients()
             try:
                 for index, server in enumerate((self.http, self.local)):
                     if server:
