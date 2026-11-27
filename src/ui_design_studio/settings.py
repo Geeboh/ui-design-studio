@@ -51,7 +51,7 @@ def _ipv4(value: str) -> str:
 
 def config_path(*, home: Path | str | None = None, xdg_config_home: Path | str | None = None) -> Path:
     """Return the one user-global settings path used by every project."""
-    if xdg_config_home is None:
+    if xdg_config_home is None and home is None:
         xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
     if xdg_config_home:
         root = Path(xdg_config_home).expanduser()

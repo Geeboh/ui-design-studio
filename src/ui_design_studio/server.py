@@ -164,15 +164,12 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
                 (EventDraft(run_id, "RunProjectionSynchronized", {"runId": run_id, "projectId": bound_project}),),
             )
 
-        projection_key = hashlib.sha256(
-            json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-        ).hexdigest()
         command_store.run_operation(
             realm=bound_project,
             actor=bound_actor["principal"],
             command="run.create",
-            idempotency_key="run-sync-" + projection_key,
-            request={"runId": run_id, "projectionSha256": projection_key},
+            idempotency_key="run-sync-" + secrets.token_hex(16),
+            request={"runId": run_id, "projection": "refresh"},
             callback=apply,
         )
     def public_mutation(command: str, run_root: Path | None, payload: dict[str, Any],

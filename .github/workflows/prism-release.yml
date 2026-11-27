@@ -25,7 +25,7 @@ jobs:
       - run: python -m venv .ci-venv
       - run: |
           .ci-venv/bin/python -m pip install --upgrade pip build pytest hatchling
-          .ci-venv/bin/python -m pip install 'mcp==1.30.0' 'segno>=1.6,<2' 'psutil>=7,<8'
+          .ci-venv/bin/python -m pip install 'mcp==1.30.0' 'segno>=1.6,<2' 'psutil>=7,<8' 'zxing-cpp>=2,<3'
       - name: Verify committed source manifest
         run: .ci-venv/bin/python scripts/package_release.py --check
       - name: Run shipped non-browser suites
