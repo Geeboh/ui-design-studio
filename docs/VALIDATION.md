@@ -1,6 +1,6 @@
 # Release validation
 
-## Version 2.0.2 candidate · 26 November 2026 UTC
+## Version 2.0.3 candidate · 26 November 2026 UTC
 
 This release record covers the PRISM Studio rebuild, the standalone MCP adapter, the project-local installer, the authenticated dashboard, and release packaging. Human participant research remains deferred by project policy.
 

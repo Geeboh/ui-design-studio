@@ -960,10 +960,13 @@ export default function designProgress(value: unknown): void {
 
 	function display(session: Session, lines: string[]): void {
 		const encoded = JSON.stringify(lines);
-		session.context.ui.setStatus(WIDGET, lines[0]);
 		if (session.context.hasUI && session.context.mode === "tui") {
+			session.context.ui.setStatus(WIDGET, undefined);
 			if (encoded !== session.lastLines) session.context.ui.setWidget(WIDGET, lines, { placement: "belowEditor" });
-		} else if (Date.now() - session.lastReport >= REPORT_MS || !session.lastReport) {
+		} else {
+			session.context.ui.setStatus(WIDGET, lines[0]);
+		}
+		if (Date.now() - session.lastReport >= REPORT_MS || !session.lastReport) {
 			const run = session.run ? relative(session.project, session.run.root).split(sep).join("/") : undefined;
 			const report = `${lines.join("\n")}\nPersistent footer unavailable.${run ? ` Run tools/ui-design status ${shellQuote(run)} --watch for periodic progress.` : ""}`;
 			if (session.context.hasUI) session.context.ui.notify(report, "info");
