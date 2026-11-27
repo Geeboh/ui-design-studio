@@ -290,6 +290,48 @@ textarea { resize: vertical; min-block-size: 7rem; }
 .reference-viewer-stage > .reference-download-only { padding: 2rem; color: var(--muted); text-align: center; }
 .reference-viewer-stage > .reference-download-only .button { margin-block-start: 1rem; }
 
+.optimization-settings { display: grid; gap: 1rem; margin-block-end: 1rem; padding: 1.1rem; border: 1px solid var(--border-subtle); border-radius: var(--radius); background: var(--surface); }
+.optimization-control-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.8rem; }
+.optimization-control-grid label { color: var(--muted); font-size: 0.85rem; }
+.optimization-control-grid output { float: right; color: var(--accent); font-variant-numeric: tabular-nums; }
+.optimization-control-grid input[type="range"] { inline-size: 100%; margin-block-start: 0.75rem; accent-color: var(--accent); }
+.optimization-check { display: flex; align-items: center; gap: 0.55rem; min-block-size: 2.75rem; color: var(--text) !important; }
+.optimization-check input { inline-size: 1.15rem; block-size: 1.15rem; accent-color: var(--accent); }
+.optimization-settings fieldset { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+.optimization-settings legend { margin-block-end: 0.6rem; color: var(--text); font-weight: 650; }
+.help-tip { display: inline-grid; place-items: center; inline-size: 1.15rem; block-size: 1.15rem; margin-inline-start: 0.15rem; border: 1px solid var(--border); border-radius: 50%; color: var(--accent); font-size: 0.75rem; cursor: help; }
+.optimization-tools { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.55rem; }
+.optimization-tool-toggle { display: flex; align-items: center; gap: 0.5rem; min-block-size: 2.6rem; padding: 0.5rem 0.65rem; border: 1px solid var(--border-subtle); border-radius: 0.35rem; background: var(--canvas); color: var(--text); font-size: 0.85rem; }
+.optimization-tool-toggle input { inline-size: 1.1rem; block-size: 1.1rem; accent-color: var(--accent); }
+.optimization-tool-toggle[data-available="false"] { color: var(--muted); }
+.optimization-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.optimization-summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.optimization-availability { display: grid; gap: 0.45rem; margin: 0; padding: 0; list-style: none; }
+.optimization-availability li { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; padding-block: 0.35rem; border-block-end: 1px solid var(--border-subtle); }
+.optimization-availability .optimization-tool-name { font-weight: 600; }
+.optimization-availability .optimization-tool-detail { color: var(--muted); font-size: 0.8rem; text-align: end; }
+.optimization-gallery { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin-block-start: 1rem; }
+.optimization-card { display: flex; flex-direction: column; min-inline-size: 0; padding: 1rem; border: 1px solid var(--border-subtle); border-radius: var(--radius); background: var(--canvas); }
+.optimization-card header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+.optimization-card h4 { font-size: 1rem; }
+.optimization-type { color: var(--muted); font-size: 0.75rem; text-transform: capitalize; }
+.optimization-savings { margin-block: 0.8rem; color: var(--success); font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.optimization-size-row { display: grid; grid-template-columns: 3.7rem minmax(0, 1fr) 4rem; align-items: center; gap: 0.5rem; margin-block-start: 0.4rem; color: var(--muted); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+.optimization-size-row strong { color: var(--text); text-align: end; }
+.optimization-size-bar { block-size: 0.55rem; overflow: hidden; border-radius: 0.2rem; background: var(--surface-raised); }
+.optimization-size-bar span { display: block; block-size: 100%; min-inline-size: 2px; border-radius: inherit; background: var(--accent); }
+.optimization-size-bar.before span { background: var(--border); }
+.optimization-card-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-block-start: auto; padding-block-start: 0.9rem; }
+.optimization-card-actions .button { min-block-size: 2.35rem; font-size: 0.8rem; }
+.optimization-card details { margin-block-start: 0.75rem; }
+.optimization-card details summary { min-block-size: 2.25rem; padding-block: 0.35rem; font-size: 0.82rem; }
+.optimization-operation { padding-block: 0.45rem; border-block-start: 1px solid var(--border-subtle); font-size: 0.8rem; }
+.optimization-operation p { margin-block-start: 0.2rem; color: var(--muted); }
+
+@media (max-width: 1100px) {
+  .optimization-gallery { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .optimization-tools { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 @media (max-width: 1100px) {
   .statistics-grid, .usage-card-grid, .usage-card-grid-compact { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .artwork-grid, .reference-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -306,7 +348,9 @@ textarea { resize: vertical; min-block-size: 7rem; }
   #run-summary { font-size: 0.8rem; }
   .connection-controls { gap: 0.4rem; }
   .connection-controls .button { min-block-size: 2.25rem; padding: 0.4rem 0.6rem; font-size: 0.8rem; }
-  .progress-layout, .work-layout, .usage-breakdown-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .progress-layout, .work-layout, .usage-breakdown-grid, .optimization-summary-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .optimization-control-grid, .optimization-tools { grid-template-columns: minmax(0, 1fr); }
+  .optimization-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .reference-grid, .reference-upload-grid, .reference-filters { grid-template-columns: minmax(0, 1fr); }
   .panel { padding: 1rem; }
   .section-heading h2 { font-size: 1.5rem; }
@@ -338,6 +382,7 @@ textarea { resize: vertical; min-block-size: 7rem; }
   .section-heading { flex-wrap: wrap; }
   .artwork-grid, .reference-grid { grid-template-columns: minmax(0, 1fr); }
   .library-filters, .reference-upload-grid, .reference-filters { grid-template-columns: minmax(0, 1fr); }
+  .optimization-gallery { grid-template-columns: minmax(0, 1fr); }
   .statistics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .statistics-grid dd { font-size: 1.4rem; }
   .reference-dialog { inline-size: calc(100vw - 0.75rem); block-size: calc(100dvh - 0.75rem); }

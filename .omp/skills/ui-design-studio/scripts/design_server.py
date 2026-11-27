@@ -52,6 +52,14 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 import xml.etree.ElementTree as ET
 
 
+_optimization_spec = importlib.util.spec_from_file_location(
+    "ui_design_studio_optimization", Path(__file__).with_name("optimization.py"))
+if _optimization_spec is None or _optimization_spec.loader is None:
+    raise ImportError("Bundled optimization engine is unavailable")
+optimization = importlib.util.module_from_spec(_optimization_spec)
+_optimization_spec.loader.exec_module(optimization)
+
+
 VISUAL = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".svg", ".html", ".htm", ".pdf"}
 SVG_CONTENT_TYPE = "image/svg+xml"
 DEPENDENCIES = VISUAL | {".css", ".woff", ".woff2", ".ttf", ".otf", ".eot"}
@@ -1462,6 +1470,12 @@ class DesignState:
                 "decisions": [{key: decision[key] for key in ("stage", "actor", "outcome", "rationale", "recordedAt", "optionId", "inputsDigest", "attachments", "annotations") if key in decision}
                               for decision in decisions["decisions"]]}
         snap["usage"] = usage
+        try:
+            snap["optimization"] = optimization.projection(studio, root)
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError):
+            snap["optimization"] = {"schemaVersion": optimization.SCHEMA_VERSION, "settings": optimization.DEFAULT_SETTINGS(),
+                                    "capabilities": optimization.tool_availability(), "recommendations": [],
+                                    "results": [], "examples": []}
         if isinstance(run.get("cancellation"), dict):
             snap["run"]["cancellation"] = dict(run["cancellation"])
         stable = {key: value for key, value in snap.items() if key != "statistics"}
@@ -1756,8 +1770,45 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self.respond(200, {"instanceId": owner.instance_id, "run": str(owner.root)})
                 return
-            if self.server.shutdown_only:
-                self.respond(404, {"error": "Not found"})
+            if path == "/api/optimization/settings":
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                self.respond(200, optimization.load_settings(owner.studio, owner.root))
+                return
+            if path in ("/api/optimization", "/api/optimization/snapshot"):
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                projection = optimization.projection(owner.studio, owner.root)
+                projection["contentBase"] = f"/optimization/{owner.optimization_capability}"
+                self.respond(200, projection)
+                return
+            if path == "/api/optimization/example":
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                projection = optimization.ensure_examples(owner.studio, owner.root)
+                projection["contentBase"] = f"/optimization/{owner.optimization_capability}"
+                self.respond(200, projection)
+                return
+            if path.startswith("/optimization/"):
+                parts = path.split("/")
+                if (len(parts) not in (4, 5) or not secrets.compare_digest(parts[2], owner.optimization_capability)):
+                    self.respond(404, {"error": "Not found"})
+                    return
+                variant = parts[4] if len(parts) == 5 else "after"
+                result, content, content_type = optimization.read_content(owner.studio, owner.root, parts[3], variant)
+                content_type = mimetypes.guess_type(result["sourceName"])[0] or content_type
+                if variant == "gzip":
+                    content_type = "application/gzip"
+                elif variant == "brotli":
+                    content_type = "application/octet-stream"
+                safe_name = "".join(character if 32 <= ord(character) < 127 and character not in {'"', "\\"}
+                                     else "_" for character in Path(result["sourceName"]).name) or "optimized.bin"
+                self.respond(200, content, content_type,
+                             "default-src 'none'; frame-ancestors 'self'; base-uri 'none'",
+                             {"Content-Disposition": f'inline; filename="{safe_name}"'})
                 return
             if path.startswith("/api/reference/") or path.startswith("/api/references/"):
                 if not self.authorized(owner.token):
@@ -1901,7 +1952,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             path = self.request_path()
             shutdown = self.server.shutdown_only
-            if (shutdown and path != "/api/shutdown") or (not shutdown and path not in ("/api/approval", "/api/command", "/api/cancel", "/api/reconcile", "/api/usage", "/api/reference", "/api/references")):
+            if (shutdown and path != "/api/shutdown") or (not shutdown and path not in (
+                    "/api/approval", "/api/command", "/api/cancel", "/api/reconcile", "/api/usage",
+                    "/api/reference", "/api/references", "/api/optimization/settings",
+                    "/api/optimization/run", "/api/optimization/example")):
                 self.respond(404, {"error": "Not found"})
                 return
             if not self.authorized(owner.shutdown_token if shutdown else owner.token):
@@ -1932,6 +1986,18 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(200, reconcile_run(owner.studio, owner.root, payload))
             elif path == "/api/usage":
                 self.respond(200, record_usage(owner.studio, owner.root, payload))
+            elif path == "/api/optimization/settings":
+                settings = payload.get("settings", payload) if isinstance(payload, dict) else payload
+                self.respond(200, {"status": "PASS", "settings": optimization.save_settings(owner.studio, owner.root, settings)})
+            elif path == "/api/optimization/run":
+                result = optimization.run_optimization(
+                    owner.studio, owner.root, payload, reference_loader=owner.state.references)
+                result["contentBase"] = f"/optimization/{owner.optimization_capability}"
+                self.respond(200, result)
+            elif path == "/api/optimization/example":
+                result = optimization.ensure_examples(owner.studio, owner.root)
+                result["contentBase"] = f"/optimization/{owner.optimization_capability}"
+                self.respond(200, result)
             elif path in ("/api/reference", "/api/references"):
                 with records_lock(owner.studio, owner.root):
                     record, idempotent = owner.state.references.store(payload)
@@ -1957,7 +2023,8 @@ class DesignServer:
         self.repo = repo
         self._lan_addresses = validated_lan_addresses(studio, lan_addresses)
         self.lock_contended = False
-        self.token, self.preview_capability, self.shutdown_token = (secrets.token_urlsafe(32) for unused in range(3))
+        self.token, self.preview_capability, self.optimization_capability, self.shutdown_token = (
+            secrets.token_urlsafe(32) for unused in range(4))
         self.instance_id = secrets.token_hex(24)
         self.stop = threading.Event()
         self.closed = threading.Event()

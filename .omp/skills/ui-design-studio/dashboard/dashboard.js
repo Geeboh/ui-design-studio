@@ -37,6 +37,8 @@
     usage: null,
     usageRange: "24h",
     ompUsage: null,
+    optimization: null,
+    optimizationLoading: false,
   };
   const DRAFT_PREFIX = "prism-studio:draft:";
   function draftKey(request) {
@@ -275,6 +277,7 @@
       state.artworks = snapshot.artworks.slice().reverse();
       state.artworkById = new Map(state.artworks.map((artwork) => [artwork.id, artwork]));
       state.references = snapshot.references.slice().reverse();
+      if (!state.optimization && snapshot.optimization) state.optimization = snapshot.optimization;
       state.lastSuccess = performance.now();
       state.failure = null;
       renderSnapshot();
@@ -1167,8 +1170,139 @@
     const dialog = byId("reference-dialog");
     if (dialog.open) dialog.close();
   }
+  function optimizationUrl(result, variant = "after") {
+    const base = state.optimization?.contentBase;
+    if (!base) throw new Error("Optimization content is not available yet.");
+    return new URL(`${base}/${result.id}/${variant}`, baseUrl).href;
+  }
+
+  function formatBytes(value) {
+    if (value < 1024) return `${numberFormat.format(value)} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
+    return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
+  }
+
+  function renderOptimization() {
+    const optimization = state.optimization;
+    if (!optimization) return;
+    const settings = optimization.settings;
+    byId("optimization-status").textContent = `${optimization.results.length} measured`;
+    byId("optimization-status").dataset.state = optimization.results.length ? "connected" : "pending";
+    byId("optimization-summary").textContent = `${optimization.results.length} real outputs · ${optimization.results.filter((result) => result.example).length} representative examples`;
+    byId("optimization-preset").value = settings.preset;
+    byId("optimization-quality").value = settings.quality;
+    byId("optimization-quality-value").textContent = settings.quality;
+    byId("optimization-level").value = settings.level;
+    byId("optimization-level-value").textContent = settings.level;
+    byId("optimization-minify").checked = settings.minify;
+    byId("optimization-compress").checked = settings.compress;
+    const tools = byId("optimization-tools");
+    tools.replaceChildren(...Object.entries(optimization.capabilities?.tools || {}).map(([name, capability]) => {
+      const label = element("label", "optimization-check");
+      const input = element("input");
+      input.type = "checkbox";
+      input.name = `tool-${name}`;
+      input.checked = settings.tools?.[name] !== false;
+      input.title = capability.reason;
+      label.append(input, element("span", "", name), element("span", "muted", capability.available ? "available" : "fallback"));
+      return label;
+    }));
+    const recommendations = byId("optimization-recommendations");
+    recommendations.replaceChildren(...(optimization.recommendations?.length
+      ? optimization.recommendations.map((item) => element("li", "", item))
+      : [element("li", "muted", "No recommendations.")]));
+    const availability = byId("optimization-availability");
+    availability.replaceChildren(...Object.entries(optimization.capabilities?.tools || {}).map(([name, capability]) =>
+      element("li", "", `${name}: ${capability.available ? "available" : "fallback"} · ${capability.reason}`)));
+    const gallery = byId("optimization-gallery");
+    gallery.replaceChildren();
+    if (!optimization.results.length) {
+      gallery.append(element("p", "empty-state", "No optimization results. Run representative examples."));
+      return;
+    }
+    for (const result of optimization.results) {
+      const card = element("article", "optimization-card");
+      const heading = element("div", "optimization-card-heading");
+      heading.append(element("h3", "", result.sourceName), badge(result.savingsBytes >= 0 ? "done" : "warning", result.savingsBytes >= 0 ? "Measured" : "Grew"));
+      card.append(heading, element("p", "muted", `${result.type} · ${result.example ? "representative example" : "uploaded source"}`));
+      const stats = element("dl", "optimization-metrics");
+      for (const [label, value] of [["Before", formatBytes(result.beforeBytes)], ["After", formatBytes(result.afterBytes)], ["Savings", `${formatBytes(Math.max(0, result.savingsBytes))} (${result.savingsPercent}%)`]]) {
+        stats.append(element("dt", "", label), element("dd", "", value));
+      }
+      card.append(stats);
+      const meter = element("div", "optimization-meter");
+      meter.append(element("span", "", "before"));
+      const beforeBar = element("span", "optimization-bar optimization-before");
+      const afterBar = element("span", "optimization-bar optimization-after");
+      beforeBar.style.inlineSize = "100%";
+      afterBar.style.inlineSize = `${Math.max(3, Math.min(100, result.afterBytes * 100 / Math.max(result.beforeBytes, 1)))}%`;
+      meter.append(beforeBar, afterBar);
+      card.append(meter);
+      const links = element("div", "optimization-links");
+      for (const [label, variant] of [["Before", "before"], ["After", "after"], ["Gzip", "gzip"], ["Brotli", "brotli"]]) {
+        if (variant === "brotli" && !result.measurements?.artifacts?.brotli) continue;
+        const link = element("a", "button button-quiet", label);
+        link.href = optimizationUrl(result, variant);
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        links.append(link);
+      }
+      card.append(links);
+      const details = element("details");
+      details.append(element("summary", "", "Operation details"));
+      details.append(...(result.operations || []).map((operation) => element("p", "optimization-operation", `${operation.label} · ${operation.tool} · ${operation.status} — ${operation.details}`)));
+      card.append(details);
+      gallery.append(card);
+    }
+  }
+
+  async function loadOptimization() {
+    if (!state.token) return;
+    const response = await fetch(new URL("api/optimization", baseUrl), { headers: { Authorization: `Bearer ${state.token}`, Accept: "application/json" }, cache: "no-store" });
+    if (!response.ok) throw new Error(await responseError(response));
+    state.optimization = await response.json();
+    renderOptimization();
+  }
+
+  function optimizationSettingsFromForm() {
+    const tools = {};
+    for (const input of document.querySelectorAll("#optimization-tools input[type=checkbox]")) tools[input.name.slice(5)] = input.checked;
+    return { schemaVersion: "1.0", preset: byId("optimization-preset").value, quality: Number(byId("optimization-quality").value), level: Number(byId("optimization-level").value), minify: byId("optimization-minify").checked, compress: byId("optimization-compress").checked, tools, recommendationMode: "safe" };
+  }
+
+  async function saveOptimizationSettings(event) {
+    event.preventDefault();
+    const feedback = byId("optimization-feedback");
+    try {
+      const response = await fetch(new URL("api/optimization/settings", baseUrl), { method: "POST", headers: { Authorization: `Bearer ${state.token}`, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(optimizationSettingsFromForm()) });
+      if (!response.ok) throw new Error(await responseError(response));
+      feedback.textContent = "Settings saved.";
+      await loadOptimization();
+    } catch (error) {
+      feedback.textContent = error.message || "Settings could not be saved.";
+    }
+  }
+
+  async function runOptimizationExamples() {
+    const feedback = byId("optimization-feedback");
+    const button = byId("optimization-run");
+    button.disabled = true;
+    feedback.textContent = "Running real transforms.";
+    try {
+      const response = await fetch(new URL("api/optimization/example", baseUrl), { method: "POST", headers: { Authorization: `Bearer ${state.token}`, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ settings: optimizationSettingsFromForm() }) });
+      if (!response.ok) throw new Error(await responseError(response));
+      state.optimization = await response.json();
+      renderOptimization();
+      feedback.textContent = "Measured outputs stored.";
+    } catch (error) {
+      feedback.textContent = error.message || "Optimization failed.";
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   function setView(view, focus = true) {
-    if (!["progress", "feed", "library", "references", "approvals", "usage"].includes(view)) return;
+    if (!["progress", "feed", "library", "references", "approvals", "usage", "optimization"].includes(view)) return;
     if (state.view !== view) {
       if (state.view === "feed") disposeGrid(byId("feed-grid"));
       if (state.view === "library") disposeGrid(byId("library-grid"));
@@ -1181,6 +1315,9 @@
     for (const panel of document.querySelectorAll("[data-view-panel]")) panel.hidden = panel.dataset.viewPanel !== view;
     renderActiveGallery();
     if (view === "references" && state.snapshot) renderReferences(state.snapshot);
+    if (view === "optimization") {
+      loadOptimization().catch((error) => { byId("optimization-feedback").textContent = error.message || "Optimization data could not be loaded."; });
+    }
     if (view === "usage") {
       renderUsage(state.usage);
     }
@@ -2134,6 +2271,19 @@
     if (event.target !== byId("reference-dialog")) return;
     const bounds = byId("reference-dialog").getBoundingClientRect();
     if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closeReference();
+  });
+  byId("optimization-settings-form").addEventListener("submit", saveOptimizationSettings);
+  byId("optimization-run").addEventListener("click", runOptimizationExamples);
+  for (const id of ["optimization-quality", "optimization-level"]) byId(id).addEventListener("input", (event) => {
+    byId(`${id}-value`).textContent = event.target.value;
+  });
+  byId("optimization-preset").addEventListener("change", () => {
+    if (byId("optimization-preset").value === "maximum") {
+      byId("optimization-quality").value = 65;
+      byId("optimization-level").value = 9;
+      byId("optimization-quality-value").textContent = "65";
+      byId("optimization-level-value").textContent = "9";
+    }
   });
   for (const [id, direction] of [["library-previous", -1], ["library-next", 1]]) byId(id).addEventListener("click", () => {
     state.libraryPage += direction;
