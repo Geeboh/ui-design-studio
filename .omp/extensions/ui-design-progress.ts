@@ -93,6 +93,7 @@ type DashboardChild = {
 	exited: Promise<void>;
 	stop(): Promise<void>;
 };
+type LanSettings = { schemaVersion: 1; lanEnabled: boolean; lanAddress: string | null };
 type DashboardOwner = { kind: "owned"; child: DashboardChild } | { kind: "borrowed" };
 type DashboardSupervisor =
 	| { kind: "idle" }
@@ -198,6 +199,50 @@ function readJson(path: string, maxBytes = MAX_JSON_BYTES): unknown {
 		throw error;
 	} finally {
 		if (descriptor !== undefined) closeSync(descriptor);
+	}
+}
+
+function globalSettingsPath(): string {
+	return join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "ui-design-studio", "config.json");
+}
+
+function readLanSettings(): LanSettings {
+	const value = (() => {
+		try { return readJson(globalSettingsPath(), 64 * 1024); }
+		catch (error) { if (isMissing(error)) return undefined; throw error; }
+	})();
+	if (value === undefined) return { schemaVersion: 1, lanEnabled: true, lanAddress: null };
+	const fields = objectFields(value);
+	const enabled = fields?.lanEnabled;
+	const address = fields?.lanAddress;
+	if (!fields || fields.schemaVersion !== 1 || typeof enabled !== "boolean"
+		|| (address !== null && address !== undefined && (typeof address !== "string" || isIP(address) !== 4))
+		|| Object.keys(fields).some(key => !["schemaVersion", "lanEnabled", "lanAddress"].includes(key))) {
+		throw new Error("Global dashboard settings are invalid.");
+	}
+	return { schemaVersion: 1, lanEnabled: enabled, lanAddress: address === undefined ? null : address };
+}
+
+function writeLanSettings(settings: LanSettings): void {
+	const path = globalSettingsPath();
+	const directory = dirname(path);
+	mkdirSync(directory, { recursive: true, mode: 0o700 });
+	plainDirectory(directory);
+	readJson(path, 64 * 1024);
+	const temporary = join(directory, `.config-${randomUUID()}.tmp`);
+	let descriptor: number | undefined;
+	try {
+		descriptor = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0), 0o600);
+		writeFileSync(descriptor, JSON.stringify(settings) + "\n", "utf8");
+		fsyncSync(descriptor);
+		closeSync(descriptor);
+		descriptor = undefined;
+		plainDirectory(directory);
+		readJson(path, 64 * 1024);
+		renameSync(temporary, path);
+	} finally {
+		if (descriptor !== undefined) closeSync(descriptor);
+		try { unlinkSync(temporary); } catch (error) { if (!isMissing(error)) throw error; }
 	}
 }
 
@@ -575,8 +620,16 @@ function diagnostic(value: unknown): string {
 		.replace(/[A-Za-z0-9_-]{32,}/gu, "[redacted]"));
 }
 
+function dashboardArguments(project: string): string[] {
+	const settings = readLanSettings();
+	const args = ["dashboard-serve", "--repo", project, "--json", "--parent-stdio",
+		"--dashboard-host", settings.lanEnabled ? "0.0.0.0" : "127.0.0.1"];
+	if (settings.lanEnabled && settings.lanAddress) args.push("--lan-address", settings.lanAddress);
+	return args;
+}
+
 function spawnDashboard(project: string): DashboardChild {
-	const child = spawn(dashboardRuntime(project), ["dashboard-serve", "--repo", project, "--json", "--parent-stdio"], {
+	const child = spawn(dashboardRuntime(project), dashboardArguments(project), {
 		cwd: project, shell: false, detached: false, stdio: ["pipe", "pipe", "pipe"],
 	});
 	const ready = Promise.withResolvers<unknown>();
@@ -715,6 +768,25 @@ export default function designProgress(value: unknown): void {
 		try { session.stopTimer(); }
 		finally { hide(session); }
 		return Promise.all([...session.children].map(child => child.stop())).then(() => {});
+	}
+
+	async function restartOwnedDashboard(session: Session): Promise<boolean> {
+		const state = session.dashboard;
+		const child = state.kind === "starting" ? state.child
+			: state.kind === "live" && state.owner.kind === "owned" ? state.owner.child : undefined;
+		if (!child && state.kind !== "recovering") return false;
+		if (state.kind === "recovering") state.cancel();
+		session.dashboardGeneration++;
+		session.dashboardId = undefined;
+		session.discoveryProof = { kind: "none" };
+		session.dashboard = { kind: "idle" };
+		refresh();
+		if (child) {
+			await child.stop();
+			session.children.delete(child);
+		}
+		if (current(session)) await ensureDashboard(session);
+		return true;
 	}
 
 	function banner(session: Session, connection: Connection): void {
@@ -1148,6 +1220,34 @@ export default function designProgress(value: unknown): void {
 			let requestGeneration = session.dashboardGeneration;
 			try {
 				const argument = args.trim();
+				if (argument === "lan" || argument.startsWith("lan ")) {
+					const request = argument.slice(3).trim();
+					if (request !== "status" && request !== "on" && request !== "off" && request !== "auto" && isIP(request) !== 4) {
+						throw new Error("Use /ui-design-dashboard lan [status|on|off|auto|IPv4].");
+					}
+					const currentSettings = readLanSettings();
+					if (request === "status") {
+						session.context.ui.notify(
+							`Dashboard LAN ${currentSettings.lanEnabled ? "enabled" : "disabled"} (${currentSettings.lanEnabled ? currentSettings.lanAddress ?? "auto" : "loopback"})`,
+							"info",
+						);
+						return;
+					}
+					const nextSettings: LanSettings = request === "on"
+						? { ...currentSettings, lanEnabled: true }
+						: request === "off"
+							? { ...currentSettings, lanEnabled: false }
+							: request === "auto"
+								? { schemaVersion: 1, lanEnabled: true, lanAddress: null }
+								: { schemaVersion: 1, lanEnabled: true, lanAddress: request };
+					writeLanSettings(nextSettings);
+					await restartOwnedDashboard(session);
+					session.context.ui.notify(
+						`Dashboard LAN ${nextSettings.lanEnabled ? "enabled" : "disabled"} (${nextSettings.lanEnabled ? nextSettings.lanAddress ?? "auto" : "loopback"})`,
+						"info",
+					);
+					return;
+				}
 				if (argument === "stop") {
 					if (session.dashboard.kind === "recovering") session.dashboard.cancel();
 					session.dashboardGeneration++;

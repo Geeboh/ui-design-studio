@@ -6,6 +6,7 @@ Run `bash install.sh --mcp-global`. Project options require a separate invocatio
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -15,6 +16,9 @@ import subprocess
 import sys
 
 PACKAGE = Path(__file__).resolve().parents[1]
+if str(PACKAGE / "src") not in sys.path:
+    sys.path.insert(0, str(PACKAGE / "src"))
+from ui_design_studio.settings import GlobalSettings, config_path, save_settings
 MARKER = ".ui-design-mcp-install.json"
 COMMANDS = ("ui-design", "ui-design-mcp")
 
@@ -29,6 +33,44 @@ def plain_parents(path: Path) -> None:
             raise InstallError(f"Refusing a symlinked managed path: {current}")
         if current.exists() and not current.is_dir():
             raise InstallError(f"Expected a directory: {current}")
+
+
+def _lan_address(value: str) -> str | None:
+    if value.lower() == "auto":
+        return None
+    try:
+        return str(ipaddress.IPv4Address(value))
+    except ipaddress.AddressValueError as exc:
+        raise argparse.ArgumentTypeError("LAN address must be an IPv4 address or auto") from exc
+
+
+def _config_snapshot(path: Path) -> tuple[bytes | None, int | None]:
+    if path.is_symlink():
+        return None, None
+    if not path.exists():
+        return None, None
+    if not path.is_file():
+        raise InstallError(f"Expected a regular global settings file: {path}")
+    return path.read_bytes(), path.stat().st_mode & 0o777
+
+
+def _restore_config(path: Path, payload: bytes | None, mode: int | None) -> None:
+    if payload is None:
+        path.unlink(missing_ok=True)
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        if mode is not None:
+            os.chmod(path, mode)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def ownership(prefix: Path, user_bin: Path) -> dict:
@@ -72,9 +114,14 @@ def preflight(prefix: Path, user_bin: Path) -> bool:
     return owned
 
 
-def install(home: Path) -> tuple[Path, Path]:
+def install(home: Path, *, lan_enabled: bool = True, lan_address: str | None = None) -> tuple[Path, Path]:
     if not home.is_absolute() or not home.is_dir():
         raise InstallError("HOME must be an absolute path to an existing directory.")
+    settings = GlobalSettings(lan_enabled=lan_enabled, lan_address=lan_address)
+    settings_file = config_path(home=home)
+    plain_parents(settings_file.parent)
+    previous_settings, previous_mode = _config_snapshot(settings_file)
+    settings_committed = False
     prefix = home / ".local/share/ui-design-studio/mcp"
     user_bin = home / ".local/bin"
     owned = preflight(prefix, user_bin)
@@ -106,6 +153,8 @@ def install(home: Path) -> tuple[Path, Path]:
             link = user_bin / name
             if not link.is_symlink():
                 link.symlink_to(prefix / "bin" / name)
+        save_settings(settings, path=settings_file)
+        settings_committed = True
     except BaseException:
         if not owned:
             for name in COMMANDS:
@@ -120,6 +169,11 @@ def install(home: Path) -> tuple[Path, Path]:
                 rollback = None
             except BaseException as restore_error:
                 raise InstallError("Owned MCP upgrade failed and rollback failed") from restore_error
+        if settings_committed:
+            try:
+                _restore_config(settings_file, previous_settings, previous_mode)
+            except BaseException as restore_error:
+                raise InstallError("MCP upgrade failed and settings rollback failed") from restore_error
         raise
     finally:
         if rollback is not None:
@@ -131,15 +185,23 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mcp-global", action="store_true", required=True,
                         help="Install only the user-global MCP package; run project installation separately")
-    parser.parse_args(argv)
+    lan = parser.add_mutually_exclusive_group()
+    lan.add_argument("--lan", dest="lan_enabled", action="store_true",
+                     help="Enable trusted-LAN dashboard access (default)")
+    lan.add_argument("--no-lan", dest="lan_enabled", action="store_false",
+                     help="Keep dashboard access loopback-only")
+    parser.set_defaults(lan_enabled=True)
+    parser.add_argument("--lan-address", type=_lan_address, default=None,
+                        metavar="auto|IPv4", help="Use one local IPv4 address, or auto interface discovery (default)")
+    args = parser.parse_args(argv)
     if sys.prefix == sys.base_prefix:
         parser.error("Run bash install.sh --mcp-global, which bootstraps a virtual environment.")
     try:
         home_value = os.environ.get("HOME", "")
         if not home_value:
             raise InstallError("HOME must be set to an absolute path to an existing directory.")
-        prefix, user_bin = install(Path(home_value))
-    except (InstallError, OSError, subprocess.SubprocessError) as exc:
+        prefix, user_bin = install(Path(home_value), lan_enabled=args.lan_enabled, lan_address=args.lan_address)
+    except (InstallError, ValueError, OSError, subprocess.SubprocessError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     print("Installed the user-global MCP package. No project files or MCP client configurations changed.")

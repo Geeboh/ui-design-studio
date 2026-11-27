@@ -958,7 +958,7 @@ test("main startup awaits authenticated readiness without MCP and shares all des
 	await Promise.all([startup, beforeWork, skillRead]);
 	assert.equal(child.events().filter(event => event.type === "spawn").length, 1);
 	assert.ok(child.events().filter(event => event.type === "identity").every(event => event.authorized));
-	assert.deepEqual(child.events()[0].args, ["dashboard-serve", "--repo", f.project, "--json", "--parent-stdio"]);
+	assert.deepEqual(child.events()[0].args, ["dashboard-serve", "--repo", f.project, "--json", "--parent-stdio", "--dashboard-host", "0.0.0.0"]);
 	const report = dashboardReports(runtime)[0];
 	assert.match(report.message.content, /^\[ok\] Dashboard live → http:\/\/127\.0\.0\.1:\d+\/#token=[a-f0-9]+ \(\/ui-design-dashboard stop to stop\)\n\[lan\] http:\/\/192\.0\.2\.46:/u);
 	assert.match(report.message.content, /[\u2580-\u259f]/u);
