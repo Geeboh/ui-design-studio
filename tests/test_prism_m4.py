@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import time
 import unittest
 
 from ui_design_studio.domain.governance import BudgetAccount, BudgetError, BudgetLedger, GovernanceError, InstructionSnapshot, LeaseManager, Money, build_worker_packet, resolve_model
@@ -69,6 +70,32 @@ class GovernanceTests(unittest.TestCase):
         reconciler.reconcile(first.attempt_id, "receipt-1", Money(5, "USD", 2), reserved_minor=5)
         with self.assertRaisesRegex(ProviderError, "different attempt"):
             reconciler.reconcile(second.attempt_id, "receipt-1", Money(5, "USD", 2), reserved_minor=5)
+    def test_terminal_settlement_rejects_new_charge_and_receipt(self):
+        ledger = BudgetLedger(BudgetAccount("run", Money(100, "USD", 2), "hard"))
+        ledger.reserve("reservation-1", Money(10, "USD", 2))
+        ledger.dispatch("reservation-1")
+        ledger.settle("reservation-1", Money(11, "USD", 2), provider_receipt="receipt-1")
+        with self.assertRaises(BudgetError):
+            ledger.settle("reservation-1", Money(12, "USD", 2), provider_receipt="receipt-2")
+        ledger.reserve("reservation-2", Money(10, "USD", 2))
+        ledger.dispatch("reservation-2")
+        with self.assertRaises(BudgetError):
+            ledger.settle("reservation-2", Money(11, "USD", 2), provider_receipt="receipt-1")
+
+    def test_expired_lease_cannot_heartbeat_or_publish_outcome(self):
+        manager = LeaseManager()
+        lease = manager.acquire("expiring", "attempt")
+        lease.expires_at = time.monotonic() - 1
+        with self.assertRaises(GovernanceError):
+            manager.heartbeat("expiring", "attempt", lease.fencing_token)
+        self.assertEqual(manager.record_outcome("expiring", "attempt", lease.fencing_token, "succeeded")["status"], "orphaned")
+
+    def test_provider_attempt_rejects_second_receipt(self):
+        reconciler = ProviderReconciler()
+        attempt = reconciler.prepare(ProviderAttempt("attempt", "request", "fixture", "model-a", None, "reservation"))
+        reconciler.reconcile(attempt.attempt_id, "receipt-1", Money(5, "USD", 2), reserved_minor=5)
+        with self.assertRaisesRegex(ProviderError, "already reconciled"):
+            reconciler.reconcile(attempt.attempt_id, "receipt-2", Money(5, "USD", 2), reserved_minor=5)
 
 
 if __name__ == "__main__":

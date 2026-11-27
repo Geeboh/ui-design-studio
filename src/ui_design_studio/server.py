@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from functools import partial, wraps
+import hashlib
 import json
 from pathlib import Path
 import posixpath
@@ -108,9 +109,41 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
     engine = studio()
     design = backend()
     guides = _Guides(engine)
+    state_directory = root / ".ui-design-studio" / "prism"
+    cursor = root
+    for part in state_directory.relative_to(root).parts:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise ValueError("Project state directory cannot contain symlinked ancestors")
+    command_store = StateStore(state_directory / "state.sqlite3")
+    bound_project = "repo-" + hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:32]
+    bound_actor = {"principal": "mcp-" + bound_project, "kind": "agent", "mode": "guided"}
+    def sync_command_projection(run_root: Path) -> None:
+        document = engine.read_json(engine.safe_path(run_root, "run.json"))
+        run_id = document.get("id")
+        if not isinstance(run_id, str) or not run_id:
+            raise ValueError("Run identity is missing")
+        with command_store.transaction() as connection:
+            project = connection.execute(
+                "SELECT project_id, source_root, state_root FROM projects WHERE project_id = ?",
+                (bound_project,),
+            ).fetchone()
+            if project is None:
+                command_store.create_project_in_transaction(connection, bound_project, str(root), str(state_directory))
+            elif (project["source_root"], project["state_root"]) != (str(root), str(state_directory)):
+                raise ValueError("Command project projection belongs to a different repository")
+            existing = connection.execute(
+                "SELECT project_id FROM runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+            if existing is None:
+                command_store.create_run_in_transaction(
+                    connection, run_id, bound_project, document,
+                    stage=document.get("phase", "assessment"),
+                    status=document.get("status", "pending"),
+                )
+            elif existing["project_id"] != bound_project:
+                raise ValueError("Run command projection belongs to a different repository")
     session = DashboardSession(root, host=dashboard_host, port=dashboard_port, lan_address=lan_address)
-    command_store = StateStore(root / ".ui-design-studio" / "prism" / "state.sqlite3")
-
     @asynccontextmanager
     async def lifespan(_: FastMCP) -> AsyncIterator[DashboardSession]:
         try:
@@ -202,13 +235,32 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
     @tool(destructive=True, idempotent=True)
     def ui_design_command(envelope: dict[str, Any]) -> dict[str, Any]:
         """Dispatch one canonical PRISM command envelope through the shared engine."""
-        return dispatch(command_store, envelope)
+        if not isinstance(envelope, dict):
+            raise ValueError("Command envelope must be an object")
+        if envelope.get("actor") != bound_actor:
+            raise ValueError("Command actor is bound to this MCP adapter")
+        scope = envelope.get("scope")
+        if not isinstance(scope, dict):
+            raise ValueError("Command scope must be an object")
+        if scope.get("projectId") not in (None, bound_project):
+            raise ValueError("Command project scope is bound to this MCP adapter")
+        payload = envelope.get("payload")
+        if not isinstance(payload, dict):
+            raise ValueError("Command payload must be an object")
+        payload = dict(payload)
+        if payload.get("projectId") not in (None, bound_project):
+            raise ValueError("Command payload project scope is bound to this MCP adapter")
+        if envelope.get("command") in {"project.initialize", "run.create"}:
+            payload["projectId"] = bound_project
+        bound = {**envelope, "actor": bound_actor, "scope": {**scope, "projectId": bound_project}, "payload": payload}
+        return dispatch(command_store, bound)
 
     @tool()
     def ui_design_start_run(theme_id: str, mode: Mode = "guided", theme_action: ThemeAction = "auto",
                             models: ModelPolicy | None = None, scope: Scope | None = None) -> dict[str, Any] | CallToolResult:
         """Create a pending run and select its dashboard. Resume the returned run after an opening failure."""
         result = engine.init_run(root, mode=mode, action=theme_action, theme_id=theme_id, model_policy=models, scope=scope)
+        sync_command_projection(Path(result["run"]))
         relative = Path(result["run"]).relative_to(root).as_posix()
         result["run"] = relative
         try:
@@ -224,6 +276,7 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
     def ui_design_resume_run(run: str) -> dict[str, Any]:
         """Open an existing repository-relative run without creating a dossier or granting approval."""
         run_root = path_in(run, "run")
+        sync_command_projection(run_root)
         relative = run_root.relative_to(root).as_posix()
         return {"status": "PASS", "run": relative, "dashboard": session.open_run(relative),
                 "landing": session.info()}

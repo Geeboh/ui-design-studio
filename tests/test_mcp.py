@@ -6,11 +6,13 @@ import asyncio
 import base64
 from contextlib import asynccontextmanager
 from datetime import timedelta
+import hashlib
 import http.client
 import json
 import os
 from pathlib import Path
 import shlex
+import sqlite3
 import signal
 import socket
 import subprocess
@@ -224,6 +226,9 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(Path(relative).is_absolute())
             document = json.loads((root / "run.json").read_text(encoding="utf-8"))
             self.assertEqual(document["status"], "pending")
+            with sqlite3.connect(self.repo / ".ui-design-studio/prism/state.sqlite3") as connection:
+                row = connection.execute("SELECT project_id, status, stage FROM runs WHERE run_id = ?", (document["id"],)).fetchone()
+            self.assertEqual(row, ("repo-" + hashlib.sha256(str(self.repo.resolve()).encode()).hexdigest()[:32], "pending", "assessment"))
             self.assertEqual(document["phase"], "assessment")
             self.assertIsNone(document["projectContext"]["sha256"])
             self.assertEqual(document["evidence"], [])

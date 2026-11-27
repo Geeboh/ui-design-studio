@@ -20,7 +20,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 TREES = (".omp/agents", ".omp/commands", ".omp/extensions", ".omp/skills", "docs", "prompts", "scripts", "tests", "tools", "examples", "src")
 TOP = ("README.md", "LICENSE.txt", "install.sh", "release.json", "pyproject.toml", "hatch_build.py")
-SKIP = {"__pycache__", ".git", ".DS_Store", "node_modules"}
+SKIP = {".git", "node_modules", "__pycache__", ".DS_Store", ".cache", ".pytest_cache"}
+PRIVATE_PARTS = {".env", "credentials", ".ui-design-studio"}
 REBUILD_CONTEXT = Path(".omp/skills/prism-rebuild")
 RUNTIME_DIRECTORIES = {Path("docs/design/runs")}
 RUNTIME_FILES = {".design-server.json", ".design-status.json", ".design-owner.json",
@@ -28,39 +29,77 @@ RUNTIME_FILES = {".design-server.json", ".design-status.json", ".design-owner.js
 EXECUTABLE = {"install.sh", "tools/ui-design"}
 
 
+def _skip(relative: Path) -> bool:
+    parts = relative.parts
+    if any(part in SKIP or part in PRIVATE_PARTS for part in parts):
+        return True
+    if any(part.startswith(".env.") and part != ".env.example" for part in parts):
+        return True
+    if any(part == ".env.example" for part in parts[:-1]):
+        return True
+    if relative.name in RUNTIME_FILES:
+        return True
+    return any(relative == runtime or runtime in relative.parents
+               for runtime in RUNTIME_DIRECTORIES)
+
+
+def _validate_symlink(path: Path, root: Path) -> None:
+    resolved = path.resolve(strict=False)
+    if not resolved.is_relative_to(root):
+        raise ValueError(f"Symlink escapes release root: {path.relative_to(root)}")
+    raise ValueError(f"Symlink is not distributable: {path.relative_to(root)}")
+
+
+def _validate_manifest(path: Path, expected: str) -> None:
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise ValueError("Refusing non-regular manifest")
+    if not path.is_file() or path.read_text(encoding="utf-8") != expected:
+        raise ValueError("MANIFEST.sha256 is missing or stale")
+
+
 def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
 def sources() -> list[Path]:
-    paths = [ROOT / name for name in TOP]
+    root = ROOT.resolve()
+    paths = [root / name for name in TOP]
     for name in TREES:
-        directory = ROOT / name
+        directory = root / name
         if not directory.is_dir() or directory.is_symlink():
             raise ValueError(f"Missing/plain source tree required: {name}")
-        for path in directory.rglob("*"):
-            relative = path.relative_to(ROOT)
-            if relative == REBUILD_CONTEXT or REBUILD_CONTEXT in relative.parents:
-                continue
-            if any(relative == runtime or runtime in relative.parents for runtime in RUNTIME_DIRECTORIES):
-                continue
-            if path.name in RUNTIME_FILES:
-                continue
-            if (any(part.startswith(".env.") for part in relative.parts[:-1])
-                    or (path.name.startswith(".env.") and path.name != ".env.example")):
-                continue
-            if path.suffix in (".pyc", ".pyo"):
-                continue
-            if path.is_symlink():
-                raise ValueError(f"Symlink is not distributable: {relative}")
-            if path.is_file():
-                paths.append(path)
+        for current, directory_names, file_names in os.walk(
+            directory, topdown=True, followlinks=False
+        ):
+            current_path = Path(current)
+            relative_current = current_path.relative_to(root)
+            kept_directories = []
+            for directory_name in sorted(directory_names):
+                relative = relative_current / directory_name
+                if relative == REBUILD_CONTEXT or REBUILD_CONTEXT in relative.parents or _skip(relative):
+                    continue
+                child = current_path / directory_name
+                if child.is_symlink():
+                    _validate_symlink(child, root)
+                kept_directories.append(directory_name)
+            directory_names[:] = kept_directories
+            for file_name in sorted(file_names):
+                path = current_path / file_name
+                relative = path.relative_to(root)
+                if relative == REBUILD_CONTEXT or REBUILD_CONTEXT in relative.parents or _skip(relative):
+                    continue
+                if path.suffix in (".pyc", ".pyo"):
+                    continue
+                if path.is_symlink():
+                    _validate_symlink(path, root)
+                if path.is_file():
+                    paths.append(path)
     for path in paths:
-        if path.is_symlink() or not path.is_file():
-            raise ValueError(f"Missing/plain source file required: {path.relative_to(ROOT)}")
-        if any(part in (".env", "credentials", ".ui-design-studio") for part in path.relative_to(ROOT).parts):
-            raise ValueError("Runtime/private state must not enter a release")
-    return sorted(set(paths), key=lambda path: path.relative_to(ROOT).as_posix())
+        if path.is_symlink():
+            _validate_symlink(path, root)
+        if not path.is_file():
+            raise ValueError(f"Missing/plain source file required: {path.relative_to(root)}")
+    return sorted(set(paths), key=lambda path: path.relative_to(root).as_posix())
 
 
 def manifest(paths: list[Path]) -> str:
@@ -76,12 +115,10 @@ def build(output: Path, check: bool = False) -> dict:
         raise ValueError("Agent count does not match release.json")
     expected = manifest(paths)
     checksum_path = ROOT / "MANIFEST.sha256"
-    if checksum_path.is_symlink() or (checksum_path.exists() and not checksum_path.is_file()):
-        raise ValueError("Refusing non-regular manifest")
+    _validate_manifest(checksum_path, expected)
     if check:
-        if not checksum_path.is_file() or checksum_path.read_text(encoding="utf-8") != expected:
-            raise ValueError("MANIFEST.sha256 is missing or stale")
         return {"status": "PASS", "filesVerified": len(paths), "version": release["version"]}
+    source_snapshot = {path: sha(path.read_bytes()) for path in paths}
     output = output.absolute()
     if output.suffix.lower() != ".zip":
         raise ValueError("Release output must end in .zip")
@@ -98,6 +135,12 @@ def build(output: Path, check: bool = False) -> dict:
             raise ValueError(f"Release output parent must be a directory: {parent}")
     output.parent.mkdir(parents=True, exist_ok=True)
     expected_manifest = expected.encode("utf-8")
+    def assert_sources_unchanged() -> None:
+        if any(sha(path.read_bytes()) != source_snapshot[path] for path in source_snapshot):
+            raise ValueError("Source changed during release build")
+        _validate_manifest(checksum_path, expected)
+
+    assert_sources_unchanged()
     paths.append(checksum_path)
     paths.sort(key=lambda path: path.relative_to(ROOT).as_posix())
     def content(path):
@@ -142,6 +185,7 @@ def build(output: Path, check: bool = False) -> dict:
             handle.write(f"{digest}  {output.name}\n")
             handle.flush()
             os.fsync(handle.fileno())
+        assert_sources_unchanged()
         if output.exists():
             backup_fd, temporary_backup = tempfile.mkstemp(prefix=".ui-release-backup-", dir=output.parent)
             os.close(backup_fd)
@@ -195,9 +239,12 @@ def build(output: Path, check: bool = False) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=ROOT / "dist/PRISM-Studio-2.0.10.zip")
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--check", action="store_true", help="Check source hashes without building")
     args = parser.parse_args()
+    if args.output is None:
+        release = json.loads((ROOT / "release.json").read_text(encoding="utf-8"))
+        args.output = ROOT / f"dist/PRISM-Studio-{release['version']}.zip"
     if sys.prefix == sys.base_prefix:
         parser.error("Use a virtual environment; see docs/DISTRIBUTION.md")
     try:

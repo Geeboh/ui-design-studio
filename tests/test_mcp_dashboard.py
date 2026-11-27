@@ -170,6 +170,16 @@ class DashboardTests(unittest.TestCase):
         self.assertTrue((root / ".design-server.lock").exists())
         self.assertFalse(self.record(session).exists())
 
+    def test_session_projection_is_bounded_and_keeps_selected_run(self):
+        session = self.session()
+        runs = [self.new_run() for _ in range(dashboard.MAX_SESSION_RECORDS + 4)]
+        selected = runs[-1][1]
+        session.selected_run = selected
+        data = session.session_data()
+        self.assertTrue(data["runsTruncated"])
+        self.assertEqual(len(data["runs"]), dashboard.MAX_SESSION_RECORDS)
+        self.assertTrue(any(item["run"] == selected for item in data["runs"]))
+
     def test_landing_open_auth_origin_host_and_body_guards(self):
         self.inventory.return_value = ("192.0.2.8",)
         session = self.session(host="0.0.0.0")

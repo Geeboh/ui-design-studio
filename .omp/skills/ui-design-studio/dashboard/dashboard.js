@@ -5,6 +5,8 @@
   const STALE_AFTER = 10000;
   const PAGE_SIZE = 12;
  const REFERENCE_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
+  const REFERENCE_PREVIEW_MAX_BYTES = 1 * 1024 * 1024;
+  const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
  const REFERENCE_CATEGORIES = new Set(["reference", "design", "concept", "inspiration"]);
   const DOCUMENT_WIDTH = 1440;
   const DOCUMENT_HEIGHT = 900;
@@ -33,9 +35,20 @@
     streamAttempt: 0,
     streamFallbackUsed: false,
     requestController: null,
+    snapshotGeneration: 0,
+    nextSnapshotGeneration: 0,
+    usageRequestController: null,
+    usageRequestGeneration: 0,
+    ompUsageController: null,
+    ompUsageTimer: null,
+    ompUsageGeneration: 0,
+    optimizationController: null,
+    optimizationGeneration: 0,
     stopped: false,
     approvalViews: new Map(),
     viewer: null,
+    referenceViewer: null,
+    referenceOpenPromise: Promise.resolve(),
     historyKey: null,
     decisionKey: null,
     usage: null,
@@ -44,20 +57,32 @@
     optimization: null,
     optimizationLoading: false,
   };
+  const DRAFT_VERSION = 1;
   const DRAFT_PREFIX = "prism-studio:draft:";
   function draftKey(request) {
     return `${DRAFT_PREFIX}${window.location.pathname}:${request.id}:${request.inputsDigest}`;
   }
+  function restoredAttachments(value) {
+    if (!Array.isArray(value)) return null;
+    return value.flatMap((item) => {
+      if (!item || typeof item !== "object" || typeof item.id !== "string" || typeof item.name !== "string"
+          || typeof item.mimeType !== "string" || typeof item.data !== "string"
+          || !/^image\/(?:png|jpeg|gif|webp)$/u.test(item.mimeType)) return [];
+      return [{ id: item.id, name: item.name, mimeType: item.mimeType, data: item.data,
+        previewUrl: `data:${item.mimeType};base64,${item.data}` }];
+    });
+  }
   function restoreDraft(request, fallback) {
     try {
       const saved = JSON.parse(window.localStorage.getItem(draftKey(request)) || "null");
-      if (!saved || typeof saved !== "object") return fallback;
+      if (!saved || typeof saved !== "object" || (saved.version !== undefined && saved.version !== DRAFT_VERSION)) return fallback;
+      const attachments = restoredAttachments(saved.attachments);
       return {
         ...fallback,
         optionId: typeof saved.optionId === "string" ? saved.optionId : fallback.optionId,
         outcome: typeof saved.outcome === "string" ? saved.outcome : fallback.outcome,
         rationale: typeof saved.rationale === "string" ? saved.rationale : fallback.rationale,
-        attachments: Array.isArray(saved.attachments) ? saved.attachments : fallback.attachments,
+        attachments: attachments || fallback.attachments,
         annotations: Array.isArray(saved.annotations) ? saved.annotations : fallback.annotations,
         activeAttachmentId: typeof saved.activeAttachmentId === "string" ? saved.activeAttachmentId : fallback.activeAttachmentId,
         reviewed: false,
@@ -66,15 +91,42 @@
         result: null,
       };
     } catch {
+      fallback.storageError = "Draft could not be loaded from browser storage.";
       return fallback;
     }
   }
+  function draftStorageMessage(view, message) {
+    view.draft.storageError = message;
+    if (!view.message) return;
+    view.message.hidden = false;
+    view.message.dataset.state = "warning";
+    view.message.textContent = message;
+  }
   function persistDraft(view) {
+    const { inputsDigest, optionId, outcome, rationale, attachments, annotations, activeAttachmentId } = view.draft;
+    const saved = {
+      version: DRAFT_VERSION, inputsDigest, optionId, outcome, rationale,
+      attachments: attachments.map(({ id, name, mimeType, data }) => ({ id, name, mimeType, data })),
+      annotations, activeAttachmentId,
+    };
     try {
-      const { inputsDigest, optionId, outcome, rationale, attachments, annotations, activeAttachmentId } = view.draft;
-      window.localStorage.setItem(draftKey(view.request), JSON.stringify({ inputsDigest, optionId, outcome, rationale, attachments, annotations, activeAttachmentId }));
+      window.localStorage.setItem(draftKey(view.request), JSON.stringify(saved));
+      view.draft.storageError = "";
+      if (view.message?.dataset.state === "warning") view.message.hidden = true;
     } catch {
-      // Draft persistence is best effort when browser storage is unavailable or full.
+      draftStorageMessage(view, "Draft could not be saved. Browser storage is unavailable or full.");
+    }
+  }
+  function clearDraft(view) {
+    view.draft.attachments = [];
+    view.draft.annotations = [];
+    view.draft.activeAttachmentId = "";
+    try {
+      const keys = new Set([draftKey(view.request), `${DRAFT_PREFIX}${window.location.pathname}:${view.request.id}:${view.draft.inputsDigest}`]);
+      for (const key of keys) window.localStorage.removeItem(key);
+      view.draft.storageError = "";
+    } catch {
+      draftStorageMessage(view, "Decision recorded, but the private draft could not be removed from browser storage.");
     }
   }
   const previewJobs = new Map();
@@ -250,20 +302,48 @@
     }
     return detail || `The server returned HTTP ${response.status}.`;
   }
+  async function responseJson(response, maxBytes) {
+    const declaredLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) throw new Error("Server payload exceeds the safe size.");
+    const body = await response.text();
+    if (new TextEncoder().encode(body).byteLength > maxBytes) throw new Error("Server payload exceeds the safe size.");
+    return JSON.parse(body);
+  }
 
-  function applySnapshot(snapshot) {
+
+  function acceptsSnapshot(snapshot, generation) {
+    if (!state.snapshot) return true;
+    if (snapshot.revision === state.snapshot.revision) return false;
+    const incomingAt = Date.parse(snapshot.observedAt);
+    const currentAt = Date.parse(state.snapshot.observedAt);
+    if (incomingAt < currentAt) return false;
+    if (incomingAt === currentAt && generation < state.snapshotGeneration) return false;
+    return true;
+  }
+
+  function applySnapshot(snapshot, generation = ++state.nextSnapshotGeneration) {
+    if (!acceptsSnapshot(snapshot, generation)) return false;
+    state.snapshotGeneration = generation;
     state.snapshot = snapshot;
-    state.usage = snapshot.usage || null;
-    state.ompUsage = state.usage?.omp || null;
+    if (state.usageRange === "24h" || !state.usage) state.usage = snapshot.usage || null;
+    state.ompUsage = snapshot.usage?.omp || state.ompUsage || null;
     // Preserve publication order without truncating submillisecond version timestamps.
     state.artworks = snapshot.artworks.slice().reverse();
     state.artworkById = new Map(state.artworks.map((artwork) => [artwork.id, artwork]));
     state.references = snapshot.references.slice().reverse();
-    if (!state.optimization && snapshot.optimization) state.optimization = snapshot.optimization;
+    if (snapshot.optimization) {
+      const contentBase = state.optimization?.contentBase;
+      const nextOptimization = contentBase ? { ...snapshot.optimization, contentBase } : snapshot.optimization;
+      if (JSON.stringify(nextOptimization) !== JSON.stringify(state.optimization)) {
+        state.optimization = nextOptimization;
+        if (state.view === "optimization") renderOptimization();
+      }
+    }
     state.lastSuccess = performance.now();
     state.failure = null;
     renderSnapshot();
     updateConnection();
+    return true;
   }
 
   async function refreshSnapshot() {
@@ -278,6 +358,7 @@
     }
     state.inFlight = true;
     const token = state.token;
+    const generation = ++state.nextSnapshotGeneration;
     const controller = new AbortController();
     state.requestController = controller;
     const deadline = setTimeout(() => controller.abort(), 12000);
@@ -292,9 +373,9 @@
         error.kind = [401, 403].includes(response.status) ? "unauthorized" : "error";
         throw error;
       }
-      const snapshot = validateSnapshot(await response.json());
+      const snapshot = validateSnapshot(await responseJson(response, MAX_SNAPSHOT_BYTES));
       if (state.stopped || token !== state.token || state.requestController !== controller) return;
-      applySnapshot(snapshot);
+      applySnapshot(snapshot, generation);
     } catch (error) {
       if (!state.stopped && token === state.token && state.requestController === controller) {
         state.failure = {
@@ -333,13 +414,15 @@
     return validateSnapshot(JSON.parse(data.join("\n")));
   }
 
-  async function consumeSnapshotStream(response, token, controller) {
+  async function consumeSnapshotStream(response, token, controller, generation) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
     const applyFrame = (frame) => {
       const snapshot = snapshotFromEvent(frame);
-      if (snapshot && !state.stopped && token === state.token) applySnapshot(snapshot);
+      if (snapshot && !state.stopped && token === state.token && !controller.signal.aborted && state.streamController === controller) {
+        applySnapshot(snapshot, generation);
+      }
     };
     try {
       while (!state.stopped && token === state.token && !controller.signal.aborted) {
@@ -361,7 +444,6 @@
       reader.releaseLock();
     }
   }
-
   function scheduleSnapshotStreamRetry() {
     if (state.stopped || !state.token || navigator.onLine === false || state.failure?.kind === "unauthorized"
         || state.streamRetryTimer || state.streamController) return;
@@ -376,6 +458,7 @@
   async function startSnapshotStream() {
     if (state.stopped || !state.token || navigator.onLine === false || state.streamController) return;
     const token = state.token;
+    const generation = ++state.nextSnapshotGeneration;
     const controller = new AbortController();
     state.streamController = controller;
     state.streamConnected = false;
@@ -402,7 +485,7 @@
       state.streamAttempt = 0;
       state.failure = null;
       updateConnection();
-      await consumeSnapshotStream(response, token, controller);
+      await consumeSnapshotStream(response, token, controller, generation);
       if (!state.stopped && token === state.token && !controller.signal.aborted) {
         throw new Error("Live snapshot stream disconnected.");
       }
@@ -413,8 +496,9 @@
         : null;
     } finally {
       if (state.streamController !== controller) return;
+      state.streamConnected = false;
       state.streamController = null;
-      if (!state.stopped && token === state.token && !state.streamConnected) scheduleSnapshotStreamRetry();
+      if (!state.stopped && token === state.token) scheduleSnapshotStreamRetry();
       updateConnection();
     }
   }
@@ -656,28 +740,67 @@
   async function loadUsageRange(range) {
     if (!state.token) return;
     state.usageRange = range;
+    const generation = ++state.usageRequestGeneration;
+    state.usageRequestController?.abort();
+    const controller = new AbortController();
+    state.usageRequestController = controller;
+    renderUsage(state.usage);
     try {
-      const response = await fetch(new URL(`api/usage/${range}`, baseUrl), { headers: { Authorization: `Bearer ${state.token}`, Accept: "application/json" }, cache: "no-store", credentials: "omit", redirect: "error" });
+      const response = await fetch(new URL(`api/usage/${range}`, baseUrl), {
+        headers: { Authorization: `Bearer ${state.token}`, Accept: "application/json" },
+        cache: "no-store", credentials: "omit", redirect: "error", signal: controller.signal,
+      });
       if (!response.ok) throw new Error(await responseError(response));
-      state.usage = await response.json();
+      const usage = await response.json();
+      if (generation !== state.usageRequestGeneration || state.usageRequestController !== controller) return;
+      state.usage = usage;
       renderUsage(state.usage);
     } catch (error) {
+      if (generation !== state.usageRequestGeneration || state.usageRequestController !== controller) return;
       byId("usage-status").textContent = "Usage unavailable";
       byId("usage-status").dataset.state = "blocked";
-      byId("usage-source-note").textContent = error.message || "Usage range request failed.";
+      byId("usage-source-note").textContent = error.name === "AbortError" ? "Usage range request superseded." : error.message || "Usage range request failed.";
+    } finally {
+      if (state.usageRequestController === controller) state.usageRequestController = null;
     }
   }
 
+  function clearOmpUsagePoll() {
+    if (state.ompUsageTimer !== null) clearTimeout(state.ompUsageTimer);
+    state.ompUsageTimer = null;
+  }
+
+  function scheduleOmpUsagePoll() {
+    if (state.stopped || state.ompUsageTimer !== null) return;
+    state.ompUsageTimer = setTimeout(() => {
+      state.ompUsageTimer = null;
+      refreshOmpUsage();
+    }, 1000);
+  }
+
   async function refreshOmpUsage() {
-    if (!state.token) return;
+    if (!state.token || state.stopped) return;
+    clearOmpUsagePoll();
+    const generation = ++state.ompUsageGeneration;
+    state.ompUsageController?.abort();
+    const controller = new AbortController();
+    state.ompUsageController = controller;
     try {
-      const response = await fetch(new URL("api/usage/omp", baseUrl), { headers: { Authorization: `Bearer ${state.token}`, Accept: "application/json" }, cache: "no-store", credentials: "omit", redirect: "error" });
+      const response = await fetch(new URL("api/usage/omp", baseUrl), {
+        headers: { Authorization: `Bearer ${state.token}`, Accept: "application/json" },
+        cache: "no-store", credentials: "omit", redirect: "error", signal: controller.signal,
+      });
       if (!response.ok) throw new Error(await responseError(response));
-      state.ompUsage = await response.json();
+      const usage = await response.json();
+      if (generation !== state.ompUsageGeneration || state.ompUsageController !== controller) return;
+      state.ompUsage = usage;
       renderOmpUsage(state.ompUsage);
-      if (state.ompUsage.status === "loading") setTimeout(refreshOmpUsage, 1000);
+      if (state.ompUsage.status === "loading") scheduleOmpUsagePoll();
     } catch (error) {
-      renderOmpUsage({ status: "unavailable", reason: error.message || "OMP usage request failed." });
+      if (generation !== state.ompUsageGeneration || state.ompUsageController !== controller) return;
+      if (error.name !== "AbortError") renderOmpUsage({ status: "unavailable", reason: error.message || "OMP usage request failed." });
+    } finally {
+      if (state.ompUsageController === controller) state.ompUsageController = null;
     }
   }
 
@@ -1220,7 +1343,7 @@
     }
   }
 
-  async function openReference(reference, returnFocus) {
+  async function openReferenceNow(reference, returnFocus) {
     const dialog = byId("reference-dialog");
     const stage = byId("reference-viewer-stage");
     const status = byId("reference-viewer-status");
@@ -1245,7 +1368,11 @@
       try {
         const response = await fetch(url, { cache: "no-store", credentials: "omit", redirect: "error" });
         if (!response.ok) throw new Error(`The server returned HTTP ${response.status}.`);
-        pre.textContent = await response.text();
+        const declaredLength = Number(response.headers.get("content-length"));
+        if (Number.isFinite(declaredLength) && declaredLength > REFERENCE_PREVIEW_MAX_BYTES) throw new Error("Text preview exceeds the safe size.");
+        const content = await response.text();
+        if (new TextEncoder().encode(content).byteLength > REFERENCE_PREVIEW_MAX_BYTES) throw new Error("Text preview exceeds the safe size.");
+        pre.textContent = content;
         status.textContent = "Text preview. Content is escaped and not executed.";
       } catch (error) {
         status.textContent = error.message || "Text preview unavailable.";
@@ -1280,9 +1407,16 @@
       stage.append(message);
       status.textContent = "Download-only reference.";
     }
+    if (dialog.open) dialog.close();
     dialog.showModal();
     byId("reference-close").focus();
     state.referenceViewer = { returnFocus };
+  }
+
+  function openReference(reference, returnFocus) {
+    const pending = state.referenceOpenPromise.then(() => openReferenceNow(reference, returnFocus));
+    state.referenceOpenPromise = pending.catch(() => {});
+    return pending;
   }
 
   function closeReference() {
@@ -1292,6 +1426,8 @@
   function optimizationUrl(result, variant = "after") {
     const base = state.optimization?.contentBase;
     if (!base) throw new Error("Optimization content is not available yet.");
+    const recorded = variant === "before" ? result.beforePath : variant === "after" ? result.afterPath : result.measurements?.artifacts?.[variant];
+    if (typeof recorded !== "string" || !recorded) throw new Error("Optimization artifact is not recorded.");
     return new URL(`${base}/${result.id}/${variant}`, baseUrl).href;
   }
 
@@ -1304,43 +1440,52 @@
   function renderOptimization() {
     const optimization = state.optimization;
     if (!optimization) return;
-    const settings = optimization.settings;
-    byId("optimization-status").textContent = `${optimization.results.length} measured`;
-    byId("optimization-status").dataset.state = optimization.results.length ? "connected" : "pending";
-    byId("optimization-summary").textContent = `${optimization.results.length} real outputs · ${optimization.results.filter((result) => result.example).length} representative examples`;
-    byId("optimization-preset").value = settings.preset;
-    byId("optimization-quality").value = settings.quality;
-    byId("optimization-quality-value").textContent = settings.quality;
-    byId("optimization-level").value = settings.level;
-    byId("optimization-level-value").textContent = settings.level;
-    byId("optimization-minify").checked = settings.minify;
-    byId("optimization-compress").checked = settings.compress;
+    const settings = optimization.settings || {};
+    const results = Array.isArray(optimization.results) ? optimization.results : [];
+    const active = document.activeElement;
     const tools = byId("optimization-tools");
+    const focusedTool = tools.contains(active) ? active.name : null;
+    byId("optimization-status").textContent = `${results.length} measured`;
+    byId("optimization-status").dataset.state = results.length ? "connected" : "pending";
+    byId("optimization-summary").textContent = `${results.length} real outputs · ${results.filter((result) => result.example).length} representative examples`;
+    byId("optimization-preset").value = settings.preset || "";
+    byId("optimization-quality").value = settings.quality ?? "";
+    byId("optimization-quality-value").textContent = settings.quality ?? "";
+    byId("optimization-level").value = settings.level ?? "";
+    byId("optimization-level-value").textContent = settings.level ?? "";
+    byId("optimization-minify").checked = settings.minify === true;
+    byId("optimization-compress").checked = settings.compress === true;
     tools.replaceChildren(...Object.entries(optimization.capabilities?.tools || {}).map(([name, capability]) => {
       const label = element("label", "optimization-check");
       const input = element("input");
       input.type = "checkbox";
       input.name = `tool-${name}`;
       input.checked = settings.tools?.[name] !== false;
-      input.title = capability.reason;
+      input.disabled = capability.available !== true;
+      input.title = capability.reason || "Capability metadata was not provided.";
       label.append(input, element("span", "", name), element("span", "muted", capability.available ? "available" : "fallback"));
       return label;
     }));
+    if (focusedTool) tools.querySelector(`[name="${CSS.escape(focusedTool)}"]`)?.focus({ preventScroll: true });
     const recommendations = byId("optimization-recommendations");
     recommendations.replaceChildren(...(optimization.recommendations?.length
       ? optimization.recommendations.map((item) => element("li", "", item))
       : [element("li", "muted", "No recommendations.")]));
     const availability = byId("optimization-availability");
     availability.replaceChildren(...Object.entries(optimization.capabilities?.tools || {}).map(([name, capability]) =>
-      element("li", "", `${name}: ${capability.available ? "available" : "fallback"} · ${capability.reason}`)));
+      element("li", "", `${name}: ${capability.available ? "available" : "fallback"} · ${capability.reason || "No reason reported"}`)));
     const gallery = byId("optimization-gallery");
+    const focusedCard = active?.closest(".optimization-card");
+    const focusedResult = focusedCard?.dataset.optimizationId;
+    const focusedVariant = active?.dataset.optimizationVariant;
     gallery.replaceChildren();
-    if (!optimization.results.length) {
+    if (!results.length) {
       gallery.append(element("p", "empty-state", "No optimization results. Run representative examples."));
       return;
     }
-    for (const result of optimization.results) {
+    for (const result of results) {
       const card = element("article", "optimization-card");
+      card.dataset.optimizationId = result.id;
       const heading = element("div", "optimization-card-heading");
       heading.append(element("h3", "", result.sourceName), badge(result.savingsBytes >= 0 ? "done" : "warning", result.savingsBytes >= 0 ? "Measured" : "Grew"));
       card.append(heading, element("p", "muted", `${result.type} · ${result.example ? "representative example" : "uploaded source"}`));
@@ -1358,9 +1503,16 @@
       meter.append(beforeBar, afterBar);
       card.append(meter);
       const links = element("div", "optimization-links");
-      for (const [label, variant] of [["Before", "before"], ["After", "after"], ["Gzip", "gzip"], ["Brotli", "brotli"]]) {
-        if (variant === "brotli" && !result.measurements?.artifacts?.brotli) continue;
+      const artifacts = result.measurements?.artifacts || {};
+      for (const [label, variant, recorded] of [
+        ["Before", "before", typeof result.beforePath === "string" && Boolean(result.beforePath)],
+        ["After", "after", typeof result.afterPath === "string" && Boolean(result.afterPath)],
+        ["Gzip", "gzip", typeof artifacts.gzip === "string" && Boolean(artifacts.gzip)],
+        ["Brotli", "brotli", typeof artifacts.brotli === "string" && Boolean(artifacts.brotli)],
+      ]) {
+        if (!recorded || !state.optimization?.contentBase) continue;
         const link = element("a", "button button-quiet", label);
+        link.dataset.optimizationVariant = variant;
         link.href = optimizationUrl(result, variant);
         link.target = "_blank";
         link.rel = "noreferrer";
@@ -1373,14 +1525,29 @@
       card.append(details);
       gallery.append(card);
     }
+    if (focusedResult && focusedVariant) gallery.querySelector(`[data-optimization-id="${CSS.escape(focusedResult)}"] [data-optimization-variant="${CSS.escape(focusedVariant)}"]`)?.focus({ preventScroll: true });
   }
 
   async function loadOptimization() {
-    if (!state.token) return;
-    const response = await fetch(new URL("api/optimization", baseUrl), { headers: { Authorization: `Bearer ${state.token}`, Accept: "application/json" }, cache: "no-store" });
-    if (!response.ok) throw new Error(await responseError(response));
-    state.optimization = await response.json();
-    renderOptimization();
+    if (!state.token || state.stopped) return;
+    const generation = ++state.optimizationGeneration;
+    state.optimizationController?.abort();
+    const controller = new AbortController();
+    state.optimizationController = controller;
+    const token = state.token;
+    try {
+      const response = await fetch(new URL("api/optimization", baseUrl), {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        cache: "no-store", credentials: "omit", redirect: "error", signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(await responseError(response));
+      const optimization = await response.json();
+      if (generation !== state.optimizationGeneration || state.optimizationController !== controller || token !== state.token) return;
+      state.optimization = optimization;
+      renderOptimization();
+    } finally {
+      if (state.optimizationController === controller) state.optimizationController = null;
+    }
   }
 
   function optimizationSettingsFromForm() {
@@ -1435,7 +1602,9 @@
     renderActiveGallery();
     if (view === "references" && state.snapshot) renderReferences(state.snapshot);
     if (view === "optimization") {
-      loadOptimization().catch((error) => { byId("optimization-feedback").textContent = error.message || "Optimization data could not be loaded."; });
+      loadOptimization().catch((error) => {
+        if (error.name !== "AbortError") byId("optimization-feedback").textContent = error.message || "Optimization data could not be loaded.";
+      });
     }
     if (view === "usage") {
       renderUsage(state.usage);
@@ -1644,7 +1813,9 @@
         reader.addEventListener("load", () => {
           const previewUrl = String(reader.result);
           const data = previewUrl.split(",", 2)[1] || "";
-          const id = `attachment-${++view.draft.attachmentSequence}`;
+          let id;
+          do id = `attachment-${++view.draft.attachmentSequence}`;
+          while (view.draft.attachments.some((attachment) => attachment.id === id));
           view.draft.attachments.push({ id, name: file.name, mimeType: file.type, data, previewUrl });
           view.draft.activeAttachmentId = id;
           renderAnnotationEditor(view);
@@ -1792,6 +1963,12 @@
         annotationTool: "arrow", attachmentSequence: 0 },
     };
     view.draft = restoreDraft(request, view.draft);
+    view.draft.attachmentSequence = view.draft.attachments.reduce((maximum, attachment) => {
+      const match = /^attachment-(\d+)$/u.exec(attachment.id);
+      const index = match ? Number(match[1]) : 0;
+      return Number.isSafeInteger(index) ? Math.max(maximum, index) : maximum;
+    }, 0);
+    if (view.draft.storageError) draftStorageMessage(view, view.draft.storageError);
     rationale.value = view.draft.rationale;
     const feedback = createAnnotationEditor(view, prefix);
     form.insertBefore(feedback, confirmationLabel);
@@ -2113,15 +2290,16 @@
         }
       } else {
         draft.result = { inputsDigest: payload.inputsDigest, outcome: payload.outcome };
-        view.message.dataset.state = payload.outcome;
+        clearDraft(view);
+        const draftError = draft.storageError;
+        view.message.dataset.state = draftError ? "warning" : payload.outcome;
         view.message.textContent = payload.outcome === "approved"
           ? "Decision recorded as approved for the reviewed digest. Acceptance gates still require their own evidence."
           : payload.outcome === "changes"
             ? "Approval-with-changes recorded for the reviewed digest. The requested feedback was saved."
             : "Decision recorded as rejected for the reviewed digest. Your request for changes was saved.";
+        if (draftError) view.message.textContent += ` ${draftError}`;
       }
-    } catch (error) {
-      view.message.dataset.state = "error";
       view.message.textContent = `${error.name === "AbortError" ? "The decision request timed out." : "No submission confirmation was received."} The decision may or may not have been recorded. Refresh the recorded status before retrying. Your draft is retained.`;
     } finally {
       clearTimeout(deadline);
@@ -2480,6 +2658,10 @@
     state.streamController = null;
     controller?.abort();
     state.streamConnected = false;
+    clearOmpUsagePoll();
+    state.usageRequestController?.abort();
+    state.ompUsageController?.abort();
+    state.optimizationController?.abort();
     updateConnection();
   });
   window.addEventListener("hashchange", () => {
@@ -2491,6 +2673,13 @@
     state.streamConnected = false;
     clearTimeout(state.streamRetryTimer);
     state.streamRetryTimer = null;
+    clearOmpUsagePoll();
+    state.usageRequestGeneration++;
+    state.ompUsageGeneration++;
+    state.optimizationGeneration++;
+    state.usageRequestController?.abort();
+    state.ompUsageController?.abort();
+    state.optimizationController?.abort();
     const controller = state.streamController;
     state.streamController = null;
     controller?.abort();
@@ -2503,6 +2692,13 @@
     state.stopped = true;
     clearTimeout(state.streamRetryTimer);
     state.streamRetryTimer = null;
+    clearOmpUsagePoll();
+    state.usageRequestGeneration++;
+    state.ompUsageGeneration++;
+    state.optimizationGeneration++;
+    state.usageRequestController?.abort();
+    state.ompUsageController?.abort();
+    state.optimizationController?.abort();
     const controller = state.streamController;
     state.streamController = null;
     controller?.abort();

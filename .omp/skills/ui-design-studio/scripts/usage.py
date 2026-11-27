@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import sqlite3
 import subprocess
 import threading
 import time
@@ -17,6 +18,7 @@ from typing import Any, Callable
 
 SCHEMA_VERSION = "1.0"
 USAGE_FILE = "usage.json"
+USAGE_DB_FILE = "usage.sqlite3"
 MAX_RECORDS = 10_000
 MAX_BYTES = 8 * 1024 * 1024
 MAX_RECENT = 200
@@ -144,7 +146,7 @@ def _empty(run_id: str) -> dict[str, Any]:
     return {"schemaVersion": SCHEMA_VERSION, "runId": run_id, "revision": 0, "records": [], "retention": {"maxRecords": MAX_RECORDS, "maxBytes": MAX_BYTES, "droppedRecords": 0}, "updatedAt": None}
 
 
-def _read_file(studio: Any, root: Path, run_id: str) -> tuple[dict[str, Any], list[str]]:
+def _legacy_file(studio: Any, root: Path, run_id: str) -> tuple[dict[str, Any], list[str]]:
     path = studio.safe_path(root, USAGE_FILE, must_exist=False)
     if not path.exists():
         return _empty(run_id), []
@@ -161,34 +163,163 @@ def _read_file(studio: Any, root: Path, run_id: str) -> tuple[dict[str, Any], li
         return _empty(run_id), [f"Usage telemetry unavailable: {exc}"]
 
 
+def _db_path(studio: Any, root: Path) -> Path:
+    return studio.safe_path(root, USAGE_DB_FILE, must_exist=False)
+
+
+def _db_meta(connection: sqlite3.Connection, key: str, default: str | None = None) -> str | None:
+    row = connection.execute("SELECT value FROM metadata WHERE key = ?", (key,)).fetchone()
+    return str(row[0]) if row is not None else default
+
+
+def _set_db_meta(connection: sqlite3.Connection, key: str, value: str) -> None:
+    connection.execute("INSERT INTO metadata(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, value))
+
+
+def _open_db(path: Path, run_id: str) -> sqlite3.Connection:
+    connection = sqlite3.connect(str(path), timeout=5)
+    connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA journal_mode = DELETE")
+    connection.execute("PRAGMA synchronous = FULL")
+    connection.execute("PRAGMA auto_vacuum = INCREMENTAL")
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS records (
+            sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+            usage_id TEXT NOT NULL UNIQUE,
+            idempotency_key TEXT NOT NULL UNIQUE,
+            recorded_at TEXT NOT NULL,
+            payload TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS records_recorded_at ON records(recorded_at);
+        """
+    )
+    stored_run = _db_meta(connection, "runId")
+    if stored_run is None:
+        _set_db_meta(connection, "runId", run_id)
+        _set_db_meta(connection, "revision", "0")
+        _set_db_meta(connection, "droppedRecords", "0")
+        _set_db_meta(connection, "updatedAt", "")
+        connection.commit()
+    elif stored_run != run_id:
+        connection.close()
+        raise ValueError("usage database belongs to a different run")
+    return connection
+
+
+def _record_from_row(row: sqlite3.Row, run_id: str) -> dict[str, Any]:
+    value = json.loads(str(row["payload"]))
+    return validate_record(value, run_id)
+
+
+def _db_data(path: Path, run_id: str) -> dict[str, Any]:
+    connection = _open_db(path, run_id)
+    try:
+        connection.row_factory = sqlite3.Row
+        records = [_record_from_row(row, run_id) for row in connection.execute("SELECT payload FROM records ORDER BY sequence")]
+        return {
+            "schemaVersion": SCHEMA_VERSION,
+            "runId": run_id,
+            "revision": int(_db_meta(connection, "revision", "0") or "0"),
+            "records": records,
+            "retention": {
+                "maxRecords": MAX_RECORDS,
+                "maxBytes": MAX_BYTES,
+                "droppedRecords": int(_db_meta(connection, "droppedRecords", "0") or "0"),
+            },
+            "updatedAt": _db_meta(connection, "updatedAt") or None,
+        }
+    finally:
+        connection.close()
+
+
+def _db_size(path: Path) -> int:
+    return sum(candidate.stat().st_size for candidate in (path, Path(f"{path}-wal"), Path(f"{path}-shm")) if candidate.exists())
+
+
+def _drop_oldest(connection: sqlite3.Connection) -> bool:
+    cursor = connection.execute("DELETE FROM records WHERE sequence = (SELECT sequence FROM records ORDER BY sequence LIMIT 1)")
+    return cursor.rowcount > 0
+
+
+def _trim_db(connection: sqlite3.Connection, path: Path) -> int:
+    dropped = int(_db_meta(connection, "droppedRecords", "0") or "0")
+    while connection.execute("SELECT COUNT(*) FROM records").fetchone()[0] > MAX_RECORDS:
+        if not _drop_oldest(connection):
+            break
+        dropped += 1
+    connection.commit()
+    while _db_size(path) > MAX_BYTES and connection.execute("SELECT COUNT(*) FROM records").fetchone()[0] > 0:
+        if not _drop_oldest(connection):
+            break
+        dropped += 1
+        connection.commit()
+        connection.execute("PRAGMA incremental_vacuum(1)")
+    _set_db_meta(connection, "droppedRecords", str(dropped))
+    return dropped
+
+
+def _read_file(studio: Any, root: Path, run_id: str) -> tuple[dict[str, Any], list[str]]:
+    path = _db_path(studio, root)
+    if path.exists():
+        try:
+            return _db_data(path, run_id), []
+        except Exception as exc:
+            return _empty(run_id), [f"Usage telemetry unavailable: {exc}"]
+    return _legacy_file(studio, root, run_id)
+
+
+def _same_record(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    return {key: value for key, value in left.items() if key != "recordedAt"} == {key: value for key, value in right.items() if key != "recordedAt"}
+
+
 def record_usage(studio: Any, root: Path, payload: Any, records_lock: Callable) -> dict[str, Any]:
     run = studio.read_json(studio.safe_path(root, "run.json"))
     run_id = run.get("id", Path(root).name)
     record = validate_record(payload, run_id)
     with records_lock(studio, root):
-        data, warnings = _read_file(studio, root, run_id)
+        path = _db_path(studio, root)
+        had_db = path.exists()
+        legacy, warnings = _legacy_file(studio, root, run_id) if not had_db else (_empty(run_id), [])
         if warnings:
             raise studio.StudioError(warnings[0])
-        for existing in data["records"]:
-            if existing["idempotencyKey"] != record["idempotencyKey"]:
-                continue
-            existing_semantic = {key: value for key, value in existing.items() if key != "recordedAt"}
-            record_semantic = {key: value for key, value in record.items() if key != "recordedAt"}
-            if existing_semantic == record_semantic:
-                return {"status": "PASS", "usageId": existing["usageId"], "revision": data["revision"], "replayed": True}
-            raise studio.StudioError("Usage idempotency key was reused with different content")
-        if len(data["records"]) >= MAX_RECORDS:
-            raise studio.StudioError("Usage telemetry record limit reached; refusing to discard history")
-        candidate = dict(data)
-        candidate["records"] = [*data["records"], record]
-        candidate["revision"] = data["revision"] + 1
-        candidate["updatedAt"] = _timestamp()
-        if len(json.dumps(candidate, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > MAX_BYTES:
-            raise studio.StudioError("Usage telemetry size limit reached; refusing to discard history")
-        path = studio.safe_path(root, USAGE_FILE, must_exist=False)
-        studio.atomic_json(path, candidate)
-        os.chmod(path, 0o600)
-        return {"status": "PASS", "usageId": record["usageId"], "revision": candidate["revision"], "replayed": False}
+        connection = _open_db(path, run_id)
+        try:
+            if not had_db:
+                for item in legacy["records"]:
+                    connection.execute(
+                        "INSERT INTO records(usage_id, idempotency_key, recorded_at, payload) VALUES (?, ?, ?, ?)",
+                        (item["usageId"], item["idempotencyKey"], item["recordedAt"], json.dumps(item, ensure_ascii=False, separators=(",", ":"))),
+                    )
+                _set_db_meta(connection, "revision", str(legacy["revision"]))
+                _set_db_meta(connection, "droppedRecords", str(legacy.get("retention", {}).get("droppedRecords", 0)))
+                _set_db_meta(connection, "updatedAt", legacy.get("updatedAt") or "")
+                connection.commit()
+            connection.row_factory = sqlite3.Row
+            existing = connection.execute("SELECT payload, usage_id FROM records WHERE idempotency_key = ?", (record["idempotencyKey"],)).fetchone()
+            if existing is not None:
+                prior = _record_from_row(existing, run_id)
+                if _same_record(prior, record):
+                    return {"status": "PASS", "usageId": prior["usageId"], "revision": int(_db_meta(connection, "revision", "0") or "0"), "replayed": True}
+                raise studio.StudioError("Usage idempotency key was reused with different content")
+            connection.execute(
+                "INSERT INTO records(usage_id, idempotency_key, recorded_at, payload) VALUES (?, ?, ?, ?)",
+                (record["usageId"], record["idempotencyKey"], record["recordedAt"], json.dumps(record, ensure_ascii=False, separators=(",", ":"))),
+            )
+            revision = int(_db_meta(connection, "revision", "0") or "0") + 1
+            _set_db_meta(connection, "revision", str(revision))
+            _set_db_meta(connection, "updatedAt", _timestamp())
+            connection.commit()
+            _trim_db(connection, path)
+            connection.commit()
+            os.chmod(path, 0o600)
+            return {"status": "PASS", "usageId": record["usageId"], "revision": revision, "replayed": False}
+        finally:
+            connection.close()
 
 
 def _range_start(range_key: str, now: dt.datetime) -> dt.datetime | None:
@@ -281,9 +412,18 @@ def project(studio: Any, root: Path, *, omp_probe: Any = None, range_key: str = 
     return local
 
 
+def _csv_text(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    first = value.lstrip(" \t\r\n")[:1]
+    return "'" + value if first in {"=", "+", "-", "@"} else value
+
+
 def export_data(studio: Any, root: Path, *, omp_probe: Any = None, format_name: str = "json") -> tuple[bytes, str, str]:
     usage = project(studio, root, omp_probe=omp_probe, range_key="all")
-    data, _ = _read_file(studio, root, Path(root).name)
+    run = studio.read_json(studio.safe_path(root, "run.json"))
+    run_id = run.get("id", Path(root).name)
+    data, _ = _read_file(studio, root, run_id)
     if format_name == "json":
         return json.dumps({"usage": usage, "records": data["records"]}, indent=2, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8", "prism-usage.json"
     if format_name != "csv":
@@ -296,7 +436,8 @@ def export_data(studio: Any, root: Path, *, omp_probe: Any = None, format_name: 
         actual = record["cost"]["actual"]
         estimate = record["cost"]["estimate"]
         discount = record["cost"]["providerCacheDiscount"]
-        writer.writerow({"usageId": record["usageId"], "recordedAt": record["recordedAt"], "sessionId": record["sessionId"], "providerRequested": record["providerRequested"], "providerObserved": record["providerObserved"], "modelRequested": record["modelRequested"], "modelObserved": record["modelObserved"], "agentId": record["agentId"], "executionStatus": record["executionStatus"], "inputTokens": record["tokens"]["input"], "outputTokens": record["tokens"]["output"], "cacheReadTokens": record["tokens"]["cacheRead"], "cacheWriteTokens": record["tokens"]["cacheWrite"], "totalTokens": record["tokens"]["total"], "compressionSavedTokens": record["compression"]["saved"] if record["compression"] else None, "actualStatus": actual["status"], "actualAmountMinor": actual["amountMinor"], "actualCurrencyCode": actual["currencyCode"], "actualCurrencyExponent": actual["currencyExponent"], "estimateStatus": estimate["status"], "providerCacheDiscountStatus": discount["status"], "providerCacheDiscountAmountMinor": discount["amountMinor"], "providerReceiptId": record["providerReceiptId"]})
+        row = {"usageId": record["usageId"], "recordedAt": record["recordedAt"], "sessionId": record["sessionId"], "providerRequested": record["providerRequested"], "providerObserved": record["providerObserved"], "modelRequested": record["modelRequested"], "modelObserved": record["modelObserved"], "agentId": record["agentId"], "executionStatus": record["executionStatus"], "inputTokens": record["tokens"]["input"], "outputTokens": record["tokens"]["output"], "cacheReadTokens": record["tokens"]["cacheRead"], "cacheWriteTokens": record["tokens"]["cacheWrite"], "totalTokens": record["tokens"]["total"], "compressionSavedTokens": record["compression"]["saved"] if record["compression"] else None, "actualStatus": actual["status"], "actualAmountMinor": actual["amountMinor"], "actualCurrencyCode": actual["currencyCode"], "actualCurrencyExponent": actual["currencyExponent"], "estimateStatus": estimate["status"], "providerCacheDiscountStatus": discount["status"], "providerCacheDiscountAmountMinor": discount["amountMinor"], "providerReceiptId": record["providerReceiptId"]}
+        writer.writerow({key: _csv_text(value) for key, value in row.items()})
     return output.getvalue().encode("utf-8"), "text/csv; charset=utf-8", "prism-usage.csv"
 
 
@@ -314,13 +455,6 @@ class OMPUsageProbe:
         if not start:
             with self._lock:
                 return dict(self._value)
-        with self._lock:
-            if self._thread is None or not self._thread.is_alive():
-                if time.monotonic() - self._fetched_at >= 30:
-                    self._value = {"status": "loading", "source": "omp stats --json"}
-                    self._thread = threading.Thread(target=self._refresh, name="prism-omp-usage", daemon=True)
-                    self._thread.start()
-            return dict(self._value)
         with self._lock:
             if self._thread is None or not self._thread.is_alive():
                 if time.monotonic() - self._fetched_at >= 30:

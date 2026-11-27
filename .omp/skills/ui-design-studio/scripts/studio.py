@@ -138,9 +138,13 @@ def atomic_json(path, data):
             raise
     try:
         os.replace(temp, path)
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
     finally:
         temp.unlink(missing_ok=True)
-
 
 def validate_slug(value):
     require(isinstance(value, str) and len(value) <= 64 and SLUG.fullmatch(value),
@@ -1149,6 +1153,20 @@ def check_run(path):
             "limits": ["Evidence files and recorded approvals are checked for completeness and freshness, not for truth. The director must inspect actual logs/screenshots and independently review the application."]}
 
 
+def validate_active_theme(registry, ids):
+    active = registry.get("activeTheme")
+    if active is None:
+        return
+    require(isinstance(active, dict), "Existing active theme record is invalid")
+    require(active.get("id") in ids, "Existing active theme is not registered")
+    require(isinstance(active.get("version"), str) and SEMVER.fullmatch(active["version"]),
+            "Existing active theme version is invalid")
+    require(isinstance(active.get("themeDigest"), str) and SHA.fullmatch(active["themeDigest"]),
+            "Existing active theme digest is invalid")
+    require(valid_timestamp(active.get("activatedAt")), "Existing active theme timestamp is invalid")
+    require(isinstance(active.get("activationReceipt"), str) and active["activationReceipt"].strip()
+            and len(active["activationReceipt"]) <= 128, "Existing active theme receipt is invalid")
+
 def registry_read(root):
     path = root / "registry.json"
     if not path.exists():
@@ -1161,6 +1179,7 @@ def registry_read(root):
         validate_slug(theme_id)
     require(data.get("defaultTheme") is None or data.get("defaultTheme") in ids, "Existing default theme is not registered")
     require(not ids or data.get("defaultTheme") in ids, "Nonempty registry must declare a registered default")
+    validate_active_theme(data, ids)
     return data
 
 
@@ -1719,6 +1738,7 @@ def restore_theme(repo, backup):
     ids = [item.get("id") for item in restored["themes"] if isinstance(item, dict)]
     require(len(ids) == len(restored["themes"]) and len(ids) == len(set(ids)), "Theme registry backup contains duplicate IDs")
     require(restored.get("defaultTheme") is None or restored["defaultTheme"] in ids, "Theme registry backup has an invalid default")
+    validate_active_theme(restored, ids)
     path = themes / "registry.json"
     atomic_json(path, restored)
     return {"status": "PASS", "registry": str(path), "restoredFrom": str(candidate), "defaultTheme": restored.get("defaultTheme"), "activeTheme": restored.get("activeTheme")}

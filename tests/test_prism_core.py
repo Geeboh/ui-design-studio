@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sqlite3
 import tempfile
+import time
 import unittest
 
 from ui_design_studio.application import dispatch
-from ui_design_studio.storage import EventDraft, IntegrityError, OperationResult, StateStore
+from ui_design_studio.storage import EventDraft, IntegrityError, OperationResult, StateError, StateStore
 
 
 class PrismCoreTests(unittest.TestCase):
@@ -75,6 +77,66 @@ class PrismCoreTests(unittest.TestCase):
         Path(first["path"]).write_bytes(b"corrupt")
         with self.assertRaises(IntegrityError):
             self.store.read_artifact(first["digest"])
+    def test_schema_rejects_newer_metadata_and_state_symlink(self):
+        newer = self.root / "newer.sqlite3"
+        connection = sqlite3.connect(newer)
+        connection.execute("CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        connection.execute("INSERT INTO schema_meta VALUES ('schemaVersion', '99.0.0')")
+        connection.commit()
+        connection.close()
+        with self.assertRaises(StateError):
+            StateStore(newer)
+        outside = self.root / "outside"
+        outside.mkdir()
+        link = self.root / "state-link"
+        link.symlink_to(outside, target_is_directory=True)
+        with self.assertRaises(StateError):
+            StateStore(link / "state.sqlite3")
+
+    def test_outbox_order_and_expired_lease_reclaim(self):
+        for index in (1, 2):
+            self.store.run_operation(
+                realm="project",
+                actor="tester",
+                command=f"run.note.{index}",
+                idempotency_key=f"note-{index}",
+                request={"runId": "run", "note": str(index)},
+                callback=lambda connection, index=index: OperationResult({"ok": True}, (EventDraft("run", "RunNoted", {"text": str(index)}),)),
+            )
+        first = self.store.claim_outbox(limit=1, consumer="consumer-a", lease_seconds=0.001)
+        self.assertEqual(len(first), 1)
+        time.sleep(0.01)
+        reclaimed = self.store.claim_outbox(limit=1, consumer="consumer-b", lease_seconds=60)
+        self.assertEqual(reclaimed[0]["sequence"], first[0]["sequence"])
+        self.store.acknowledge_outbox(reclaimed[0]["eventId"], "consumer-b")
+        second = self.store.claim_outbox(limit=1, consumer="consumer-c")
+        self.assertGreater(second[0]["sequence"], reclaimed[0]["sequence"])
+
+    def test_corrupt_artifact_blocks_approval(self):
+        artifact = self.store.publish_artifact(b"approval", "application/octet-stream")
+        Path(artifact["path"]).write_bytes(b"tampered")
+        response = dispatch(self.store, {
+            "command": "approval.decide",
+            "operationId": "corrupt-approval",
+            "idempotencyKey": "corrupt-approval",
+            "actor": self.actor,
+            "scope": {"projectId": "project", "runId": "run", "artifactDigest": artifact["digest"]},
+            "expectedVersions": [{"entity": "run", "identity": "run", "revision": 1}],
+            "payload": {"decisionId": "corrupt-approval", "runId": "run", "artifactDigest": artifact["digest"], "dependencyFingerprint": "deps-v1", "outcome": "approved"},
+        })
+        self.assertEqual(response["status"], "FAIL")
+        self.assertEqual(response["error"]["code"], "BLOB_CORRUPT")
+    def test_rationale_type_and_size_are_rejected(self):
+        base = {
+            "command": "approval.decide",
+            "actor": self.actor,
+            "scope": {"projectId": "project", "runId": "run", "artifactDigest": self.artifact},
+            "expectedVersions": [{"entity": "run", "identity": "run", "revision": 1}],
+        }
+        malformed = dispatch(self.store, {**base, "operationId": "bad-rationale", "idempotencyKey": "bad-rationale", "payload": {"decisionId": "bad-rationale", "runId": "run", "artifactDigest": self.artifact, "dependencyFingerprint": "deps-v1", "outcome": "approved", "rationale": None}})
+        self.assertEqual(malformed["receipt"]["result"]["error"]["code"], "VALIDATION_ERROR")
+        oversized = dispatch(self.store, {**base, "operationId": "large-rationale", "idempotencyKey": "large-rationale", "payload": {"decisionId": "large-rationale", "runId": "run", "artifactDigest": self.artifact, "dependencyFingerprint": "deps-v1", "outcome": "approved", "rationale": "x" * (16 * 1024 + 1)}})
+        self.assertEqual(oversized["receipt"]["result"]["error"]["code"], "VALIDATION_ERROR")
 
 if __name__ == "__main__":
     unittest.main()

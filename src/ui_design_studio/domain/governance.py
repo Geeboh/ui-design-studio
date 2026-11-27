@@ -66,7 +66,7 @@ class BudgetLedger:
         self._reservations: dict[str, Reservation] = {}
         self._settled_design_minor = 0
         self._implementation_minor = 0
-        self._receipts: set[str] = set()
+        self._receipts: dict[str, str] = {}
         self._lock = threading.RLock()
 
     def _check_currency(self, money: Money) -> None:
@@ -109,17 +109,27 @@ class BudgetLedger:
             reservation = self._reservations.get(reservation_id)
             if reservation is None:
                 raise BudgetError("reservation not found")
-            if provider_receipt is not None and provider_receipt in self._receipts:
-                return reservation
+            if provider_receipt is not None:
+                owner = self._receipts.get(provider_receipt)
+                if owner is not None and owner != reservation_id:
+                    raise BudgetError("provider receipt belongs to a different reservation")
+            if reservation.status in {"settled", "released"}:
+                if reservation.status == "settled" and reservation.observed == observed and reservation.provider_receipt == provider_receipt:
+                    return reservation
+                raise BudgetError("reservation is terminal")
             if observed is None:
+                if reservation.status == "unknown":
+                    return reservation
                 reservation.status = "unknown"
                 return reservation
             self._check_currency(observed)
+            if provider_receipt is not None and provider_receipt in self._receipts:
+                raise BudgetError("provider receipt was already settled")
             reservation.observed = observed
             reservation.status = "settled"
             reservation.provider_receipt = provider_receipt
             if provider_receipt is not None:
-                self._receipts.add(provider_receipt)
+                self._receipts[provider_receipt] = reservation_id
             if reservation.category == "design":
                 self._settled_design_minor += observed.amount_minor
             else:
@@ -142,6 +152,7 @@ class BudgetLedger:
             cap = self.account.cap.amount_minor if self.account.cap is not None else None
             available = None if cap is None else cap - self._settled_design_minor - self._held_design()
             return {"accountId": self.account.account_id, "enforcement": self.account.enforcement, "currency": None if self.account.cap is None else {"code": self.account.cap.currency_code, "exponent": self.account.cap.currency_exponent}, "capMinor": cap, "settledDesignMinor": self._settled_design_minor, "implementationMinor": self._implementation_minor, "reservedDesignMinor": self._held_design(), "availableMinor": available, "reservations": {key: {"status": value.status, "category": value.category, "amountMinor": value.amount.amount_minor, "observedMinor": None if value.observed is None else value.observed.amount_minor, "discrepancyMinor": value.discrepancy_minor} for key, value in self._reservations.items()}}
+
 
 @dataclass(frozen=True)
 class ModelAssignment:
@@ -166,6 +177,7 @@ def resolve_model(*, explicit: str | None = None, persisted_run: str | None = No
     else:
         resolved = requested if requested in available else None
     return ModelAssignment(requested, resolved, None, source, "resolved" if resolved else "unavailable")
+
 
 @dataclass(frozen=True)
 class InstructionSnapshot:
@@ -212,6 +224,8 @@ def build_worker_packet(*, task_id: str, objective: str, input_versions: dict[st
     if not actions:
         raise GovernanceError("worker allowed actions are required")
     return WorkerPacket(task_id, objective.strip(), dict(input_versions), tuple(owned_paths), actions, tuple(instructions), model, tuple(dependencies or ()), reservation_id)
+
+
 @dataclass
 class WorkerLease:
     task_id: str
@@ -227,8 +241,16 @@ class LeaseManager:
         self._tokens: dict[str, int] = {}
         self._lock = threading.RLock()
 
+    @staticmethod
+    def _expire_if_needed(lease: WorkerLease) -> None:
+        if lease.status == "active" and time.monotonic() >= lease.expires_at:
+            lease.status = "expired"
+
     def acquire(self, task_id: str, attempt_id: str) -> WorkerLease:
         with self._lock:
+            previous = self._leases.get(task_id)
+            if previous is not None:
+                self._expire_if_needed(previous)
             token = self._tokens.get(task_id, 0) + 1
             self._tokens[task_id] = token
             lease = WorkerLease(task_id, attempt_id, token)
@@ -238,17 +260,23 @@ class LeaseManager:
     def heartbeat(self, task_id: str, attempt_id: str, fencing_token: int) -> WorkerLease:
         with self._lock:
             lease = self._leases.get(task_id)
+            if lease is not None:
+                self._expire_if_needed(lease)
             if lease is None or lease.attempt_id != attempt_id or lease.fencing_token != fencing_token or lease.status != "active":
-                raise GovernanceError("stale worker lease")
+                raise GovernanceError("stale or expired worker lease")
             lease.expires_at = time.monotonic() + 60
             return lease
 
     def record_outcome(self, task_id: str, attempt_id: str, fencing_token: int, outcome: str) -> dict[str, Any]:
         with self._lock:
             lease = self._leases.get(task_id)
+            if lease is not None:
+                self._expire_if_needed(lease)
             if lease is None or lease.attempt_id != attempt_id or lease.fencing_token != fencing_token or lease.status != "active":
                 return {"status": "orphaned", "taskId": task_id, "attemptId": attempt_id, "outcome": outcome}
-            lease.status = "completed" if outcome in {"succeeded", "failed", "cancelled"} else outcome
+            if outcome not in {"succeeded", "failed", "cancelled"}:
+                raise GovernanceError("unsupported worker outcome")
+            lease.status = "completed"
             return {"status": "accepted", "taskId": task_id, "attemptId": attempt_id, "outcome": outcome}
 
     def cancel(self, task_id: str) -> WorkerLease:
@@ -256,6 +284,11 @@ class LeaseManager:
             lease = self._leases.get(task_id)
             if lease is None:
                 raise GovernanceError("worker lease not found")
+            self._expire_if_needed(lease)
             if lease.status == "active":
                 lease.status = "cancel_requested"
+            elif lease.status == "cancel_requested":
+                return lease
+            else:
+                raise GovernanceError("worker lease is terminal")
             return lease

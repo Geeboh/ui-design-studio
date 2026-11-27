@@ -1,19 +1,25 @@
 """Focused installer coverage for the optional native progress adapter payload."""
 from __future__ import annotations
-
+import contextlib
+import csv
 import importlib.util
+import io
+import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
 from unittest import mock
 
-
 PACKAGE = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("ui_design_progress_install_test", PACKAGE / "scripts/install.py")
 INSTALL = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = INSTALL
 SPEC.loader.exec_module(INSTALL)
+USAGE_SPEC = importlib.util.spec_from_file_location("ui_design_progress_usage_test", PACKAGE / ".omp/skills/ui-design-studio/scripts/usage.py")
+USAGE = importlib.util.module_from_spec(USAGE_SPEC)
+sys.modules[USAGE_SPEC.name] = USAGE
+USAGE_SPEC.loader.exec_module(USAGE)
 EXTENSION = ".omp/extensions/ui-design-progress.ts"
 
 
@@ -85,6 +91,46 @@ class ProgressInstallerTests(unittest.TestCase):
         self.assertNotIn(b"artwork-library", after)
         self.assertNotIn(b"progress-pi-tasks", after)
         self.assertEqual(INSTALL.marked_block(after, INSTALL.IGNORE_START, INSTALL.IGNORE_END, INSTALL.IGNORE_BLOCK), after)
+
+
+class UsageStudio:
+    StudioError = RuntimeError
+
+    def safe_path(self, root, relative, **_kwargs):
+        return Path(root) / relative
+
+    def read_json(self, path):
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+class UsageTelemetryTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="progress usage ")
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        (self.root / "run.json").write_text(json.dumps({"id": "run-1"}), encoding="utf-8")
+        self.studio = UsageStudio()
+
+    def test_rollover_keeps_dropped_count_and_escapes_formula_cells(self):
+        with mock.patch.object(USAGE, "MAX_RECORDS", 2):
+            for index in range(3):
+                USAGE.record_usage(
+                    self.studio,
+                    self.root,
+                    {
+                        "usageId": f"usage-{index}",
+                        "idempotencyKey": f"attempt-{index}",
+                        "providerObserved": "=HYPERLINK(\"https://example.invalid\")" if index == 2 else "fixture",
+                        "executionStatus": "completed",
+                    },
+                    lambda _studio, _root: contextlib.nullcontext(),
+                )
+            projection = USAGE.project(self.studio, self.root, range_key="all")
+            self.assertEqual(projection["session"]["requests"], 2)
+            self.assertEqual(projection["limits"]["droppedRecords"], 1)
+            payload, _, _ = USAGE.export_data(self.studio, self.root, format_name="csv")
+            rows = list(csv.DictReader(io.StringIO(payload.decode("utf-8"))))
+            self.assertEqual(rows[-1]["providerObserved"], "'=HYPERLINK(\"https://example.invalid\")")
 
 
 if __name__ == "__main__":

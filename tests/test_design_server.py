@@ -1,6 +1,7 @@
 """Synthetic, isolated behavior tests. These are not application review evidence."""
-import argparse
 import base64
+import argparse
+import gzip
 import contextlib
 import hashlib
 import http.client
@@ -253,7 +254,7 @@ class DesignServerTests(unittest.TestCase):
                 self.assertEqual(headers["Cache-Control"], "no-store")
                 self.assertNotIn(server.shutdown_token, json.dumps(content))
         self.assertNotIn(server.shutdown_token, json.dumps(self.request(server)[2]))
-        for path in ("/", "/api/snapshot", "/dashboard.js", "/preview/anything"):
+        for path in ("/", "/api/snapshot", "/api/optimization", "/api/reference/ref", "/optimization/not-a-result", "/dashboard.js", "/preview/anything"):
             self.assertEqual(self.request(server, path, local=True)[0], 404)
 
     def test_unadvertised_hosts_and_duplicate_host_headers_are_rejected(self):
@@ -1711,6 +1712,89 @@ class DesignServerTests(unittest.TestCase):
         self.assertEqual(decision["outcome"], "approved")
         self.assertEqual(decision["inputsDigest"], request["inputsDigest"])
 
+
+    def test_observer_tasks_require_current_session_provenance_and_expire(self):
+        run_id = studio.read_json(self.root / "run.json")["id"]
+        session_id = "observer-session"
+        observer = self.root / "progress-pi-tasks-observer"
+        observer.mkdir()
+        path = observer / (hashlib.sha256(session_id.encode("utf-8")).hexdigest() + ".json")
+        write_json(path, {
+            "version": 1, "runId": run_id, "sessionId": session_id,
+            "updatedAt": backend.timestamp(),
+            "state": {"tasks": {"observed": {"title": "Observed task", "status": "active"}}},
+        })
+        state = backend.DesignState(studio, self.root)
+        self.assertEqual([item["id"] for item in state.snapshot()["tasks"]], ["observed"])
+        record = studio.read_json(path)
+        record["updatedAt"] = "2000-01-01T00:00:00+00:00"
+        write_json(path, record)
+        expired = state.snapshot()
+        self.assertEqual(expired["tasks"], [])
+        self.assertTrue(any("expired" in warning.lower() for warning in expired["warnings"]))
+
+    def test_state_root_and_reference_identifiers_cannot_escape(self):
+        linked = self.repo / "linked-run"
+        linked.symlink_to(self.root, target_is_directory=True)
+        with self.assertRaises(studio.StudioError):
+            backend.DesignServer(studio, linked)
+        server = self.start()
+        base = {
+            "category": "reference", "title": "Safe", "notes": "",
+            "originalName": "safe.txt", "mimeType": "text/plain",
+            "data": base64.b64encode(b"safe").decode("ascii"),
+        }
+        for reference_id in ("../outside", "/absolute", "nested/id", "a\u0301"):
+            with self.subTest(reference_id=reference_id):
+                self.assertEqual(self.request(server, "/api/reference", "POST",
+                                              {**base, "id": reference_id})[0], 400)
+        self.assertFalse((self.repo / "outside").exists())
+
+    def test_reference_quota_rejects_before_creating_another_record(self):
+        server = self.start()
+        payload = {
+            "id": "quota-reference", "category": "reference", "title": "Quota", "notes": "",
+            "originalName": "quota.txt", "mimeType": "text/plain",
+            "data": base64.b64encode(b"quota").decode("ascii"),
+        }
+        with mock.patch.object(backend, "MAX_REFERENCES", 0):
+            self.assertEqual(self.request(server, "/api/reference", "POST", payload)[0], 400)
+        self.assertFalse((self.root / "references/quota-reference").exists())
+
+    def test_optimization_content_routes_preserve_source_type_and_transport_headers(self):
+        server = self.start()
+        result_id = "opt-" + "0" * 32
+        source = b"<html><body>fixture</body></html>"
+        result = {"id": result_id, "sourceName": "fixture.html"}
+
+        try:
+            import brotli
+        except ImportError:
+            brotli = None
+
+        def content(unused_studio, unused_root, unused_result, variant):
+            if variant == "gzip":
+                return result, gzip.compress(source, mtime=0), "application/octet-stream"
+            if variant == "brotli":
+                return result, brotli.compress(source), "application/octet-stream"
+            return result, source, "application/octet-stream"
+
+        variants = [("after", None), ("gzip", "gzip")]
+        if brotli is not None:
+            variants.append(("brotli", "br"))
+        with mock.patch.object(backend.optimization, "read_content", side_effect=content):
+            for variant, encoding in variants:
+                with self.subTest(variant=variant):
+                    code, headers, body = self.request(
+                        server, f"/optimization/{server.optimization_capability}/{result_id}/{variant}",
+                        authenticated=False)
+                    self.assertEqual(code, 200)
+                    self.assertEqual(headers["Content-Type"], "text/html")
+                    self.assertEqual(headers.get("Content-Encoding"), encoding)
+                    if variant == "gzip":
+                        self.assertEqual(gzip.decompress(body), source)
+                    elif variant == "brotli":
+                        self.assertEqual(brotli.decompress(body), source)
 
 if __name__ == "__main__":
     unittest.main()

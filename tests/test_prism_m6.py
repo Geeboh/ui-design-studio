@@ -87,6 +87,41 @@ class M6Tests(unittest.TestCase):
             (target / "theme.css").write_text("changed", encoding="utf-8")
             with self.assertRaises(ThemeLifecycleError):
                 lifecycle.restore(receipt)
+    def test_theme_ids_and_symlink_ancestors_are_rejected(self):
+        with TemporaryDirectory() as root:
+            root = Path(root)
+            source = root / "source"
+            source.mkdir()
+            (source / "theme.css").write_text("theme", encoding="utf-8")
+            lifecycle = ThemeLifecycle(root / "state")
+            with self.assertRaises(ThemeLifecycleError):
+                lifecycle.install(source, root / "target", theme_id="fixture", scope="dashboard", receipt_id="../escape")
+            outside = root / "outside"
+            outside.mkdir()
+            link = root / "linked"
+            link.symlink_to(outside, target_is_directory=True)
+            with self.assertRaises(ThemeLifecycleError):
+                ThemeLifecycle(link / "state")
+            with self.assertRaises(ThemeLifecycleError):
+                lifecycle.install(source, link / "target", theme_id="fixture", scope="dashboard", receipt_id="theme-1")
+
+    def test_restore_validates_backup_digest_before_delete(self):
+        with TemporaryDirectory() as root:
+            root = Path(root)
+            source = root / "source"
+            source.mkdir()
+            (source / "theme.css").write_text("v1", encoding="utf-8")
+            target = root / "target"
+            target.mkdir()
+            (target / "theme.css").write_text("old", encoding="utf-8")
+            lifecycle = ThemeLifecycle(root / "state")
+            lifecycle.install(source, target, theme_id="fixture", scope="dashboard", receipt_id="theme-1")
+            (source / "theme.css").write_text("v2", encoding="utf-8")
+            receipt = lifecycle.upgrade(source, target, theme_id="fixture", scope="dashboard", receipt_id="theme-2")
+            (lifecycle.state_root / "theme-2.previous" / "theme.css").write_text("corrupt", encoding="utf-8")
+            with self.assertRaises(ThemeLifecycleError):
+                lifecycle.restore(receipt)
+            self.assertEqual((target / "theme.css").read_text(encoding="utf-8"), "v2")
 
 
 if __name__ == "__main__":
