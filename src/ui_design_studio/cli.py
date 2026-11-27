@@ -289,8 +289,8 @@ def _cleanup_project(argv: list[str]) -> int:
     parser.add_argument("--yes", action="store_true", help="Apply the cleanup")
     parser.add_argument("--purge-backups", action="store_true", help="Also remove installer backups")
     args = parser.parse_args(argv)
-    if not args.dry_run and not args.yes:
-        parser.error("refusing to remove files without --yes; use --dry-run to preview")
+    if args.dry_run:
+        args.yes = False
     try:
         result = cleanup_project(args.repo, apply=args.yes and not args.dry_run, purge_backups=args.purge_backups)
     except (CleanupError, OSError) as exc:

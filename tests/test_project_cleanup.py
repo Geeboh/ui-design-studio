@@ -5,8 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-
-from ui_design_studio.project_cleanup import cleanup_project
+from ui_design_studio.project_cleanup import CleanupError, cleanup_project
 
 
 class ProjectCleanupTests(unittest.TestCase):
@@ -70,6 +69,27 @@ class ProjectCleanupTests(unittest.TestCase):
         result = cleanup_project(self.root, apply=True, purge_backups=False)
         self.assertEqual(result["status"], "CONFLICT")
         self.assertTrue((self.root / "tools/ui-design").exists())
+
+    def test_unowned_nested_file_is_preserved(self) -> None:
+        extra = self.root / "docs/ui-design-studio/user-note.md"
+        extra.parent.mkdir(parents=True)
+        extra.write_text("keep\n")
+        result = cleanup_project(self.root, apply=True, purge_backups=False)
+        self.assertTrue(result["applied"])
+        self.assertTrue(extra.exists())
+
+    def test_mode_change_blocks_cleanup(self) -> None:
+        path = self.root / "tools/ui-design"
+        path.chmod(0o755)
+        result = cleanup_project(self.root, apply=True, purge_backups=False)
+        self.assertEqual(result["status"], "CONFLICT")
+        self.assertTrue(path.exists())
+
+    def test_unsafe_state_path_is_rejected(self) -> None:
+        state = self.root / ".ui-design-studio/install-state.json"
+        state.write_text(json.dumps({"package": "ui-design-studio", "managedFiles": {"../../outside": {}}}))
+        with self.assertRaisesRegex(CleanupError, "Unsafe managed path"):
+            cleanup_project(self.root, apply=False, purge_backups=False)
 
     def test_purge_backups_is_explicit(self) -> None:
         result = cleanup_project(self.root, apply=True, purge_backups=True)

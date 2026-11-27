@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import stat
 
 
 AGENTS_START = b"<!-- ui-design-studio:start -->"
@@ -41,6 +42,15 @@ def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _safe_relative(raw: object) -> str:
+    if not isinstance(raw, str):
+        raise CleanupError("Invalid managed path")
+    path = Path(raw)
+    if path.is_absolute() or not raw or ".." in path.parts:
+        raise CleanupError(f"Unsafe managed path: {raw!r}")
+    return path.as_posix()
+
+
 def _load_state(root: Path) -> dict:
     path = root / INSTALL_STATE
     if not path.is_file():
@@ -51,6 +61,7 @@ def _load_state(root: Path) -> dict:
         raise CleanupError(f"Invalid install state: {path}") from exc
     if state.get("package") != PACKAGE or not isinstance(state.get("managedFiles"), dict):
         raise CleanupError(f"Unrecognized install state: {path}")
+    state["managedFiles"] = {_safe_relative(key): value for key, value in state["managedFiles"].items()}
     return state
 
 
@@ -70,29 +81,14 @@ def _strip_block(data: bytes, start: bytes, end: bytes) -> bytes:
 
 
 def _candidate_paths(root: Path, state: dict) -> set[str]:
-    managed = set(state.get("managedFiles", {}))
-    managed.update({
+    if state:
+        return set(state.get("managedFiles", {}))
+    return {
         ".omp/extensions/ui-design-progress.ts",
         ".omp/commands/ui-design.md",
         ".omp/commands/ui-yolo.md",
         "tools/ui-design",
-        "docs/ui-design-studio",
-    })
-    for skill in KNOWN_SKILLS:
-        managed.add(f".omp/skills/{skill}")
-    if (root / ".omp/agents").is_dir():
-        managed.update(path.relative_to(root).as_posix() for path in (root / ".omp/agents").glob("ui-*.md"))
-    if (root / "docs/ui-design-studio").is_dir():
-        managed.update(path.relative_to(root).as_posix() for path in (root / "docs/ui-design-studio").rglob("*"))
-    expanded: set[str] = set()
-    for relative in managed:
-        path = root / relative
-        if path.is_dir() and not path.is_symlink():
-            expanded.update(child.relative_to(root).as_posix() for child in path.rglob("*"))
-            expanded.add(relative)
-        else:
-            expanded.add(relative)
-    return expanded
+    }
 
 
 def plan_cleanup(root: Path, *, purge_backups: bool = False) -> CleanupPlan:
@@ -111,9 +107,18 @@ def plan_cleanup(root: Path, *, purge_backups: bool = False) -> CleanupPlan:
         if path.is_dir() and not path.is_symlink():
             continue
         record = managed.get(relative)
-        if isinstance(record, dict) and path.is_file():
+        if isinstance(record, dict):
+            if path.is_symlink() or not path.is_file():
+                conflicts.add(relative)
+                continue
             expected = record.get("sha256")
-            if isinstance(expected, str) and _digest(path) != expected:
+            expected_mode = record.get("mode")
+            if (
+                not isinstance(expected, str)
+                or _digest(path) != expected
+                or not isinstance(expected_mode, int)
+                or stat.S_IMODE(path.stat().st_mode) != expected_mode
+            ):
                 conflicts.add(relative)
                 continue
         remove.add(relative)
