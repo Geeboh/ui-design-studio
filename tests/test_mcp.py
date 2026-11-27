@@ -229,6 +229,12 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             with sqlite3.connect(self.repo / ".ui-design-studio/prism/state.sqlite3") as connection:
                 row = connection.execute("SELECT project_id, status, stage FROM runs WHERE run_id = ?", (document["id"],)).fetchone()
             self.assertEqual(row, ("repo-" + hashlib.sha256(str(self.repo.resolve()).encode()).hexdigest()[:32], "pending", "assessment"))
+            with sqlite3.connect(self.repo / ".ui-design-studio/prism/state.sqlite3") as connection:
+                commands = [item[0] for item in connection.execute(
+                    "SELECT command FROM operations WHERE actor = ? ORDER BY created_at",
+                    ("mcp-" + row[0],),
+                )]
+            self.assertIn("run.create", commands)
             self.assertEqual(document["phase"], "assessment")
             self.assertIsNone(document["projectContext"]["sha256"])
             self.assertEqual(document["evidence"], [])
@@ -241,6 +247,11 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                                        next_action="Review the first concept", blocker=["Synthetic pending assessment"])
             self.assertEqual(progress["dashboard"]["instanceId"], started["dashboard"]["instanceId"])
             self.assertEqual(progress["landing"]["instanceId"], started["landing"]["instanceId"])
+            with sqlite3.connect(self.repo / ".ui-design-studio/prism/state.sqlite3") as connection:
+                self.assertTrue(connection.execute(
+                    "SELECT 1 FROM operations WHERE command = 'run.progress' AND actor = ?",
+                    ("mcp-" + row[0],),
+                ).fetchone())
             worker = await self.call(client, "ui_design_worker", run=relative, id="concept",
                                      task="Render a synthetic concept", status="active", message="Fixture pass", model="fixture/model")
             self.assertEqual(worker["worker"]["model"], "fixture/model")

@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from functools import partial, wraps
 import hashlib
+import secrets
 import json
 from pathlib import Path
 import posixpath
@@ -22,7 +23,7 @@ from . import __version__
 from .dashboard import DashboardSession, DashboardUnavailable
 from .runtime import PACKAGE, PAYLOAD, backend, studio
 from .application import dispatch
-from .storage import StateStore
+from .storage import EventDraft, OperationRejected, OperationResult, StateStore
 
 
 Mode = Literal["guided", "yolo"]
@@ -123,7 +124,8 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
         run_id = document.get("id")
         if not isinstance(run_id, str) or not run_id:
             raise ValueError("Run identity is missing")
-        with command_store.transaction() as connection:
+
+        def apply(connection):
             project = connection.execute(
                 "SELECT project_id, source_root, state_root FROM projects WHERE project_id = ?",
                 (bound_project,),
@@ -143,6 +145,56 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
                 )
             elif existing["project_id"] != bound_project:
                 raise ValueError("Run command projection belongs to a different repository")
+            return OperationResult(
+                {"runId": run_id, "projectId": bound_project},
+                (EventDraft(run_id, "RunProjectionSynchronized", {"runId": run_id, "projectId": bound_project}),),
+            )
+
+        command_store.run_operation(
+            realm=bound_project,
+            actor=bound_actor["principal"],
+            command="run.create",
+            idempotency_key="run-create-" + run_id,
+            request={"runId": run_id, "run": document},
+            callback=apply,
+        )
+    def public_mutation(command: str, run_root: Path | None, payload: dict[str, Any],
+                        callback: Callable[[], dict[str, Any]], *, idempotent: bool = True) -> dict[str, Any]:
+        if run_root is not None:
+            document = engine.read_json(engine.safe_path(run_root, "run.json"))
+            run_id = document.get("id")
+            if not isinstance(run_id, str) or not run_id:
+                raise ValueError("Run identity is missing")
+        else:
+            run_id = "project"
+        request = {"runId": run_id, **payload}
+        if idempotent:
+            idempotency_key = payload.get("idempotencyKey")
+            if not isinstance(idempotency_key, str) or not idempotency_key.strip():
+                idempotency_key = "compat-" + hashlib.sha256(
+                    json.dumps(request, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+                ).hexdigest()
+        else:
+            idempotency_key = "call-" + secrets.token_hex(16)
+
+        def apply(_connection):
+            result = callback()
+            if not isinstance(result, dict):
+                raise OperationRejected("INVALID_RESULT", "Public mutation returned an invalid result")
+            return OperationResult(result, (
+                EventDraft(run_id, command, {"runId": run_id, "command": command}),
+            ))
+
+        receipt = command_store.run_operation(
+            realm=bound_project,
+            actor=bound_actor["principal"],
+            command=command,
+            idempotency_key=idempotency_key,
+            request=request,
+            callback=apply,
+        )
+        return {**receipt.result, "receipt": receipt.as_dict()}
+
     session = DashboardSession(root, host=dashboard_host, port=dashboard_port, lan_address=lan_address)
     @asynccontextmanager
     async def lifespan(_: FastMCP) -> AsyncIterator[DashboardSession]:
@@ -286,18 +338,21 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
         """Inspect local capabilities for the configured repository without running application gates."""
         return engine.doctor(root)
 
-    @tool()
+    @tool(destructive=True, idempotent=True)
     def ui_design_theme_new(id: str, name: str) -> dict[str, Any]:
         """Scaffold an unregistered theme under the configured themes directory."""
         engine.validate_slug(id)
         _, themes, _ = engine.config_paths(root)
         engine.safe_path(root, (themes / id).relative_to(root).as_posix(), must_exist=False, allow_dir=True)
-        return engine.theme_new(root, id, name)
+        return public_mutation("theme.new", None, {"id": id, "name": name},
+                               lambda: engine.theme_new(root, id, name), idempotent=False)
 
     @tool(destructive=True, idempotent=True)
     def ui_design_build_theme(path: str) -> dict[str, Any]:
         """Compile a repository-relative theme under the configured themes directory."""
-        return engine.build_theme(path_in(path, "theme"))
+        theme = path_in(path, "theme")
+        return public_mutation("theme.build", None, {"path": path},
+                               lambda: engine.build_theme(theme))
 
     @tool(read_only=True)
     def ui_design_check_theme(path: str) -> dict[str, Any]:
@@ -319,7 +374,13 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
     def ui_design_scope_complete(path: str, target: str, artifacts: FileList,
                                  blocker: list[str] | None = None, next: str | None = None) -> dict[str, Any]:
         """Record bounded scope closure without granting full-theme release."""
-        return engine.complete_scope(path_in(path, "run"), target, run_files(path_in(path, "run"), artifacts), blocker, next)
+        run_root = path_in(path, "run")
+        selected = run_files(run_root, artifacts)
+        return public_mutation(
+            "run.scope_complete", run_root,
+            {"target": target, "artifacts": artifacts, "blocker": blocker, "next": next},
+            lambda: engine.complete_scope(run_root, target, selected, blocker, next),
+        )
     @tool(read_only=True)
     def ui_design_resume_check(path: str) -> dict[str, Any]:
         """Check changed run dependencies and transitive stale nodes without rerunning unchanged work."""
@@ -354,12 +415,13 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
         inputs = run_files(run_root, files)
         return {"status": "PASS", "inputs": files, "inputsDigest": engine.file_digest(run_root, inputs)}
 
-    @tool()
+    @tool(destructive=True, idempotent=True)
     def ui_design_package(path: str, output: str) -> dict[str, Any]:
         """Package a configured theme into a new repository-relative ZIP destination."""
         theme = path_in(path, "theme")
         destination = engine.safe_path(root, output, must_exist=False)
-        return engine.package_theme(theme, destination)
+        return public_mutation("theme.package", None, {"path": path, "output": output},
+                               lambda: engine.package_theme(theme, destination), idempotent=False)
 
     @tool(destructive=True, idempotent=True)
     def ui_design_register(theme: str, run: str, make_default: bool = False) -> dict[str, Any]:
@@ -367,11 +429,16 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
         engine.validate_slug(theme)
         _, themes, _ = engine.config_paths(root)
         path_in((themes / theme).relative_to(root).as_posix(), "theme")
-        return engine.register_theme(root, theme, path_in(run, "run"), make_default)
+        run_root = path_in(run, "run")
+        return public_mutation(
+            "theme.register", run_root, {"theme": theme, "run": run, "makeDefault": make_default},
+            lambda: engine.register_theme(root, theme, run_root, make_default),
+        )
     @tool(destructive=True, idempotent=True)
     def ui_design_restore_theme(backup: str) -> dict[str, Any]:
         """Restore a prior theme registry backup and its active-theme selection."""
-        return engine.restore_theme(root, backup)
+        return public_mutation("theme.restore", None, {"backup": backup},
+                               lambda: engine.restore_theme(root, backup))
 
     @tool()
     def ui_design_status(run: str, interval: float = 1.0) -> dict[str, Any]:
@@ -395,7 +462,10 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
         """Publish the director's actual next action or blocker list and return connection details."""
         run_root = path_in(run, "run")
         engine.require(next_action is not None or blocker is not None, "Publish --next or --blocker")
-        result = design.publish_progress(design.studio, run_root, next_action, blocker)
+        result = public_mutation(
+            "run.progress", run_root, {"nextAction": next_action, "blocker": blocker},
+            lambda: design.publish_progress(design.studio, run_root, next_action, blocker),
+        )
         result.update(connection_details(run_root.relative_to(root).as_posix()))
         return result
 
@@ -403,22 +473,34 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
     def ui_design_worker(run: str, id: str, task: str, status: WorkerStatus,
                          message: str, model: str | None = None) -> dict[str, Any]:
         """Publish a worker's reported state. A record does not prove process liveness."""
-        return design.publish_worker(design.studio, path_in(run, "run"), id, task, status, message, model)
+        run_root = path_in(run, "run")
+        return public_mutation(
+            "run.worker", run_root,
+            {"id": id, "task": task, "status": status, "message": message, "model": model},
+            lambda: design.publish_worker(design.studio, run_root, id, task, status, message, model),
+        )
 
-    @tool()
+    @tool(destructive=True, idempotent=True)
     def ui_design_artwork(run: str, file: str, context: str, title: str | None = None) -> dict[str, Any]:
         """Retain artwork. file is repository-relative, inside the selected run or its active configured theme."""
         run_root = path_in(run, "run")
-        return design.publish_artwork(design.studio, run_root, file, context, title, repo=root)
+        return public_mutation(
+            "run.artwork", run_root, {"file": file, "context": context, "title": title},
+            lambda: design.publish_artwork(design.studio, run_root, file, context, title, repo=root),
+        )
 
-    @tool()
+    @tool(destructive=True, idempotent=True)
     def ui_design_approval_request(run: str, id: str, stage: ReviewStage, title: str, context: str,
                                    files: FileList, choices: str | None = None) -> dict[str, Any]:
         """Publish a guided review, never an approval. files and choices are repository-relative selected-run files."""
         run_root = path_in(run, "run")
         inputs = run_files(run_root, files)
         options = engine.read_json(engine.safe_path(run_root, run_file(run_root, choices))) if choices is not None else None
-        return design.publish_request(design.studio, run_root, id, stage, title, context, inputs, options, repo=root)
+        return public_mutation(
+            "run.approval_request", run_root,
+            {"id": id, "stage": stage, "title": title, "context": context, "files": files, "choices": choices},
+            lambda: design.publish_request(design.studio, run_root, id, stage, title, context, inputs, options, repo=root),
+        )
 
     @tool(destructive=True, idempotent=True)
     def ui_design_design_cleanup(run: str | None = None, all: bool = False) -> dict[str, Any]:
@@ -427,8 +509,11 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
                        "Use design-cleanup RUN or design-cleanup --all --repo PATH")
         if all:
             engine.config_paths(root)
-            return design.cleanup_all(design.studio, root)
-        return design.cleanup(design.studio, path_in(run, "run"))
+            return public_mutation("project.cleanup", None, {"all": True},
+                                   lambda: design.cleanup_all(design.studio, root))
+        run_root = path_in(run, "run")
+        return public_mutation("run.cleanup", run_root, {"all": False, "run": run},
+                               lambda: design.cleanup(design.studio, run_root))
 
     @tool(read_only=True)
     def ui_design_dashboard_info(run: str | None = None) -> dict[str, Any]:
