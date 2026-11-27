@@ -58,9 +58,9 @@ class GlobalMCPInstallerTests(unittest.TestCase):
             executable.chmod(0o755)
         return subprocess.CompletedProcess(command, 0)
 
-    def install(self):
+    def install(self, **kwargs):
         with mock.patch.object(installer.subprocess, "run", side_effect=self.external_install):
-            return installer.install(self.home)
+            return installer.install(self.home, **kwargs)
 
     def test_new_install_and_owned_upgrade_use_isolated_prefix(self):
         projects = [self.base / "first project", self.base / "second project"]
@@ -85,6 +85,14 @@ class GlobalMCPInstallerTests(unittest.TestCase):
         self.assertEqual(sum(command[1:3] == ["-m", "venv"] for command in self.calls), 1)
         self.assertEqual(sum(command[1:3] == ["-m", "pip"] for command in self.calls), 2)
         self.assertFalse(any("--no-deps" in command for command in self.calls))
+
+    def test_install_persists_global_lan_policy(self):
+        self.install()
+        settings = json.loads((self.home / ".config/ui-design-studio/config.json").read_text())
+        self.assertEqual(settings, {"schemaVersion": 1, "lanEnabled": True, "lanAddress": None})
+        self.install(lan_enabled=False, lan_address="192.168.1.20")
+        settings = json.loads((self.home / ".config/ui-design-studio/config.json").read_text())
+        self.assertEqual(settings, {"schemaVersion": 1, "lanEnabled": False, "lanAddress": "192.168.1.20"})
 
     def test_external_pip_target_configuration_cannot_redirect_installation(self):
         config = self.base / "external-pip.conf"

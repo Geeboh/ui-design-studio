@@ -6,7 +6,7 @@ PRISM Studio 2.0.1 fixes project installation on filesystems where per-file meta
 
 - Project installer uses data-only synchronization where supported, avoiding unnecessary metadata sync cost for every file.
 - `ui-design cleanup-project` removes installer-owned project payload, venv and install state while preserving MCP runtime data, design runs, evidence, themes and project policy.
-- Cleanup defaults to dry-run, requires `--yes` to apply, refuses edited managed files, and requires `--purge-backups` to remove rollback records.
+- Global dashboard LAN policy is enabled by default with automatic interface discovery. Installer switches and `/ui-design-dashboard lan ...` controls change the global setting.
 - Installation and MCP documentation now describe universal-MCP-only cleanup.
 
 ## Usage

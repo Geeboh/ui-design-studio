@@ -23,6 +23,34 @@ bash ./install.sh --mcp-global
 
 This creates an isolated environment at `~/.local/share/ui-design-studio/mcp` and exposes `ui-design` and `ui-design-mcp` in `~/.local/bin`. Add `~/.local/bin` to your shell's `PATH` if needed. OMP also checks the fixed environment path, so shell PATH changes are not required for automatic startup.
 
+### Global LAN policy
+
+The global installer enables dashboard LAN access by default. It discovers every active non-loopback IPv4 interface and advertises those addresses:
+
+```bash
+bash ./install.sh --mcp-global
+```
+
+Use installer switches to choose the global default:
+
+```bash
+bash ./install.sh --mcp-global --no-lan
+bash ./install.sh --mcp-global --lan --lan-address auto
+bash ./install.sh --mcp-global --lan --lan-address 192.168.1.20
+```
+
+Settings live at `${XDG_CONFIG_HOME:-~/.config}/ui-design-studio/config.json` and apply to every project using the global runtime. Inside OMP, change them without editing files:
+
+```text
+/ui-design-dashboard lan status
+/ui-design-dashboard lan on
+/ui-design-dashboard lan off
+/ui-design-dashboard lan auto
+/ui-design-dashboard lan 192.168.1.20
+```
+
+Changing the setting restarts only a dashboard child owned by the current OMP session. Borrowed dashboards remain untouched. LAN mode exposes bearer-token HTTP URLs and project content. Use it only on a trusted network.
+
 The global option installs only the MCP runtime. Install the OMP skills and extension into each target project with the normal `--project` command. No system Python packages, client configuration, or OS service is installed. Package installation requires access to its Python dependencies.
 
 Use the same global `ui-design-mcp` executable for every project, with a separate explicit `--repo /absolute/project/path` for each connection. Project records and permissions stay separate.
@@ -105,11 +133,9 @@ Use these commands in OMP.
 
 The first command prints the live links again. An explicit stop inhibits automatic restart until you request start. OMP's banner names `/ui-design-dashboard stop` rather than promising that an OMP Ctrl-C stops only the dashboard. URLs retain the authentication fragment; do not shorten them before sharing with an authorized reviewer.
 
-## Choose network exposure
+The global default enables dashboard LAN access and automatically advertises active non-loopback IPv4 interfaces. Use `/ui-design-dashboard lan off` or reinstall with `bash ./install.sh --mcp-global --no-lan` for loopback-only operation. HTTP does not encrypt bearer credentials or project content.
 
-The default `--dashboard-host 127.0.0.1` keeps the dashboard on loopback. Use `--dashboard-host 0.0.0.0` only for explicit trusted-LAN access. HTTP does not encrypt bearer credentials or project content.
-
-`--dashboard-port` accepts 0 through 65535 and defaults to an ephemeral port. An occupied explicit port fails. `--lan-address ADDRESS` selects an IPv4 address from an active local interface. The adapter never guesses an address, opens a tunnel, or edits a firewall. Address changes refresh advertised URLs and allowed origins. Existing CLI servers keep their owner's configured exposure when reused.
+`--dashboard-host 0.0.0.0` enables trusted-LAN binding. `--dashboard-host 127.0.0.1` forces loopback for one process. `--lan-address ADDRESS` selects one active IPv4 interface; omit it or use `auto` for automatic discovery. The adapter never guesses a public address, opens a tunnel or edits a firewall. MCP itself remains local stdio.
 
 The landing page lists recorded runs and opens the existing direct run dashboard. Guided approvals remain browser actions bound to reviewed input digests. No MCP tool submits human approval.
 

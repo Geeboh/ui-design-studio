@@ -21,7 +21,28 @@ from .dashboard import AmbiguousSessions, DashboardSession, DashboardUnavailable
 from .runtime import studio
 from .server import create_server
 from .application import dispatch
+from .settings import load_settings
 from .project_cleanup import CleanupError, cleanup_project
+
+_UNSET = object()
+
+
+def _lan_address(value: str) -> str | None:
+    if value.lower() == "auto":
+        return None
+    return _ipv4(value)
+
+
+def _network_options(dashboard_host: object, lan_address: object) -> tuple[str, str | None]:
+    settings = load_settings()
+    if dashboard_host is _UNSET:
+        dashboard_host = "0.0.0.0" if settings.lan_enabled or lan_address is not _UNSET else "127.0.0.1"
+    if dashboard_host not in ("0.0.0.0", "127.0.0.1"):
+        raise ValueError("Dashboard host must be 0.0.0.0 or 127.0.0.1")
+    if lan_address is _UNSET:
+        lan_address = settings.lan_address if dashboard_host == "0.0.0.0" and settings.lan_enabled else None
+    return dashboard_host, lan_address
+
 
 
 def _repo(value: str) -> Path:
@@ -113,13 +134,14 @@ def mcp_main(argv: list[str] | None = None) -> int:
     """Start one MCP stdio connection with an explicit, fixed repository boundary."""
     parser = argparse.ArgumentParser(prog="ui-design-mcp", description=__doc__)
     parser.add_argument("--repo", required=True, type=_repo)
-    parser.add_argument("--dashboard-host", choices=("0.0.0.0", "127.0.0.1"), default="127.0.0.1")
+    parser.add_argument("--dashboard-host", choices=("0.0.0.0", "127.0.0.1"), default=_UNSET)
     parser.add_argument("--dashboard-port", type=_port, default=0)
-    parser.add_argument("--lan-address", type=_ipv4)
+    parser.add_argument("--lan-address", type=_lan_address, default=_UNSET)
     args = parser.parse_args(argv)
     try:
-        server = create_server(args.repo, dashboard_host=args.dashboard_host,
-                               dashboard_port=args.dashboard_port, lan_address=args.lan_address)
+        dashboard_host, lan_address = _network_options(args.dashboard_host, args.lan_address)
+        server = create_server(args.repo, dashboard_host=dashboard_host,
+                               dashboard_port=args.dashboard_port, lan_address=lan_address)
         anyio.run(_serve_stdio, server)
         return 0
     except KeyboardInterrupt:
@@ -189,9 +211,9 @@ def _dashboard_serve(argv: list[str]) -> int:
     parser = _DashboardParser(prog="ui-design dashboard-serve",
                               description="Keep a verified dashboard available until stopped.")
     parser.add_argument("--repo", required=True, type=_repo)
-    parser.add_argument("--dashboard-host", choices=("0.0.0.0", "127.0.0.1"), default="127.0.0.1")
+    parser.add_argument("--dashboard-host", choices=("0.0.0.0", "127.0.0.1"), default=_UNSET)
     parser.add_argument("--dashboard-port", type=_port, default=0)
-    parser.add_argument("--lan-address", type=_ipv4)
+    parser.add_argument("--lan-address", type=_lan_address, default=_UNSET)
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--parent-stdio", action="store_true", help="Stop when the supervising parent's stdin closes.")
     try:
@@ -231,8 +253,9 @@ def _dashboard_serve(argv: list[str]) -> int:
         for signum in (signal.SIGINT, signal.SIGTERM):
             previous_signals[signum] = signal.signal(signum, stop_on_signal)
         try:
-            session = DashboardSession(args.repo, host=args.dashboard_host,
-                                       port=args.dashboard_port, lan_address=args.lan_address)
+            dashboard_host, lan_address = _network_options(args.dashboard_host, args.lan_address)
+            session = DashboardSession(args.repo, host=dashboard_host,
+                                       port=args.dashboard_port, lan_address=lan_address)
             if args.parent_stdio:
                 # A parent can disappear while this bounded pipe read is blocked.
                 threading.Thread(target=read_parent, name="ui-design-dashboard-stdin", daemon=True).start()
