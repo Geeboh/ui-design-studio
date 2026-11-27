@@ -2300,6 +2300,7 @@
             : "Decision recorded as rejected for the reviewed digest. Your request for changes was saved.";
         if (draftError) view.message.textContent += ` ${draftError}`;
       }
+    } catch (error) {
       view.message.textContent = `${error.name === "AbortError" ? "The decision request timed out." : "No submission confirmation was received."} The decision may or may not have been recorded. Refresh the recorded status before retrying. Your draft is retained.`;
     } finally {
       clearTimeout(deadline);
