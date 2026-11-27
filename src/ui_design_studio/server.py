@@ -392,8 +392,12 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
         _, manifest, _ = engine.load_theme(theme)
         _, source_files, _ = engine.theme_files(manifest)
         source_digest = engine.file_digest(theme, [item for item in source_files if item != "tokens.css"])
-        return public_mutation("theme.build", None, {"path": path, "sourceDigest": source_digest},
-                               lambda: engine.build_theme(theme))
+        generated = engine.safe_path(theme, "tokens.css", must_exist=False)
+        generated_digest = hashlib.sha256(generated.read_bytes()).hexdigest() if generated.exists() else "none"
+        return public_mutation(
+            "theme.build", None, {"path": path, "sourceDigest": source_digest, "generatedDigest": generated_digest},
+            lambda: engine.build_theme(theme),
+        )
 
     @tool(read_only=True)
     def ui_design_check_theme(path: str) -> dict[str, Any]:
