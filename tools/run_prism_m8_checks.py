@@ -22,6 +22,7 @@ def artifacts() -> list[Path]:
     ]
 
 
+def main() -> int:
     source_commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, capture_output=True, check=False
     ).stdout.strip()
