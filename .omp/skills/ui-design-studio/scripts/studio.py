@@ -27,7 +27,7 @@ import uuid
 import zipfile
 import xml.etree.ElementTree as ET
 
-VERSION = "2.0.3"
+VERSION = "2.0.4"
 SLUG = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 SEMVER = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\Z")
 SHA = re.compile(r"[0-9a-f]{64}\Z")
@@ -1107,7 +1107,7 @@ def check_run(path):
     for decision in decisions_list:
         require(isinstance(decision, dict), "Decision entries must be objects")
         stage = decision.get("stage")
-        require(stage in ("plan", "design", "finalize"), f"Unknown decision stage: {stage}")
+        require(stage in ("assessment", "plan", "design", "finalize"), f"Unknown decision stage: {stage}")
         require(decision.get("actor") in ("user", "agent-yolo", "director"), "Decision actor must be user, agent-yolo, or director")
         require(decision["actor"] != "director" or stage == "finalize", "Director approval is only valid at finalize")
         require(not (run["mode"] == "guided" and decision["actor"] == "agent-yolo"), "Guided runs cannot record agent-yolo approval")

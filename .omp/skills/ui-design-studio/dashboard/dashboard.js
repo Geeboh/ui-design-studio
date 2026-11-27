@@ -149,7 +149,7 @@
     requireValue(Array.isArray(data.history) && data.history.every((point) => record(point) && date(point.at) && ["verified", "required", "passedGates"].every((key) => count(point[key]))), "History records are invalid.");
     requireValue(Array.isArray(data.artworks) && data.artworks.every((artwork) => record(artwork) && ["id", "path", "title", "context", "version", "url"].every((key) => text(artwork[key])) && ["image", "html", "pdf"].includes(artwork.kind) && date(artwork.createdAt)), "Artwork records are invalid.");
     requireValue(new Set(data.artworks.map((artwork) => artwork.id)).size === data.artworks.length, "Artwork IDs must identify unique retained versions.");
-    requireValue(Array.isArray(data.approvals) && data.approvals.every((request) => record(request) && ["id", "title", "context", "inputsDigest"].every((key) => text(request[key])) && (request.createdAt === undefined || date(request.createdAt)) && ["plan", "design"].includes(request.stage) && strings(request.inputs) && ["pending", "approved", "changes", "rejected", "stale"].includes(request.status) && Array.isArray(request.options) && request.options.every((option) => record(option) && text(option.id) && text(option.label) && strings(option.artworkIds)) && new Set(request.options.map((option) => option.id)).size === request.options.length), "Approval requests are invalid.");
+    requireValue(Array.isArray(data.approvals) && data.approvals.every((request) => record(request) && ["id", "title", "context", "inputsDigest"].every((key) => text(request[key])) && (request.createdAt === undefined || date(request.createdAt)) && ["assessment", "plan", "design"].includes(request.stage) && strings(request.inputs) && ["pending", "approved", "changes", "rejected", "stale"].includes(request.status) && Array.isArray(request.options) && request.options.every((option) => record(option) && text(option.id) && text(option.label) && strings(option.artworkIds)) && new Set(request.options.map((option) => option.id)).size === request.options.length), "Approval requests are invalid.");
     requireValue(new Set(data.approvals.map((request) => request.id)).size === data.approvals.length, "Approval request IDs are duplicated.");
     requireValue(data.decisions === undefined || (Array.isArray(data.decisions) && data.decisions.every((decision) => record(decision) && ["stage", "actor", "outcome", "rationale"].every((key) => text(decision[key])) && ["recordedAt", "optionId", "inputsDigest"].every((key) => decision[key] === undefined || text(decision[key])))), "Recorded decisions are invalid.");
     return data;
@@ -1455,7 +1455,8 @@
       }
       view.request = request;
       view.withdrawn = false;
-      view.stage.textContent = `${request.stage === "plan" ? "Plan" : "Design"} · ${request.id}`;
+      const stage = request.stage === "assessment" ? "Assessment" : request.stage === "plan" ? "Plan" : "Design";
+      view.stage.textContent = `${stage} · ${request.id}`;
       view.title.textContent = request.title;
       view.context.textContent = request.context;
       view.status.textContent = request.status;

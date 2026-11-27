@@ -386,6 +386,17 @@ class DesignServerTests(unittest.TestCase):
         self.assertEqual(snapshot["decisions"][-1]["actor"], "user")
         self.assertNotEqual(next(g for g in snapshot["gates"] if g["id"] == "finalize")["status"], "passed")
 
+    def test_assessment_request_uses_dashboard_approval_surface(self):
+        (self.root / "report.md").write_text("Assessment findings\n", encoding="utf-8")
+        request = backend.publish_request(
+            studio, self.root, "assessment-priority", "assessment",
+            "Choose assessment priority", "Select the order for the discovered tasks.",
+            ["report.md"], [{"id": "status-first", "label": "Status first"}, {"id": "resource-first", "label": "Resources first"}],
+        )["request"]
+        self.assertEqual(request["stage"], "assessment")
+        server = self.start()
+        self.assertEqual(self.request(server)[2]["approvals"][0]["stage"], "assessment")
+
     def test_approval_status_is_persisted_for_other_consumers(self):
         request = self.plan("shared-review")
         server = self.start()

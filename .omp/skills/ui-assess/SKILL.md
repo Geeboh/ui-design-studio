@@ -24,7 +24,7 @@ Resolve or refresh the [project context](../ui-design-studio/references/project-
 4. Use independent usability and engineering/performance workers when available. Pass complete task contracts using [multi-agent guidance](../ui-design-studio/references/multi-agent.md); workers do not inherit the director's project context automatically.
 5. Record observations and reproducible baselines. Label inference, hypotheses and unverified checks. Do not describe an agent walkthrough as user research or invent performance results.
 6. Write `brief.md`, `report.md`, `findings.json`, `coverage.json` and baseline evidence under the selected `docs/design/runs/<id>/`. Use the director's current machine-record contract.
-7. In guided mode show findings and ask a compact set of unresolved design questions. In yolo mode record explicit assumptions without cosmetic questions. Apply [decision rules](../ui-design-studio/references/decisions.md).
+7. In guided mode show findings and publish one dashboard assessment request per unresolved design question with `tools/ui-design approval-request --stage assessment`; wait for its recorded decision before continuing. Do not use the host's native Ask or console question UI for assessment choices. In yolo mode record explicit assumptions without cosmetic questions.
 8. Report priorities, evidence, coverage gaps and the next phase's prerequisites. Finish without changing application styles or implicitly approving a concept.
 
 Use `tools/ui-design` only for its documented checks and run bookkeeping. A successful environment check is not a usability assessment.

@@ -472,7 +472,7 @@ def latest_decisions(studio, root):
     need(studio, isinstance(record, dict) and record.get("schemaVersion") == "1.0" and isinstance(record.get("decisions"), list), "Invalid decisions record")
     latest = {}
     for item in record["decisions"]:
-        need(studio, isinstance(item, dict) and item.get("stage") in ("plan", "design", "finalize"), "Invalid decision entry")
+        need(studio, isinstance(item, dict) and item.get("stage") in ("assessment", "plan", "design", "finalize"), "Invalid decision entry")
         latest[item["stage"]] = item
     return record, latest
 
@@ -492,7 +492,7 @@ def current_decision(studio, root, run, decision):
 def publish_request(studio, root, request_id, stage, title, context, files, choices=None, repo=None):
     root = checked_root(studio, root)
     need(studio, isinstance(request_id, str) and SLUG.fullmatch(request_id) and len(request_id) <= 64, "Approval ID must be a portable lowercase slug")
-    need(studio, stage in ("plan", "design") and title.strip() and context.strip(), "Approval needs a stage, title and review context")
+    need(studio, stage in ("assessment", "plan", "design") and title.strip() and context.strip(), "Approval needs a stage, title and review context")
     with records_lock(studio, root):
         source_record = import_theme_art(studio, root, repo)
         run = studio.read_json(root / "run.json")
@@ -2027,7 +2027,7 @@ def add_parsers(subs):
     sub = subs.add_parser("approval-request", help="Publish a digest-bound guided Plan or Design review")
     sub.add_argument("run")
     sub.add_argument("--id", required=True)
-    sub.add_argument("--stage", required=True, choices=("plan", "design"))
+    sub.add_argument("--stage", required=True, choices=("assessment", "plan", "design"))
     sub.add_argument("--title", required=True)
     sub.add_argument("--context", required=True)
     sub.add_argument("--files", required=True, nargs="+")
