@@ -19,7 +19,7 @@ import tempfile
 from datetime import datetime, timezone
 from dataclasses import dataclass
 
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 PACKAGE = Path(__file__).resolve().parents[1]
 STATE = ".ui-design-studio/install-state.json"
 BACKUPS = ".ui-design-studio/backups"
@@ -118,7 +118,7 @@ def atomic_write(path: Path, data: bytes, mode: int) -> None:
         with os.fdopen(fd, "wb") as stream:
             stream.write(data)
             stream.flush()
-            os.fsync(stream.fileno())
+            (os.fdatasync if hasattr(os, "fdatasync") else os.fsync)(stream.fileno())
         temp.chmod(mode)
         os.replace(temp, path)
     finally:

@@ -27,6 +27,17 @@ The global option installs only the MCP runtime. Install the OMP skills and exte
 
 Use the same global `ui-design-mcp` executable for every project, with a separate explicit `--repo /absolute/project/path` for each connection. Project records and permissions stay separate.
 
+### Remove old project-local installs
+
+The universal MCP runtime does not need project-local `.omp` files. Remove an old project installation without stopping MCP:
+
+```bash
+ui-design cleanup-project --repo /absolute/path/to/project --dry-run
+ui-design cleanup-project --repo /absolute/path/to/project --yes
+```
+
+The cleanup preserves `.ui-design-studio/runtime`, design runs, evidence, themes and project policy. Use `--purge-backups` only to remove old installer rollback records. It never removes the universal runtime under `~/.local/share/ui-design-studio/mcp`.
+
 ## Configure a connection
 
 Add this executable and argument contract to your client's MCP configuration.
