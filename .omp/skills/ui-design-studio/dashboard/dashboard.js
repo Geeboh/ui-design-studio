@@ -1970,6 +1970,9 @@
     }, 0);
     if (view.draft.storageError) draftStorageMessage(view, view.draft.storageError);
     rationale.value = view.draft.rationale;
+    for (const input of form.querySelectorAll('input[name="outcome"]')) {
+      input.checked = input.value === view.draft.outcome;
+    }
     const feedback = createAnnotationEditor(view, prefix);
     form.insertBefore(feedback, confirmationLabel);
     form.addEventListener("input", () => {

@@ -20,7 +20,7 @@ c7a4c8acbf997f369ca43b1f4cc2d98fad4e36c3ccfe45a4a3929f07abc67444  .omp/skills/ui
 461d3d657a0bf1ac1b0baa603d631f1224afc533e21c971365e26ecfadc0d9c5  .omp/skills/ui-design-studio/assets/example-theme/tokens.css
 227262c29ccf9803c32fc42b1167242ea542a4e8f9b65c1394db074587ef6195  .omp/skills/ui-design-studio/assets/example-theme/tokens.json
 8904ad3b6f1c004afa7acdc00199ceaf11b395423776964c93d65b72dd69e709  .omp/skills/ui-design-studio/dashboard/dashboard.css
-5f3bad3c3ce0f312fe8fff91adb51df025af609bd65f147e990674ae88bdca4e  .omp/skills/ui-design-studio/dashboard/dashboard.js
+fcf1c2cda52b2d8857178bda8fd906c624dde5d85f4a631df910347f4811e801  .omp/skills/ui-design-studio/dashboard/dashboard.js
 f1d7d5ed11ebd5d86dae64ccbe85a58e802f77420b88b44971b693409c923564  .omp/skills/ui-design-studio/dashboard/index.html
 9ebceac67c044fddd96c5aec2862ad623d8af58868aea24577e0b4fe136356b1  .omp/skills/ui-design-studio/dashboard/landing.html
 a3d6c0c6e05edf8336c76ea51f68a8abeabda41b7c4fc5bcd81499c1572657bd  .omp/skills/ui-design-studio/dashboard/landing.js
@@ -36,7 +36,7 @@ bf05a8bb999d3df3807f38fdb00e8293e03f5794fe370fdbc73c9c94d2ac7dca  .omp/skills/ui
 d9d7eb33b05f80a8295c0c6bb87c07bc565de0c8ab52eaf2a7ddea40a4efb1c5  .omp/skills/ui-design-studio/references/visual-system.md
 e320ad53e7fdf62d9e1c63d9b43ba3cb8d85046901a74c99188d4cd7a4ea4e2c  .omp/skills/ui-design-studio/references/workflow.md
 41c45babfedfc2e94b162f43e24e7467fe54bdd7368fc07957b71ecfa7bd7d7b  .omp/skills/ui-design-studio/schemas/theme.schema.json
-d21999a163fb85249d93fee0cac682ef6e63e8a949659ed101a96cbe27634af3  .omp/skills/ui-design-studio/scripts/design_server.py
+429182e10a66af55e6b98030b50f33c404ec750ab83108e6566c6059573325e5  .omp/skills/ui-design-studio/scripts/design_server.py
 2655940a6d9a11b1d4428888037fb5e1aad2d40590e92afdff6eb79e7a8d5319  .omp/skills/ui-design-studio/scripts/optimization.py
 549459e4b6e040aaaeec56132a027e85b2fc250ca2ba876e13ee5617f55c7aef  .omp/skills/ui-design-studio/scripts/studio.py
 eba4992694fdec6bddf92d2f91b57fe86aaec13a7b0196235e641ffe6e5377a5  .omp/skills/ui-design-studio/scripts/usage.py
@@ -161,7 +161,7 @@ d6c41d1e40bbc30ab8f7f9ffe1ad318d5c85490053f8a834648b6967b85a9a47  src/ui_design_
 7bff73e6a25f65dada7a4d1dce1bd40a5f4a5dcb87fb430825cbf0c885e94721  src/ui_design_studio/migration.py
 0ef5975be8c1f61ef42f67ca7f3851cea07bca1784e968465ee7b4c7d6cf00c2  src/ui_design_studio/project_cleanup.py
 a791c65167983bce31826769ef864bb2656be5a739c24bf581a65bda631a2e0c  src/ui_design_studio/runtime.py
-f35f8f11ee0f5e7b7a522d881fa2ee37a6b46501818c03635eef060ee5e8500c  src/ui_design_studio/server.py
+d1da6ed57916f8b6877f891ae25ea295b69d964c0569ad0eebbc1eee0e6ef1d7  src/ui_design_studio/server.py
 97d1e32c646b520d6da78b659578e9a6db30e745b066846dccbc11d1439ad547  src/ui_design_studio/settings.py
 cffc952c0233b560d8b1a59001bbfc2936c5b7e5a04562ee8e1609a26b248899  src/ui_design_studio/storage/__init__.py
 191bed21e7656c6330dd1da71ae454365e11d6ef71ce066d2c9721756035ad59  src/ui_design_studio/storage/database.py

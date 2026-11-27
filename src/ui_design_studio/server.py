@@ -383,13 +383,14 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
         _, themes, _ = engine.config_paths(root)
         engine.safe_path(root, (themes / id).relative_to(root).as_posix(), must_exist=False, allow_dir=True)
         return public_mutation("theme.new", None, {"id": id, "name": name},
-                               lambda: engine.theme_new(root, id, name), idempotent=False)
+                               lambda: engine.theme_new(root, id, name))
 
     @tool(destructive=True, idempotent=True)
     def ui_design_build_theme(path: str) -> dict[str, Any]:
         """Compile a repository-relative theme under the configured themes directory."""
         theme = path_in(path, "theme")
-        return public_mutation("theme.build", None, {"path": path},
+        source_digest = engine.check_theme(theme)["themeDigest"]
+        return public_mutation("theme.build", None, {"path": path, "sourceDigest": source_digest},
                                lambda: engine.build_theme(theme))
 
     @tool(read_only=True)

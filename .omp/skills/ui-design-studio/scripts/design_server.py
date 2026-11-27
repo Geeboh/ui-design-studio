@@ -323,6 +323,8 @@ def _observer_is_current(record, path, run_id):
     if observed.tzinfo is None:
         return False
     age = (dt.datetime.now(dt.timezone.utc) - observed).total_seconds()
+    if age < -5:
+        return False
     return age <= OBSERVER_MAX_AGE_SECONDS
 
 
@@ -1554,7 +1556,7 @@ class DesignState:
                     except (studio.StudioError, OSError, ValueError, TypeError):
                         continue
             if candidates:
-                latest_native = max(candidates, key=lambda item: item.get("updatedAt", ""))
+                latest_native = max(candidates, key=lambda item: item.get("observedAt") or item.get("updatedAt", ""))
                 task_timestamp = _record_timestamp(latest_native, task_timestamp)
                 native = latest_native.get("state", {})
                 native_tasks = native.get("tasks", {}) if isinstance(native, dict) else {}
@@ -2308,7 +2310,7 @@ class Handler(BaseHTTPRequestHandler):
                             record, idempotent = owner.state.references.store(payload)
                         self.respond(200, {"status": "PASS", "reference": record, "idempotent": idempotent})
                     else:
-                        self.respond(200, approve(owner.studio, owner.root, payload, owner.repo))
+                        self.respond(200, owner.approve_command(payload))
         except ReferenceConflict as exc:
             self.respond(409, {"error": str(exc)})
         except ApprovalConflict as exc:
@@ -2394,6 +2396,65 @@ class DesignServer:
             self._event_clients.clear()
         for client in clients:
             client.close()
+
+    def approve_command(self, payload):
+        from ui_design_studio.storage import EventDraft, OperationRejected, OperationResult, StateStore
+
+        project = _plain_directory(self.studio, self.repo or self.root)
+        run = self.studio.read_json(self.studio.safe_path(self.root, "run.json"))
+        run_id = run.get("id")
+        need(self.studio, isinstance(run_id, str) and run_id, "Run identity is missing")
+        state_root = _confined_state_path(self.studio, self.root, self.repo)
+        store = StateStore(state_root)
+        project_id = _state_project_id(self.studio, store, project, run)
+        with store.transaction() as connection:
+            project_row = connection.execute(
+                "SELECT source_root, state_root FROM projects WHERE project_id = ?", (project_id,)
+            ).fetchone()
+            if project_row is None:
+                store.create_project_in_transaction(connection, project_id, str(project), str(state_root.parent))
+            elif (project_row["source_root"], project_row["state_root"]) != (str(project), str(state_root.parent)):
+                raise self.studio.StudioError("Command project projection belongs to a different repository")
+            if connection.execute("SELECT 1 FROM runs WHERE run_id = ?", (run_id,)).fetchone() is None:
+                store.create_run_in_transaction(
+                    connection, run_id, project_id, run,
+                    stage=run.get("phase", "assessment"), status=run.get("status", "pending"),
+                )
+        request = {"runId": run_id, "approval": payload}
+        current = store.get_run(run_id)
+        revision = current["revision"] if current is not None else 0
+        decisions_path = self.studio.safe_path(self.root, "decisions.json", must_exist=False)
+        decisions_digest = hashlib.sha256(decisions_path.read_bytes()).hexdigest() if decisions_path.exists() else "none"
+        key = "approval-" + hashlib.sha256(
+            canonical(request) + decisions_digest.encode("ascii") + str(revision).encode("ascii")
+        ).hexdigest()
+        actor = "design-dashboard-" + self.instance_id
+
+        def apply(connection):
+            result = approve(self.studio, self.root, payload, self.repo)
+            updated = self.studio.read_json(self.studio.safe_path(self.root, "run.json"))
+            encoded = json.dumps(updated, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+            existing = connection.execute(
+                "SELECT status, stage, payload_json FROM runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+            if existing is None:
+                raise OperationRejected("STATE_CONFLICT", "Run projection is missing")
+            if (existing["status"], existing["stage"], existing["payload_json"]) != (
+                updated.get("status", "pending"), updated.get("phase", "assessment"), encoded
+            ):
+                changed = connection.execute(
+                    "UPDATE runs SET status = ?, stage = ?, revision = revision + 1, payload_json = ? WHERE run_id = ?",
+                    (updated.get("status", "pending"), updated.get("phase", "assessment"), encoded, run_id),
+                ).rowcount
+                if changed != 1:
+                    raise OperationRejected("STATE_CONFLICT", "Run projection was not updated")
+            return OperationResult(result, (EventDraft(run_id, "ApprovalRecorded", {"runId": run_id}),))
+
+        receipt = store.run_operation(
+            realm=project_id, actor=actor, command="approval.decide",
+            idempotency_key=key, request=request, callback=apply,
+        )
+        return {**receipt.result, "receipt": receipt.as_dict()}
 
     def dispatch_command(self, payload):
         from ui_design_studio.application import dispatch
