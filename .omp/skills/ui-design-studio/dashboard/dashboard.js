@@ -1,7 +1,7 @@
 "use strict";
 
 (() => {
-  const POLL_INTERVAL = 2000;
+  const STREAM_RETRY_DELAYS = [500, 1000, 2000, 5000, 10000];
   const STALE_AFTER = 10000;
   const PAGE_SIZE = 12;
  const REFERENCE_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
@@ -27,7 +27,11 @@
     failure: null,
     inFlight: false,
     refreshQueued: false,
-    pollTimer: null,
+    streamConnected: false,
+    streamController: null,
+    streamRetryTimer: null,
+    streamAttempt: 0,
+    streamFallbackUsed: false,
     requestController: null,
     stopped: false,
     approvalViews: new Map(),
@@ -37,6 +41,8 @@
     usage: null,
     usageRange: "24h",
     ompUsage: null,
+    optimization: null,
+    optimizationLoading: false,
   };
   const DRAFT_PREFIX = "prism-studio:draft:";
   function draftKey(request) {
@@ -175,7 +181,7 @@
   }
 
   function snapshotFresh() {
-    return Boolean(state.snapshot && state.token && !state.failure && navigator.onLine !== false && performance.now() - state.lastSuccess < STALE_AFTER);
+    return Boolean(state.snapshot && state.token && state.streamConnected && !state.failure && navigator.onLine !== false && performance.now() - state.lastSuccess < STALE_AFTER);
   }
 
   function updateConnection() {
@@ -202,6 +208,13 @@
       kind = "loading";
       label = "Connecting";
       message = "Connecting to the design server. No run records have been loaded.";
+    } else if (!state.streamConnected) {
+      const stale = performance.now() - state.lastSuccess >= STALE_AFTER;
+      kind = stale ? "stale" : "reconnecting";
+      label = stale ? "Stale snapshot" : "Reconnecting";
+      message = stale
+        ? "No fresh snapshot has been received for more than 10 seconds. Approval submissions are paused; drafts are retained."
+        : "Live snapshot updates are disconnected. Reconnecting. Displayed records may be stale; approval submissions are paused.";
     } else if (!snapshotFresh()) {
       kind = "stale";
       label = "Stale snapshot";
@@ -238,16 +251,29 @@
     return detail || `The server returned HTTP ${response.status}.`;
   }
 
+  function applySnapshot(snapshot) {
+    state.snapshot = snapshot;
+    state.usage = snapshot.usage || null;
+    state.ompUsage = state.usage?.omp || null;
+    // Preserve publication order without truncating submillisecond version timestamps.
+    state.artworks = snapshot.artworks.slice().reverse();
+    state.artworkById = new Map(state.artworks.map((artwork) => [artwork.id, artwork]));
+    state.references = snapshot.references.slice().reverse();
+    if (!state.optimization && snapshot.optimization) state.optimization = snapshot.optimization;
+    state.lastSuccess = performance.now();
+    state.failure = null;
+    renderSnapshot();
+    updateConnection();
+  }
+
   async function refreshSnapshot() {
     if (state.stopped) return;
     if (state.inFlight) {
       state.refreshQueued = true;
       return;
     }
-    clearTimeout(state.pollTimer);
     if (!state.token || navigator.onLine === false) {
       updateConnection();
-      state.pollTimer = setTimeout(refreshSnapshot, POLL_INTERVAL);
       return;
     }
     state.inFlight = true;
@@ -268,16 +294,7 @@
       }
       const snapshot = validateSnapshot(await response.json());
       if (state.stopped || token !== state.token || state.requestController !== controller) return;
-      state.snapshot = snapshot;
-      state.usage = snapshot.usage || null;
-      state.ompUsage = state.usage?.omp || null;
-      // Preserve publication order without truncating submillisecond version timestamps.
-      state.artworks = snapshot.artworks.slice().reverse();
-      state.artworkById = new Map(state.artworks.map((artwork) => [artwork.id, artwork]));
-      state.references = snapshot.references.slice().reverse();
-      state.lastSuccess = performance.now();
-      state.failure = null;
-      renderSnapshot();
+      applySnapshot(snapshot);
     } catch (error) {
       if (!state.stopped && token === state.token && state.requestController === controller) {
         state.failure = {
@@ -291,9 +308,114 @@
       state.inFlight = false;
       state.requestController = null;
       updateConnection();
-      const delay = state.refreshQueued ? 0 : POLL_INTERVAL;
-      state.refreshQueued = false;
-      if (!state.stopped) state.pollTimer = setTimeout(refreshSnapshot, delay);
+      if (state.refreshQueued && !state.stopped) {
+        state.refreshQueued = false;
+        refreshSnapshot();
+      } else {
+        state.refreshQueued = false;
+      }
+    }
+  }
+
+  function snapshotFromEvent(frame) {
+    const eventLines = frame.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    let event = "";
+    const data = [];
+    for (const line of eventLines) {
+      if (!line || line.startsWith(":")) continue;
+      const separator = line.indexOf(":");
+      const field = separator < 0 ? line : line.slice(0, separator);
+      const value = separator < 0 ? "" : line.slice(separator + 1).replace(/^ /, "");
+      if (field === "event") event = value;
+      if (field === "data") data.push(value);
+    }
+    if (event !== "snapshot" || !data.length) return null;
+    return validateSnapshot(JSON.parse(data.join("\n")));
+  }
+
+  async function consumeSnapshotStream(response, token, controller) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const applyFrame = (frame) => {
+      const snapshot = snapshotFromEvent(frame);
+      if (snapshot && !state.stopped && token === state.token) applySnapshot(snapshot);
+    };
+    try {
+      while (!state.stopped && token === state.token && !controller.signal.aborted) {
+        const { done, value } = await reader.read();
+        if (done) {
+          buffer += decoder.decode();
+          if (buffer) applyFrame(buffer);
+          return;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        let match;
+        while ((match = buffer.match(/\r\n\r\n|\n\n|\r\r/))) {
+          const frame = buffer.slice(0, match.index);
+          buffer = buffer.slice(match.index + match[0].length);
+          applyFrame(frame);
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  function scheduleSnapshotStreamRetry() {
+    if (state.stopped || !state.token || navigator.onLine === false || state.failure?.kind === "unauthorized"
+        || state.streamRetryTimer || state.streamController) return;
+    const delay = STREAM_RETRY_DELAYS[Math.min(state.streamAttempt, STREAM_RETRY_DELAYS.length - 1)];
+    state.streamAttempt = Math.min(state.streamAttempt + 1, STREAM_RETRY_DELAYS.length - 1);
+    state.streamRetryTimer = setTimeout(() => {
+      state.streamRetryTimer = null;
+      startSnapshotStream();
+    }, delay);
+  }
+
+  async function startSnapshotStream() {
+    if (state.stopped || !state.token || navigator.onLine === false || state.streamController) return;
+    const token = state.token;
+    const controller = new AbortController();
+    state.streamController = controller;
+    state.streamConnected = false;
+    updateConnection();
+    try {
+      const response = await fetch(new URL("api/events", baseUrl), {
+        headers: { Authorization: `Bearer ${token}`, Accept: "text/event-stream" },
+        cache: "no-store", credentials: "omit", redirect: "error", signal: controller.signal,
+      });
+      if (!response.ok) {
+        const error = new Error(await responseError(response));
+        error.kind = [401, 403].includes(response.status) ? "unauthorized" : "error";
+        throw error;
+      }
+      if (!response.body || typeof response.body.getReader !== "function") {
+        if (!state.streamFallbackUsed) {
+          state.streamFallbackUsed = true;
+          await refreshSnapshot();
+        }
+        throw new Error("Live snapshot streaming is unavailable.");
+      }
+      if (state.stopped || token !== state.token || controller.signal.aborted) return;
+      state.streamConnected = true;
+      state.streamAttempt = 0;
+      state.failure = null;
+      updateConnection();
+      await consumeSnapshotStream(response, token, controller);
+      if (!state.stopped && token === state.token && !controller.signal.aborted) {
+        throw new Error("Live snapshot stream disconnected.");
+      }
+    } catch (error) {
+      if (state.stopped || token !== state.token || controller.signal.aborted) return;
+      state.failure = error.kind === "unauthorized"
+        ? { kind: "unauthorized", message: error.message || "Bearer authentication was rejected." }
+        : null;
+    } finally {
+      if (state.streamController !== controller) return;
+      state.streamController = null;
+      if (!state.stopped && token === state.token && !state.streamConnected) scheduleSnapshotStreamRetry();
+      updateConnection();
     }
   }
   async function cancelRun() {
@@ -1167,8 +1289,139 @@
     const dialog = byId("reference-dialog");
     if (dialog.open) dialog.close();
   }
+  function optimizationUrl(result, variant = "after") {
+    const base = state.optimization?.contentBase;
+    if (!base) throw new Error("Optimization content is not available yet.");
+    return new URL(`${base}/${result.id}/${variant}`, baseUrl).href;
+  }
+
+  function formatBytes(value) {
+    if (value < 1024) return `${numberFormat.format(value)} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
+    return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
+  }
+
+  function renderOptimization() {
+    const optimization = state.optimization;
+    if (!optimization) return;
+    const settings = optimization.settings;
+    byId("optimization-status").textContent = `${optimization.results.length} measured`;
+    byId("optimization-status").dataset.state = optimization.results.length ? "connected" : "pending";
+    byId("optimization-summary").textContent = `${optimization.results.length} real outputs · ${optimization.results.filter((result) => result.example).length} representative examples`;
+    byId("optimization-preset").value = settings.preset;
+    byId("optimization-quality").value = settings.quality;
+    byId("optimization-quality-value").textContent = settings.quality;
+    byId("optimization-level").value = settings.level;
+    byId("optimization-level-value").textContent = settings.level;
+    byId("optimization-minify").checked = settings.minify;
+    byId("optimization-compress").checked = settings.compress;
+    const tools = byId("optimization-tools");
+    tools.replaceChildren(...Object.entries(optimization.capabilities?.tools || {}).map(([name, capability]) => {
+      const label = element("label", "optimization-check");
+      const input = element("input");
+      input.type = "checkbox";
+      input.name = `tool-${name}`;
+      input.checked = settings.tools?.[name] !== false;
+      input.title = capability.reason;
+      label.append(input, element("span", "", name), element("span", "muted", capability.available ? "available" : "fallback"));
+      return label;
+    }));
+    const recommendations = byId("optimization-recommendations");
+    recommendations.replaceChildren(...(optimization.recommendations?.length
+      ? optimization.recommendations.map((item) => element("li", "", item))
+      : [element("li", "muted", "No recommendations.")]));
+    const availability = byId("optimization-availability");
+    availability.replaceChildren(...Object.entries(optimization.capabilities?.tools || {}).map(([name, capability]) =>
+      element("li", "", `${name}: ${capability.available ? "available" : "fallback"} · ${capability.reason}`)));
+    const gallery = byId("optimization-gallery");
+    gallery.replaceChildren();
+    if (!optimization.results.length) {
+      gallery.append(element("p", "empty-state", "No optimization results. Run representative examples."));
+      return;
+    }
+    for (const result of optimization.results) {
+      const card = element("article", "optimization-card");
+      const heading = element("div", "optimization-card-heading");
+      heading.append(element("h3", "", result.sourceName), badge(result.savingsBytes >= 0 ? "done" : "warning", result.savingsBytes >= 0 ? "Measured" : "Grew"));
+      card.append(heading, element("p", "muted", `${result.type} · ${result.example ? "representative example" : "uploaded source"}`));
+      const stats = element("dl", "optimization-metrics");
+      for (const [label, value] of [["Before", formatBytes(result.beforeBytes)], ["After", formatBytes(result.afterBytes)], ["Savings", `${formatBytes(Math.max(0, result.savingsBytes))} (${result.savingsPercent}%)`]]) {
+        stats.append(element("dt", "", label), element("dd", "", value));
+      }
+      card.append(stats);
+      const meter = element("div", "optimization-meter");
+      meter.append(element("span", "", "before"));
+      const beforeBar = element("span", "optimization-bar optimization-before");
+      const afterBar = element("span", "optimization-bar optimization-after");
+      beforeBar.style.inlineSize = "100%";
+      afterBar.style.inlineSize = `${Math.max(3, Math.min(100, result.afterBytes * 100 / Math.max(result.beforeBytes, 1)))}%`;
+      meter.append(beforeBar, afterBar);
+      card.append(meter);
+      const links = element("div", "optimization-links");
+      for (const [label, variant] of [["Before", "before"], ["After", "after"], ["Gzip", "gzip"], ["Brotli", "brotli"]]) {
+        if (variant === "brotli" && !result.measurements?.artifacts?.brotli) continue;
+        const link = element("a", "button button-quiet", label);
+        link.href = optimizationUrl(result, variant);
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        links.append(link);
+      }
+      card.append(links);
+      const details = element("details");
+      details.append(element("summary", "", "Operation details"));
+      details.append(...(result.operations || []).map((operation) => element("p", "optimization-operation", `${operation.label} · ${operation.tool} · ${operation.status} — ${operation.details}`)));
+      card.append(details);
+      gallery.append(card);
+    }
+  }
+
+  async function loadOptimization() {
+    if (!state.token) return;
+    const response = await fetch(new URL("api/optimization", baseUrl), { headers: { Authorization: `Bearer ${state.token}`, Accept: "application/json" }, cache: "no-store" });
+    if (!response.ok) throw new Error(await responseError(response));
+    state.optimization = await response.json();
+    renderOptimization();
+  }
+
+  function optimizationSettingsFromForm() {
+    const tools = {};
+    for (const input of document.querySelectorAll("#optimization-tools input[type=checkbox]")) tools[input.name.slice(5)] = input.checked;
+    return { schemaVersion: "1.0", preset: byId("optimization-preset").value, quality: Number(byId("optimization-quality").value), level: Number(byId("optimization-level").value), minify: byId("optimization-minify").checked, compress: byId("optimization-compress").checked, tools, recommendationMode: "safe" };
+  }
+
+  async function saveOptimizationSettings(event) {
+    event.preventDefault();
+    const feedback = byId("optimization-feedback");
+    try {
+      const response = await fetch(new URL("api/optimization/settings", baseUrl), { method: "POST", headers: { Authorization: `Bearer ${state.token}`, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(optimizationSettingsFromForm()) });
+      if (!response.ok) throw new Error(await responseError(response));
+      feedback.textContent = "Settings saved.";
+      await loadOptimization();
+    } catch (error) {
+      feedback.textContent = error.message || "Settings could not be saved.";
+    }
+  }
+
+  async function runOptimizationExamples() {
+    const feedback = byId("optimization-feedback");
+    const button = byId("optimization-run");
+    button.disabled = true;
+    feedback.textContent = "Running real transforms.";
+    try {
+      const response = await fetch(new URL("api/optimization/example", baseUrl), { method: "POST", headers: { Authorization: `Bearer ${state.token}`, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ settings: optimizationSettingsFromForm() }) });
+      if (!response.ok) throw new Error(await responseError(response));
+      state.optimization = await response.json();
+      renderOptimization();
+      feedback.textContent = "Measured outputs stored.";
+    } catch (error) {
+      feedback.textContent = error.message || "Optimization failed.";
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   function setView(view, focus = true) {
-    if (!["progress", "feed", "library", "references", "approvals", "usage"].includes(view)) return;
+    if (!["progress", "feed", "library", "references", "approvals", "usage", "optimization"].includes(view)) return;
     if (state.view !== view) {
       if (state.view === "feed") disposeGrid(byId("feed-grid"));
       if (state.view === "library") disposeGrid(byId("library-grid"));
@@ -1181,6 +1434,9 @@
     for (const panel of document.querySelectorAll("[data-view-panel]")) panel.hidden = panel.dataset.viewPanel !== view;
     renderActiveGallery();
     if (view === "references" && state.snapshot) renderReferences(state.snapshot);
+    if (view === "optimization") {
+      loadOptimization().catch((error) => { byId("optimization-feedback").textContent = error.message || "Optimization data could not be loaded."; });
+    }
     if (view === "usage") {
       renderUsage(state.usage);
     }
@@ -2135,6 +2391,19 @@
     const bounds = byId("reference-dialog").getBoundingClientRect();
     if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closeReference();
   });
+  byId("optimization-settings-form").addEventListener("submit", saveOptimizationSettings);
+  byId("optimization-run").addEventListener("click", runOptimizationExamples);
+  for (const id of ["optimization-quality", "optimization-level"]) byId(id).addEventListener("input", (event) => {
+    byId(`${id}-value`).textContent = event.target.value;
+  });
+  byId("optimization-preset").addEventListener("change", () => {
+    if (byId("optimization-preset").value === "maximum") {
+      byId("optimization-quality").value = 65;
+      byId("optimization-level").value = 9;
+      byId("optimization-quality-value").textContent = "65";
+      byId("optimization-level-value").textContent = "9";
+    }
+  });
   for (const [id, direction] of [["library-previous", -1], ["library-next", 1]]) byId(id).addEventListener("click", () => {
     state.libraryPage += direction;
     renderLibrary();
@@ -2201,21 +2470,43 @@
     if (!previewResize) for (const preview of previewJobs.keys()) scaleThumbnail(preview);
     if (!viewerResize && state.viewer?.mode === "fit") applyViewerScale();
   });
-  window.addEventListener("online", refreshSnapshot);
-  window.addEventListener("offline", updateConnection);
+  window.addEventListener("online", () => {
+    state.failure = null;
+    refreshSnapshot();
+    startSnapshotStream();
+  });
+  window.addEventListener("offline", () => {
+    const controller = state.streamController;
+    state.streamController = null;
+    controller?.abort();
+    state.streamConnected = false;
+    updateConnection();
+  });
   window.addEventListener("hashchange", () => {
     const token = new URLSearchParams(window.location.hash.slice(1)).get("token") || "";
     if (token === state.token) return;
     state.token = token;
     byId("server-url").textContent = window.location.href;
     state.failure = null;
-    state.requestController?.abort();
+    state.streamConnected = false;
+    clearTimeout(state.streamRetryTimer);
+    state.streamRetryTimer = null;
+    const controller = state.streamController;
+    state.streamController = null;
+    controller?.abort();
+    state.streamAttempt = 0;
     refreshSnapshot();
+    startSnapshotStream();
   });
   let ageTimer = setInterval(updateConnection, 1000);
   window.addEventListener("pagehide", () => {
     state.stopped = true;
-    clearTimeout(state.pollTimer);
+    clearTimeout(state.streamRetryTimer);
+    state.streamRetryTimer = null;
+    const controller = state.streamController;
+    state.streamController = null;
+    controller?.abort();
+    state.streamConnected = false;
     clearInterval(ageTimer);
     state.requestController?.abort();
     state.requestController = null;
@@ -2235,6 +2526,8 @@
     }
     if (state.viewer) viewerResize?.observe(byId("viewer-stage"));
     refreshSnapshot();
+    startSnapshotStream();
   });
   refreshSnapshot();
+  startSnapshotStream();
 })();

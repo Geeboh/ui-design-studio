@@ -52,6 +52,14 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 import xml.etree.ElementTree as ET
 
 
+_optimization_spec = importlib.util.spec_from_file_location(
+    "ui_design_studio_optimization", Path(__file__).with_name("optimization.py"))
+if _optimization_spec is None or _optimization_spec.loader is None:
+    raise ImportError("Bundled optimization engine is unavailable")
+optimization = importlib.util.module_from_spec(_optimization_spec)
+_optimization_spec.loader.exec_module(optimization)
+
+
 VISUAL = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".svg", ".html", ".htm", ".pdf"}
 SVG_CONTENT_TYPE = "image/svg+xml"
 DEPENDENCIES = VISUAL | {".css", ".woff", ".woff2", ".ttf", ".otf", ".eot"}
@@ -1358,6 +1366,34 @@ class DesignState:
                     if isinstance(native_tasks, dict):
                         native_tasks = [dict(item, id=key) for key, item in native_tasks.items() if isinstance(key, str) and isinstance(item, dict)]
                     tasks.extend(item for item in task_records({"tasks": native_tasks}) if item["id"] not in known)
+        if not director:
+            candidates = []
+            for native_name in ("progress-pi-tasks", "progress-pi-tasks-observer"):
+                native_dir = studio.safe_path(root, native_name, must_exist=False, allow_dir=True)
+                if not native_dir.exists():
+                    continue
+                for path in native_dir.glob("*.json"):
+                    try:
+                        candidate = studio.read_json(studio.safe_path(native_dir, path.name))
+                        if isinstance(candidate, dict) and candidate.get("version") == 1 and candidate.get("runId") == run.get("id"):
+                            candidates.append(candidate)
+                    except (studio.StudioError, OSError, ValueError, TypeError):
+                        continue
+            if candidates:
+                latest_native = max(candidates, key=lambda item: item.get("updatedAt", ""))
+                native = latest_native.get("state", {})
+                native_tasks = native.get("tasks", {}) if isinstance(native, dict) else {}
+                if isinstance(native_tasks, dict):
+                    native_tasks = [dict(item, id=key) for key, item in native_tasks.items() if isinstance(key, str) and isinstance(item, dict)]
+                tasks.extend(item for item in task_records({"tasks": native_tasks}) if item["id"] not in known)
+        if not workers and tasks:
+            workers = [{
+                "id": f"task-{item['id']}",
+                "task": item["title"],
+                "status": "done" if item["status"] == "done" else "active" if item["status"] in ("active", "in_progress") else "pending",
+                "message": f"Observed OMP task status: {item['nextAction']}" if item.get("nextAction") else f"Observed OMP task status: {item['status']}.",
+                "updatedAt": timestamp(),
+            } for item in tasks]
         gates = []
         def gate(key, label, condition, detail, failed=False):
             gates.append({"id": key, "label": label, "status": "passed" if condition else "failed" if failed else "pending", "detail": detail})
@@ -1462,6 +1498,12 @@ class DesignState:
                 "decisions": [{key: decision[key] for key in ("stage", "actor", "outcome", "rationale", "recordedAt", "optionId", "inputsDigest", "attachments", "annotations") if key in decision}
                               for decision in decisions["decisions"]]}
         snap["usage"] = usage
+        try:
+            snap["optimization"] = optimization.projection(studio, root)
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError):
+            snap["optimization"] = {"schemaVersion": optimization.SCHEMA_VERSION, "settings": optimization.DEFAULT_SETTINGS(),
+                                    "capabilities": optimization.tool_availability(), "recommendations": [],
+                                    "results": [], "examples": []}
         if isinstance(run.get("cancellation"), dict):
             snap["run"]["cancellation"] = dict(run["cancellation"])
         stable = {key: value for key, value in snap.items() if key != "statistics"}
@@ -1624,6 +1666,37 @@ def validated_lan_addresses(studio, addresses):
     return tuple(result)
 
 
+class SnapshotEventClient:
+    CLOSED = object()
+
+    def __init__(self):
+        self.condition = threading.Condition()
+        self.pending = None
+        self.closed = False
+
+    def publish(self, snapshot):
+        with self.condition:
+            if self.closed:
+                return
+            self.pending = snapshot
+            self.condition.notify()
+
+    def wait(self, timeout):
+        with self.condition:
+            if self.pending is None and not self.closed:
+                self.condition.wait(timeout)
+            if self.closed:
+                return self.CLOSED
+            snapshot, self.pending = self.pending, None
+            return snapshot
+
+    def close(self):
+        with self.condition:
+            self.closed = True
+            self.pending = None
+            self.condition.notify_all()
+
+
 class DesignHTTPServer(ThreadingHTTPServer):
     daemon_threads = False
     allow_reuse_address = True
@@ -1655,13 +1728,14 @@ class DesignHTTPServer(ThreadingHTTPServer):
             connections = tuple(self.connections)
         for connection in connections:
             try:
-                connection.shutdown(socket.SHUT_RD)
+                connection.shutdown(socket.SHUT_RDWR)
             except OSError:
                 pass
 
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "UIDesign/1.0"
+    protocol_version = "HTTP/1.1"
 
     def setup(self):
         super().setup()
@@ -1743,6 +1817,43 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Unsafe URL path")
         return value
 
+    def stream_events(self):
+        owner = self.owner
+        subscription = owner.subscribe_events()
+        if subscription is None:
+            self.respond(503, {"error": "Snapshot events are unavailable"})
+            return
+        client, initial = subscription
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store, no-transform")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("X-Accel-Buffering", "no")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(b"event: snapshot\ndata: " + canonical(initial) + b"\n\n")
+            self.wfile.flush()
+            revision = initial.get("revision")
+            while True:
+                snapshot = client.wait(15)
+                if snapshot is SnapshotEventClient.CLOSED:
+                    break
+                if snapshot is None:
+                    self.wfile.write(b": keepalive\n\n")
+                    self.wfile.flush()
+                    continue
+                if snapshot.get("revision") == revision:
+                    continue
+                self.wfile.write(b"event: snapshot\ndata: " + canonical(snapshot) + b"\n\n")
+                self.wfile.flush()
+                revision = snapshot.get("revision")
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+        finally:
+            owner.unsubscribe_events(client)
+
     def do_GET(self):
         owner = self.owner
         try:
@@ -1750,14 +1861,57 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(403, {"error": "Unadvertised request Host"})
                 return
             path = self.request_path()
+            if path == "/api/events":
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                self.stream_events()
+                return
             if path == "/api/identity":
                 if not self.authorized(owner.token):
                     self.respond(401, {"error": "Bearer authentication required"})
                     return
                 self.respond(200, {"instanceId": owner.instance_id, "run": str(owner.root)})
                 return
-            if self.server.shutdown_only:
-                self.respond(404, {"error": "Not found"})
+            if path == "/api/optimization/settings":
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                self.respond(200, optimization.load_settings(owner.studio, owner.root))
+                return
+            if path in ("/api/optimization", "/api/optimization/snapshot"):
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                projection = optimization.projection(owner.studio, owner.root)
+                projection["contentBase"] = f"/optimization/{owner.optimization_capability}"
+                self.respond(200, projection)
+                return
+            if path == "/api/optimization/example":
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                projection = optimization.ensure_examples(owner.studio, owner.root)
+                projection["contentBase"] = f"/optimization/{owner.optimization_capability}"
+                self.respond(200, projection)
+                return
+            if path.startswith("/optimization/"):
+                parts = path.split("/")
+                if (len(parts) not in (4, 5) or not secrets.compare_digest(parts[2], owner.optimization_capability)):
+                    self.respond(404, {"error": "Not found"})
+                    return
+                variant = parts[4] if len(parts) == 5 else "after"
+                result, content, content_type = optimization.read_content(owner.studio, owner.root, parts[3], variant)
+                content_type = mimetypes.guess_type(result["sourceName"])[0] or content_type
+                if variant == "gzip":
+                    content_type = "application/gzip"
+                elif variant == "brotli":
+                    content_type = "application/octet-stream"
+                safe_name = "".join(character if 32 <= ord(character) < 127 and character not in {'"', "\\"}
+                                     else "_" for character in Path(result["sourceName"]).name) or "optimized.bin"
+                self.respond(200, content, content_type,
+                             "default-src 'none'; frame-ancestors 'self'; base-uri 'none'",
+                             {"Content-Disposition": f'inline; filename="{safe_name}"'})
                 return
             if path.startswith("/api/reference/") or path.startswith("/api/references/"):
                 if not self.authorized(owner.token):
@@ -1901,7 +2055,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             path = self.request_path()
             shutdown = self.server.shutdown_only
-            if (shutdown and path != "/api/shutdown") or (not shutdown and path not in ("/api/approval", "/api/command", "/api/cancel", "/api/reconcile", "/api/usage", "/api/reference", "/api/references")):
+            if (shutdown and path != "/api/shutdown") or (not shutdown and path not in (
+                    "/api/approval", "/api/command", "/api/cancel", "/api/reconcile", "/api/usage",
+                    "/api/reference", "/api/references", "/api/optimization/settings",
+                    "/api/optimization/run", "/api/optimization/example")):
                 self.respond(404, {"error": "Not found"})
                 return
             if not self.authorized(owner.shutdown_token if shutdown else owner.token):
@@ -1932,6 +2089,18 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(200, reconcile_run(owner.studio, owner.root, payload))
             elif path == "/api/usage":
                 self.respond(200, record_usage(owner.studio, owner.root, payload))
+            elif path == "/api/optimization/settings":
+                settings = payload.get("settings", payload) if isinstance(payload, dict) else payload
+                self.respond(200, {"status": "PASS", "settings": optimization.save_settings(owner.studio, owner.root, settings)})
+            elif path == "/api/optimization/run":
+                result = optimization.run_optimization(
+                    owner.studio, owner.root, payload, reference_loader=owner.state.references)
+                result["contentBase"] = f"/optimization/{owner.optimization_capability}"
+                self.respond(200, result)
+            elif path == "/api/optimization/example":
+                result = optimization.ensure_examples(owner.studio, owner.root)
+                result["contentBase"] = f"/optimization/{owner.optimization_capability}"
+                self.respond(200, result)
             elif path in ("/api/reference", "/api/references"):
                 with records_lock(owner.studio, owner.root):
                     record, idempotent = owner.state.references.store(payload)
@@ -1957,13 +2126,53 @@ class DesignServer:
         self.repo = repo
         self._lan_addresses = validated_lan_addresses(studio, lan_addresses)
         self.lock_contended = False
-        self.token, self.preview_capability, self.shutdown_token = (secrets.token_urlsafe(32) for unused in range(3))
+        self.token, self.preview_capability, self.optimization_capability, self.shutdown_token = (
+            secrets.token_urlsafe(32) for unused in range(4))
         self.instance_id = secrets.token_hex(24)
         self.stop = threading.Event()
         self.closed = threading.Event()
         self.close_lock = threading.RLock()
         self.http = self.local = self.run_lock = self.temporary = self.state = None
         self.threads = []
+        self._event_clients = set()
+        self._events_lock = threading.Lock()
+        self._event_revision = None
+
+    def subscribe_events(self):
+        client = SnapshotEventClient()
+        with self.state.lock:
+            if self.stop.is_set() or self.closed.is_set():
+                return None
+            snapshot = self.state.snapshot()
+            with self._events_lock:
+                if self.stop.is_set() or self.closed.is_set():
+                    return None
+                self._event_clients.add(client)
+        return client, snapshot
+
+    def unsubscribe_events(self, client):
+        with self._events_lock:
+            self._event_clients.discard(client)
+        client.close()
+
+    def publish_event_snapshot(self, snapshot):
+        revision = snapshot.get("revision")
+        if not isinstance(revision, str):
+            return
+        with self._events_lock:
+            if self.stop.is_set() or self.closed.is_set() or revision == self._event_revision:
+                return
+            self._event_revision = revision
+            clients = tuple(self._event_clients)
+        for client in clients:
+            client.publish(snapshot)
+
+    def close_event_clients(self):
+        with self._events_lock:
+            clients = tuple(self._event_clients)
+            self._event_clients.clear()
+        for client in clients:
+            client.close()
 
     def dispatch_command(self, payload):
         from ui_design_studio.application import dispatch
@@ -2093,6 +2302,9 @@ class DesignServer:
                 return None
             private_json(self.studio, self.studio.safe_path(self.root, ".design-status.json", must_exist=False),
                          {**snapshot, "lines": status_lines(snapshot), "instanceId": self.instance_id})
+            if self.stop.is_set() or self.closed.is_set():
+                return None
+            self.publish_event_snapshot(snapshot)
             return snapshot
 
     def watch(self):
@@ -2134,6 +2346,7 @@ class DesignServer:
             if self.closed.is_set():
                 return
             self.stop.set()
+            self.close_event_clients()
             try:
                 for index, server in enumerate((self.http, self.local)):
                     if server:

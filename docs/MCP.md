@@ -95,6 +95,14 @@ Local usage records live in the selected run's private `usage.json`. Record one 
 
 Observed, estimated, not-billable, and unknown costs remain separate. Missing token counts remain `Unknown`; cache reads are not compression savings. Usage telemetry never changes hard budget enforcement.
 
+## Optimize retained resources
+
+Open the dashboard's **Optimization** tab. It runs real local transforms and stores before/after bytes, operation details, tool availability, compression artifacts, savings and recommendations.
+
+Supported representative types include PNG, JPEG, SVG, HTML, CSS, JavaScript, JSON, text and PDF. Optional `pngcrush`, `jpegoptim`, `optipng` and `svgomg`/`svgo` executables run only when present and only when their output is smaller. Built-in fallbacks never claim an external tool ran.
+
+Presets are `Balanced`, `Maximum savings`, `Lossless` and `Custom`. Gzip and optional Brotli artifacts are measured separately. Originals remain immutable.
+
 ## Print a verified address and QR code
 
 ```bash

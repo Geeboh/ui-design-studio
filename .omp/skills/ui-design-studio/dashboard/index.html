@@ -40,6 +40,7 @@
       <button id="nav-references" type="button" data-view="references" aria-controls="references-panel">References <span id="reference-count" class="nav-count" hidden></span></button>
       <button id="nav-approvals" type="button" data-view="approvals" aria-controls="approvals-panel">Approvals <span id="approval-count" class="nav-count" hidden></span></button>
       <button id="nav-usage" type="button" data-view="usage" aria-controls="usage-panel">Usage</button>
+      <button id="nav-optimization" type="button" data-view="optimization" aria-controls="optimization-panel">Optimization <span id="optimization-count" class="nav-count" hidden></span></button>
     </nav>
   </header>
 
@@ -264,6 +265,61 @@
           <section class="panel"><div class="panel-heading"><h4>OMP projects</h4><span class="muted">Folder totals</span></div><div class="table-scroll"><table><thead><tr><th scope="col">Project</th><th scope="col">Requests</th><th scope="col">Tokens</th><th scope="col">Cost</th></tr></thead><tbody id="omp-folder-rows"></tbody></table></div></section>
           <section class="panel"><div class="panel-heading"><h4>OMP agent types</h4><span class="muted">Main and subagent totals</span></div><div class="table-scroll"><table><thead><tr><th scope="col">Agent</th><th scope="col">Requests</th><th scope="col">Input</th><th scope="col">Cost</th></tr></thead><tbody id="omp-agent-rows"></tbody></table></div></section>
         </div>
+      </section>
+    </section>
+    <section id="optimization-panel" data-view-panel="optimization" aria-labelledby="optimization-heading" hidden aria-busy="true">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Measured asset transforms</p>
+          <h2 id="optimization-heading" tabindex="-1">Optimization</h2>
+          <p id="optimization-summary" class="muted">Loading real before and after bytes.</p>
+        </div>
+        <span id="optimization-status" class="status-badge" data-state="pending">Not loaded</span>
+      </div>
+      <form id="optimization-settings-form" class="optimization-settings" aria-describedby="optimization-help">
+        <p id="optimization-help" class="muted">Settings apply to the next run. Missing external tools use measured built-in fallbacks and are never reported as executed.</p>
+        <div class="optimization-control-grid">
+          <label for="optimization-preset">Preset <span class="help-tip" title="Presets set conservative defaults. Choose Custom to tune every value." aria-label="Preset help">?</span>
+            <select id="optimization-preset" name="preset">
+              <option value="balanced">Balanced</option>
+              <option value="maximum">Maximum savings</option>
+              <option value="lossless">Lossless</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label for="optimization-quality">Quality <output id="optimization-quality-value" for="optimization-quality">80</output>
+            <input id="optimization-quality" name="quality" type="range" min="1" max="100" value="80">
+          </label>
+          <label for="optimization-level">Compression level <output id="optimization-level-value" for="optimization-level">6</output>
+            <input id="optimization-level" name="level" type="range" min="0" max="9" value="6">
+          </label>
+          <label class="optimization-check"><input id="optimization-minify" name="minify" type="checkbox" checked> Minify text resources</label>
+          <label class="optimization-check"><input id="optimization-compress" name="compress" type="checkbox" checked> Create gzip/Brotli artifacts</label>
+        </div>
+        <fieldset>
+          <legend>Tools and fallbacks <span class="help-tip" title="External tools run only when the executable is available and output is smaller." aria-label="Tool help">?</span></legend>
+          <div id="optimization-tools" class="optimization-tools"></div>
+        </fieldset>
+        <div class="optimization-actions">
+          <button id="optimization-save" type="submit" class="button button-quiet">Save settings</button>
+          <button id="optimization-run" type="button" class="button button-primary">Run representative examples</button>
+          <span id="optimization-feedback" class="muted" role="status"></span>
+        </div>
+      </form>
+      <div class="optimization-summary-grid">
+        <section class="panel" aria-labelledby="optimization-recommendations-heading">
+          <div class="panel-heading"><h3 id="optimization-recommendations-heading">Recommendations</h3><span class="muted">Measured policy</span></div>
+          <ul id="optimization-recommendations" class="message-list"><li class="muted">No recommendations loaded.</li></ul>
+        </section>
+        <section class="panel" aria-labelledby="optimization-availability-heading">
+          <div class="panel-heading"><h3 id="optimization-availability-heading">Tool availability</h3><span class="muted">Current host</span></div>
+          <ul id="optimization-availability" class="optimization-availability"><li class="muted">No tool data loaded.</li></ul>
+        </section>
+      </div>
+      <section class="panel" aria-labelledby="optimization-gallery-heading">
+        <div class="panel-heading"><h3 id="optimization-gallery-heading">Representative outputs</h3><span id="optimization-gallery-count" class="muted">No results loaded</span></div>
+        <p class="muted">Each card links to bytes persisted by this run. Savings are measured from those files, not estimates.</p>
+        <div id="optimization-gallery" class="optimization-gallery"><p class="empty-state">No optimization results loaded.</p></div>
       </section>
     </section>
   </main>

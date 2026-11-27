@@ -421,11 +421,28 @@ function linesFor(status: Snapshot): string[] {
 		`Blocker ${status.blockers.length ? status.blockers.join(" | ") : "none reported"}`,
 	];
 	if (status.warnings.length) lines.push(`Warning ${status.warnings.join(" | ")}`);
-	// OMP wraps each Text row. One unmodified URL row stays below the ten-row limit.
 	lines.push(status.url);
 	return lines;
 }
 
+function exportTasks(session: Session, run: Run & { source: "auto" | "explicit" }): void {
+	if (!session.tasks || session.exported === session.tasks) return;
+	if (readRun(run.root).id !== run.id) throw new Error("The active design run changed identity.");
+	if (run.source === "explicit") {
+		const director = objectFields(readJson(join(run.root, "progress-pi-tasks-director.json")));
+		if (director?.runId !== run.id || director.sessionId !== session.id) return;
+	}
+	const directory = join(run.root, run.source === "explicit" ? "progress-pi-tasks" : "progress-pi-tasks-observer");
+	try { mkdirSync(directory, { mode: 0o700 }); }
+	catch (error) {
+		if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") throw error;
+	}
+	const key = createHash("sha256").update(session.id).digest("hex");
+	writeProgress(run.root, join(directory, `${key}.json`), {
+		...session.tasks, sessionId: session.id, runId: run.id, updatedAt: new Date().toISOString(),
+	});
+	session.exported = session.tasks;
+}
 function writeProgress(root: string, destination: string, value: JsonObject): void {
 	plainDirectory(root);
 	plainDirectory(dirname(destination));
@@ -448,22 +465,6 @@ function writeProgress(root: string, destination: string, value: JsonObject): vo
 	}
 }
 
-function exportTasks(session: Session, run: Run & { source: "auto" | "explicit" }): void {
-	if (run.source !== "explicit" || !session.tasks || session.exported === session.tasks) return;
-	if (readRun(run.root).id !== run.id) throw new Error("The active design run changed identity.");
-	const director = objectFields(readJson(join(run.root, "progress-pi-tasks-director.json")));
-	if (director?.runId !== run.id || director.sessionId !== session.id) return;
-	const directory = join(run.root, "progress-pi-tasks");
-	try { mkdirSync(directory, { mode: 0o700 }); }
-	catch (error) {
-		if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") throw error;
-	}
-	const key = createHash("sha256").update(session.id).digest("hex");
-	writeProgress(run.root, join(directory, `${key}.json`), {
-		...session.tasks, sessionId: session.id, runId: run.id, updatedAt: new Date().toISOString(),
-	});
-	session.exported = session.tasks;
-}
 
 function shellQuote(path: string): string {
 	return `'${path.replaceAll("'", "'\\''")}'`;

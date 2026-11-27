@@ -357,6 +357,21 @@ class DashboardBrowserTests(unittest.TestCase):
         expect(page.locator("#viewer-content img")).to_be_visible()
         self.assertGreater(image.evaluate("(node) => node.naturalWidth"), 0)
 
+    def test_optimization_tab_shows_measured_examples_and_controls(self):
+        root = self.new_run()
+        self.backend.optimization.ensure_examples(self.engine, root)
+        server = self.backend.DesignServer(self.engine, root, interval=0.05)
+        self.addCleanup(server.close)
+        server.start()
+        page = self.page()
+        page.goto(server.url)
+        expect(page.locator("#connection-status")).to_have_text("Connected")
+        page.locator("#nav-optimization").click()
+        expect(page.locator("#optimization-heading")).to_be_visible()
+        expect(page.locator(".optimization-card")).not_to_have_count(0)
+        expect(page.locator("#optimization-run")).to_be_enabled()
+        expect(page.locator("#optimization-recommendations li")).not_to_have_count(0)
+
     def test_usage_panel_shows_recorded_tokens_and_cost(self):
         root = self.new_run()
         self.backend.record_usage(self.engine, root, {
