@@ -313,11 +313,11 @@ def _observer_is_current(record, path, run_id):
     session_id = record.get("sessionId")
     if not isinstance(session_id, str) or not session_id.strip() or digest(session_id.encode("utf-8")) != path.stem:
         return False
-    updated_at = record.get("updatedAt")
-    if not isinstance(updated_at, str):
+    observed_at = record.get("observedAt") or record.get("updatedAt")
+    if not isinstance(observed_at, str):
         return False
     try:
-        observed = dt.datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+        observed = dt.datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
     except ValueError:
         return False
     if observed.tzinfo is None:

@@ -30,6 +30,7 @@ const MAX_READINESS_BYTES = 128 * 1024;
 const STARTUP_MS = 8_000;
 const MAX_RESTARTS = 3;
 const OBSERVER_MAX_AGE_MS = 15_000;
+const OBSERVER_REFRESH_MS = 5_000;
 
 // The bundled host has no resolvable package types in offline installations.
 // This subset follows the public docs/extensions.md contract and is checked at entry.
@@ -126,6 +127,7 @@ type Session = {
 	opening: Promise<void> | undefined;
 	tasks: PiTasks | undefined;
 	exported: PiTasks | undefined;
+	lastObserverWrite: number;
 	lastLines: string;
 	lastReport: number;
 	stopTimer: () => void;
@@ -429,10 +431,10 @@ function linesFor(status: Snapshot): string[] {
 function observerRecord(value: unknown, runId: string, now = Date.now()): boolean {
 	const fields = objectFields(value);
 	const sessionId = fields?.sessionId;
-	const updatedAt = fields?.updatedAt;
+	const observedAt = fields?.observedAt ?? fields?.updatedAt;
 	if (!fields || fields.runId !== runId || typeof sessionId !== "string" || !sessionId
-		|| typeof updatedAt !== "string" || !Number.isFinite(Date.parse(updatedAt)) || now - Date.parse(updatedAt) > OBSERVER_MAX_AGE_MS
-		|| Date.parse(updatedAt) - now > 5_000 || !piTasks(value)) return false;
+		|| typeof observedAt !== "string" || !Number.isFinite(Date.parse(observedAt)) || now - Date.parse(observedAt) > OBSERVER_MAX_AGE_MS
+		|| Date.parse(observedAt) - now > 5_000 || !piTasks(value)) return false;
 	return createHash("sha256").update(sessionId).digest("hex") === fields.fileKey;
 }
 
@@ -470,14 +472,17 @@ function exportTasks(session: Session, run: Run & { source: "auto" | "explicit" 
 		if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") throw error;
 	}
 	const key = createHash("sha256").update(session.id).digest("hex");
-	if (run.source === "auto") pruneObserverFiles(run.root, run.id);
 	const destination = join(directory, `${key}.json`);
-	if (!session.tasks || session.exported === session.tasks) return;
+	const now = Date.now();
+	const refreshDue = run.source === "auto" && now - session.lastObserverWrite >= OBSERVER_REFRESH_MS;
+	if (!session.tasks || (session.exported === session.tasks && !refreshDue)) return;
 	const sourceUpdatedAt = objectFields(session.tasks.state)?.lastUpdatedAt;
 	const value: JsonObject = { ...session.tasks, sessionId: session.id, runId: run.id };
 	if (typeof sourceUpdatedAt === "string" && Number.isFinite(Date.parse(sourceUpdatedAt))) value.updatedAt = sourceUpdatedAt;
+	if (run.source === "auto") value.observedAt = new Date(now).toISOString();
 	writeProgress(run.root, destination, value);
 	session.exported = session.tasks;
+	session.lastObserverWrite = now;
 }
 function writeProgress(root: string, destination: string, value: JsonObject): void {
 	plainDirectory(root);
@@ -1148,7 +1153,7 @@ export default function designProgress(value: unknown): void {
 		const session: Session = { context, id, project, runs: undefined, run: undefined, dashboardId: undefined, dashboardGeneration: 0,
 			dashboard: { kind: "idle" }, children: new Set(), banners: 0, resumeRun: undefined, discoveredRuns: new Set(), opening: undefined,
 			discoveryProof: { kind: "none" },
-			tasks, exported: undefined, lastLines: "", lastReport: 0, stopTimer: () => {} };
+			tasks, exported: undefined, lastObserverWrite: 0, lastLines: "", lastReport: 0, stopTimer: () => {} };
 		lifecycle = { kind: "active", session };
 		if (context.setInterval && context.clearTimer) {
 			const timer = context.setInterval(refresh, POLL_MS);

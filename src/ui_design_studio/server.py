@@ -145,17 +145,34 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
                 )
             elif existing["project_id"] != bound_project:
                 raise ValueError("Run command projection belongs to a different repository")
+            else:
+                changed = connection.execute(
+                    "UPDATE runs SET status = ?, stage = ?, revision = revision + 1, payload_json = ? "
+                    "WHERE run_id = ? AND project_id = ?",
+                    (
+                        document.get("status", "pending"),
+                        document.get("phase", "assessment"),
+                        json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False),
+                        run_id,
+                        bound_project,
+                    ),
+                ).rowcount
+                if changed != 1:
+                    raise ValueError("Run command projection could not be refreshed")
             return OperationResult(
                 {"runId": run_id, "projectId": bound_project},
                 (EventDraft(run_id, "RunProjectionSynchronized", {"runId": run_id, "projectId": bound_project}),),
             )
 
+        projection_key = hashlib.sha256(
+            json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
         command_store.run_operation(
             realm=bound_project,
             actor=bound_actor["principal"],
             command="run.create",
-            idempotency_key="run-create-" + run_id,
-            request={"runId": run_id, "run": document},
+            idempotency_key="run-sync-" + projection_key,
+            request={"runId": run_id, "projectionSha256": projection_key},
             callback=apply,
         )
     def public_mutation(command: str, run_root: Path | None, payload: dict[str, Any],
@@ -165,6 +182,7 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
             run_id = document.get("id")
             if not isinstance(run_id, str) or not run_id:
                 raise ValueError("Run identity is missing")
+            sync_command_projection(run_root)
         else:
             run_id = "project"
         request = {"runId": run_id, **payload}
@@ -177,10 +195,20 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
         else:
             idempotency_key = "call-" + secrets.token_hex(16)
 
-        def apply(_connection):
+        def apply(connection):
             result = callback()
             if not isinstance(result, dict):
                 raise OperationRejected("INVALID_RESULT", "Public mutation returned an invalid result")
+            if run_root is not None:
+                updated = engine.read_json(engine.safe_path(run_root, "run.json"))
+                encoded = json.dumps(updated, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+                changed = connection.execute(
+                    "UPDATE runs SET status = ?, stage = ?, revision = revision + 1, payload_json = ? "
+                    "WHERE run_id = ? AND project_id = ?",
+                    (updated.get("status", "pending"), updated.get("phase", "assessment"), encoded, run_id, bound_project),
+                ).rowcount
+                if changed != 1:
+                    raise OperationRejected("STATE_CONFLICT", "Run projection was not updated")
             return OperationResult(result, (
                 EventDraft(run_id, command, {"runId": run_id, "command": command}),
             ))
@@ -302,8 +330,14 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
         payload = dict(payload)
         if payload.get("projectId") not in (None, bound_project):
             raise ValueError("Command payload project scope is bound to this MCP adapter")
-        if envelope.get("command") in {"project.initialize", "run.create"}:
+        command = envelope.get("command")
+        if command in {"project.initialize", "run.create"}:
             payload["projectId"] = bound_project
+        if command == "project.initialize":
+            for field, expected in (("sourceRoot", str(root)), ("stateRoot", str(state_directory))):
+                if payload.get(field) not in (None, expected):
+                    raise ValueError(f"Command {field} is bound to this MCP adapter")
+                payload[field] = expected
         bound = {**envelope, "actor": bound_actor, "scope": {**scope, "projectId": bound_project}, "payload": payload}
         return dispatch(command_store, bound)
 
@@ -484,8 +518,11 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
     def ui_design_artwork(run: str, file: str, context: str, title: str | None = None) -> dict[str, Any]:
         """Retain artwork. file is repository-relative, inside the selected run or its active configured theme."""
         run_root = path_in(run, "run")
+        content_digest = engine.sha_file(engine.safe_path(root, file))
         return public_mutation(
-            "run.artwork", run_root, {"file": file, "context": context, "title": title},
+            "run.artwork",
+            run_root,
+            {"file": file, "contentSha256": content_digest, "context": context, "title": title},
             lambda: design.publish_artwork(design.studio, run_root, file, context, title, repo=root),
         )
 

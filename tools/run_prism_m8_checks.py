@@ -22,7 +22,10 @@ def artifacts() -> list[Path]:
     ]
 
 
-def main() -> int:
+    source_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, capture_output=True, check=False
+    ).stdout.strip()
+    manifest_sha256 = hashlib.sha256((ROOT / "MANIFEST.sha256").read_bytes()).hexdigest()
     expected = artifacts()
     missing = [str(path) for path in expected if not path.is_file()]
     manifest = subprocess.run(
@@ -41,7 +44,8 @@ def main() -> int:
     receipt.parent.mkdir(parents=True, exist_ok=True)
     receipt.write_text(
         f"status: {'passed' if code == 0 else 'failed'}\n"
-        f"observedAt: {datetime.now(timezone.utc).isoformat()}\n"
+        f"sourceCommit: {source_commit}\n"
+        f"manifestSha256: {manifest_sha256}\n"
         f"missing: {missing}\n"
         f"manifest:\n{manifest.stdout}{manifest.stderr}\n"
         f"sha256: {checksums}\n",

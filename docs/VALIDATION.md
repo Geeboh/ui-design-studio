@@ -3,11 +3,12 @@
 ## Version 2.0.10 candidate · 27 November 2026 UTC
 
 This release record covers the PRISM Studio rebuild, the standalone MCP adapter, the project-local installer, the authenticated dashboard, and release packaging. Human participant research remains deferred by project policy.
+The M8 gate receipt records the exact source commit and manifest digest used for artifact verification. Historical validation sections below are retained as historical records.
 
 | Check | Observed result | Scope |
 | --- | --- | --- |
 | Core and web receipts | PASS | M0-M8 focused gates on the clean candidate |
-| Full Python suite | PASS; 386 tests and 230 subtests | `tests`, excluding the browser matrix |
+| Full Python suite | PASS; 387 tests and 230 subtests | `tests`, excluding the browser matrix |
 | Dashboard browser matrix | PASS; 15 tests each | Chromium, Firefox, and WebKit |
 | Standalone OMP host regression | PASS; 53 tests | Live no-tools RPC readiness and UI Design Studio discovery |
 | Python distributions | PASS | Wheel, sdist, and source ZIP built from the current source |
