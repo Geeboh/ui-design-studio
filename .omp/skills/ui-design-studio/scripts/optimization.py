@@ -544,11 +544,14 @@ def _write_result(studio: Any, root: Path, source: dict[str, Any], settings: dic
 
 
 def _example_sources() -> list[dict[str, Any]]:
-    # Small deterministic bytes. They are intentionally real file formats.
+    # Deterministic real formats with high-contrast, multi-color visual coverage.
     png = bytes.fromhex("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cfc000000301010018dd8db40000000049454e44ae426082")
+    jpeg = base64.b64decode("/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYzLjIwLjEwMQD/2wBDAAgQEBMQExYWFhYWFhoYGhsbGxoaGhobGxsdHR0iIiIdHR0bGx0dICAiIiUmJSMjIiMmJigoKDAwLi44ODpFRVP/xABMAAEBAAAAAAAAAAAAAAAAAAAABgEBAQAAAAAAAAAAAAAAAAAABgcQAQAAAAAAAAAAAAAAAAAAAAARAQAAAAAAAAAAAAAAAAAAAAD/wAARCAAIAAgDASIAAhEAAxEA/9oADAMBAAIRAxEAPwCLAE1/f//Z")
+    svg = b"""<svg xmlns="http://www.w3.org/2000/svg" width="480" height="240" viewBox="0 0 480 240"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#16324f"/><stop offset=".5" stop-color="#e85d75"/><stop offset="1" stop-color="#f2c14e"/></linearGradient></defs><rect width="480" height="240" fill="url(#g)"/><circle cx="90" cy="120" r="58" fill="#07111f" stroke="#fff" stroke-width="5"/><circle cx="240" cy="120" r="58" fill="#fff" fill-opacity=".08" stroke="#07111f" stroke-width="5"/><path d="M330 180L390 50l60 130z" fill="#2ec4b6" stroke="#07111f" stroke-width="8" onclick="bad()"/></svg>"""
     return [
         {"sourceName": "sample.png", "data": png},
-        {"sourceName": "sample.svg", "data": b"<?xml version=\"1.0\"?><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\"> <!-- keep shape --> <rect width=\"24\" height=\"24\" fill=\"#3366ff\" onclick=\"bad()\"/> </svg>"},
+        {"sourceName": "sample.jpeg", "data": jpeg},
+        {"sourceName": "sample.svg", "data": svg},
         {"sourceName": "sample.html", "data": b"<!doctype html>\n<html> <head> <title> Sample </title> </head> <body>  <h1>Hello</h1> <!-- remove --> </body> </html>"},
         {"sourceName": "sample.css", "data": b"/* theme */\n.card { color: #3366ff; padding: 8px 8px; }\n"},
         {"sourceName": "sample.js", "data": b"// greeting\nfunction greet(name) { return \"Hello, \" + name; }\n"},

@@ -37,9 +37,8 @@ class OptimizationTests(unittest.TestCase):
                 self.assertTrue(operations)
                 self.assertIn("gzip", artifacts)
 
-    def test_examples_cover_resource_types(self) -> None:
         names = {item["sourceName"] for item in optimization._example_sources()}
-        self.assertEqual(names, {"sample.png", "sample.svg", "sample.html", "sample.css", "sample.js", "sample.json", "sample.txt", "sample.pdf"})
+        self.assertEqual(names, {"sample.png", "sample.jpeg", "sample.svg", "sample.html", "sample.css", "sample.js", "sample.json", "sample.txt", "sample.pdf"})
 
 
 if __name__ == "__main__":
