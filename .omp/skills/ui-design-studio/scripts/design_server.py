@@ -69,6 +69,68 @@ MAX_ANNOTATIONS = 256
 ATTACHMENT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._ -]{0,159}\Z")
 ATTACHMENT_MIME = {"image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "image/webp": ".webp"}
 ANNOTATION_TOOLS = {"arrow", "line", "curve", "rectangle", "ellipse", "text"}
+REFERENCE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
+REFERENCE_CATEGORIES = frozenset({"reference", "design", "concept", "inspiration"})
+REFERENCE_NAME = re.compile(r"[^\x00-\x1f\x7f-\x9f/\\]{1,255}\Z")
+MAX_REFERENCE_BYTES = 8 * 1024 * 1024
+REFERENCE_TYPES = {
+    ".html": ("text/html", "html"), ".htm": ("text/html", "html"),
+    ".pdf": ("application/pdf", "pdf"),
+    ".txt": ("text/plain", "text"), ".text": ("text/plain", "text"),
+    ".md": ("text/markdown", "text"), ".markdown": ("text/markdown", "text"),
+    ".json": ("application/json", "text"), ".csv": ("text/csv", "text"),
+    ".xml": ("application/xml", "text"), ".css": ("text/css", "text"),
+    ".js": ("text/javascript", "text"), ".mjs": ("text/javascript", "text"),
+    ".cjs": ("text/javascript", "text"), ".ts": ("text/typescript", "text"),
+    ".tsx": ("text/typescript", "text"), ".mts": ("text/typescript", "text"),
+    ".cts": ("text/typescript", "text"),
+    ".png": ("image/png", "image"), ".jpg": ("image/jpeg", "image"),
+    ".jpeg": ("image/jpeg", "image"), ".gif": ("image/gif", "image"),
+    ".webp": ("image/webp", "image"), ".avif": ("image/avif", "image"),
+    ".svg": (SVG_CONTENT_TYPE, "svg"),
+    ".doc": ("application/msword", "download"),
+    ".docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "download"),
+    ".xls": ("application/vnd.ms-excel", "download"),
+    ".xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "download"),
+    ".ppt": ("application/vnd.ms-powerpoint", "download"),
+    ".pptx": ("application/vnd.openxmlformats-officedocument.presentationml.presentation", "download"),
+    ".odt": ("application/vnd.oasis.opendocument.text", "download"),
+    ".ods": ("application/vnd.oasis.opendocument.spreadsheet", "download"),
+    ".odp": ("application/vnd.oasis.opendocument.presentation", "download"),
+    ".rtf": ("application/rtf", "download"),
+    ".zip": ("application/zip", "download"), ".tar": ("application/x-tar", "download"),
+    ".gz": ("application/gzip", "download"), ".tgz": ("application/gzip", "download"),
+    ".7z": ("application/x-7z-compressed", "download"), ".rar": ("application/vnd.rar", "download"),
+}
+REFERENCE_MIME_ALIASES = {
+    ".html": {"text/html"}, ".htm": {"text/html"},
+    ".pdf": {"application/pdf"},
+    ".txt": {"text/plain"}, ".text": {"text/plain"},
+    ".md": {"text/markdown", "text/x-markdown"}, ".markdown": {"text/markdown", "text/x-markdown"},
+    ".json": {"application/json", "text/json"}, ".csv": {"text/csv", "application/csv"},
+    ".xml": {"application/xml", "text/xml"}, ".css": {"text/css"},
+    ".js": {"text/javascript", "application/javascript"}, ".mjs": {"text/javascript", "application/javascript"},
+    ".cjs": {"text/javascript", "application/javascript"}, ".ts": {"text/typescript", "application/typescript"},
+    ".tsx": {"text/typescript", "application/typescript"}, ".mts": {"text/typescript", "application/typescript"},
+    ".cts": {"text/typescript", "application/typescript"},
+    ".png": {"image/png"}, ".jpg": {"image/jpeg"}, ".jpeg": {"image/jpeg"},
+    ".gif": {"image/gif"}, ".webp": {"image/webp"}, ".avif": {"image/avif"},
+    ".svg": {SVG_CONTENT_TYPE},
+    ".doc": {"application/msword"}, ".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+    ".xls": {"application/vnd.ms-excel"}, ".xlsx": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+    ".ppt": {"application/vnd.ms-powerpoint"}, ".pptx": {"application/vnd.openxmlformats-officedocument.presentationml.presentation"},
+    ".odt": {"application/vnd.oasis.opendocument.text"}, ".ods": {"application/vnd.oasis.opendocument.spreadsheet"},
+    ".odp": {"application/vnd.oasis.opendocument.presentation"}, ".rtf": {"application/rtf", "text/rtf"},
+    ".zip": {"application/zip"}, ".tar": {"application/x-tar"}, ".gz": {"application/gzip", "application/x-gzip"},
+    ".tgz": {"application/gzip", "application/x-gzip"}, ".7z": {"application/x-7z-compressed"},
+    ".rar": {"application/vnd.rar", "application/x-rar-compressed"},
+}
+REFERENCE_INLINE_EXTENSIONS = frozenset(
+    extension for extension, (_, kind) in REFERENCE_TYPES.items() if kind in {"html", "pdf", "image", "svg"}
+)
+REFERENCE_TEXT_EXTENSIONS = frozenset(
+    extension for extension, (_, kind) in REFERENCE_TYPES.items() if kind == "text"
+)
 def _usage_backend():
     if not hasattr(_usage_backend, "module"):
         path = Path(__file__).with_name("usage.py")
@@ -244,6 +306,155 @@ class FileLock:
 def records_lock(studio, root):
     with FileLock(Path(root) / ".design-records.lock", studio, blocking=True):
         yield
+
+class ReferenceConflict(Exception):
+    pass
+
+
+class ReferenceLibrary:
+    RECORD_KEYS = frozenset({"schemaVersion", "id", "category", "title", "notes", "originalName",
+                             "extension", "mimeType", "bytes", "sha256", "createdAt", "path"})
+
+    def __init__(self, studio, root):
+        self.studio, self.root = studio, Path(root)
+        self.directory = studio.safe_path(root, "references", must_exist=False, allow_dir=True)
+
+    def _target(self, reference_id, *, must_exist=False):
+        need(self.studio, isinstance(reference_id, str) and REFERENCE_ID.fullmatch(reference_id),
+             "Reference ID must contain only letters, numbers, dots, underscores or hyphens")
+        return self.studio.safe_path(self.directory, reference_id, must_exist=must_exist, allow_dir=True)
+
+    def _validate_record(self, record, source):
+        need(self.studio, isinstance(record, dict) and set(record) == self.RECORD_KEYS,
+             "Reference record fields are invalid")
+        need(self.studio, record["schemaVersion"] == "1.0"
+             and isinstance(record["id"], str) and REFERENCE_ID.fullmatch(record["id"])
+             and isinstance(record["category"], str) and record["category"] in REFERENCE_CATEGORIES,
+             "Reference identity is invalid")
+        need(self.studio, isinstance(record["title"], str) and 1 <= len(record["title"]) <= 200,
+             "Reference title is invalid")
+        need(self.studio, isinstance(record["notes"], str) and len(record["notes"]) <= 4000,
+             "Reference notes are invalid")
+        need(self.studio, isinstance(record["originalName"], str) and REFERENCE_NAME.fullmatch(record["originalName"]),
+             "Reference original name is invalid")
+        extension = Path(record["originalName"]).suffix.lower()
+        need(self.studio, extension == record["extension"] and extension in REFERENCE_TYPES,
+             "Reference extension is not supported")
+        need(self.studio, record["mimeType"] == REFERENCE_TYPES[extension][0],
+             "Reference MIME type is invalid")
+        need(self.studio, isinstance(record["bytes"], int) and not isinstance(record["bytes"], bool)
+             and 1 <= record["bytes"] <= MAX_REFERENCE_BYTES,
+             "Reference byte count is invalid")
+        need(self.studio, isinstance(record["sha256"], str) and HASH.fullmatch(record["sha256"]),
+             "Reference digest is invalid")
+        need(self.studio, isinstance(record["createdAt"], str) and record["createdAt"].strip(), "Reference timestamp is invalid")
+        try:
+            parsed = dt.datetime.fromisoformat(record["createdAt"].replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise self.studio.StudioError("Reference timestamp is invalid") from exc
+        need(self.studio, parsed.tzinfo is not None, "Reference timestamp must include timezone")
+        expected_path = f"references/{record['id']}/source"
+        need(self.studio, record["path"] == expected_path, "Reference path is invalid")
+        need(self.studio, source.is_file() and not source.is_symlink(), "Reference source is not a regular file")
+        observed = source.read_bytes()
+        need(self.studio, len(observed) == record["bytes"] and digest(observed) == record["sha256"],
+             "Reference bytes changed")
+        return record
+
+    def record(self, reference_id):
+        target = self._target(reference_id, must_exist=True)
+        record = self.studio.read_json(self.studio.safe_path(target, "record.json"))
+        source = self.studio.safe_path(target, "source")
+        return self._validate_record(record, source)
+
+    def file(self, reference_id):
+        record = self.record(reference_id)
+        return record, self.studio.safe_path(self._target(reference_id, must_exist=True), "source").read_bytes()
+
+    def records(self):
+        if not self.directory.exists() or not self.directory.is_dir():
+            return []
+        records = []
+        for target in sorted(self.directory.iterdir(), key=lambda path: path.name):
+            if target.is_symlink() or not target.is_dir() or not REFERENCE_ID.fullmatch(target.name):
+                continue
+            try:
+                records.append(self.record(target.name))
+            except (self.studio.StudioError, OSError, UnicodeError, ValueError, TypeError, KeyError):
+                continue
+        return sorted(records, key=lambda item: (item["createdAt"], item["id"]))
+
+    def store(self, payload):
+        need(self.studio, isinstance(payload, dict), "Reference body must be an object")
+        allowed = {"id", "category", "title", "notes", "originalName", "extension", "mimeType",
+                   "bytes", "sha256", "data"}
+        required = {"id", "category", "title", "originalName", "mimeType", "data"}
+        need(self.studio, set(payload).issubset(allowed) and required.issubset(payload),
+             "Reference body contains unsupported or missing fields")
+        reference_id = payload["id"]
+        need(self.studio, isinstance(reference_id, str) and REFERENCE_ID.fullmatch(reference_id),
+             "Reference ID is invalid")
+        category = payload["category"]
+        need(self.studio, category in REFERENCE_CATEGORIES, "Reference category is invalid")
+        title = payload["title"]
+        notes = payload.get("notes", "")
+        need(self.studio, isinstance(title, str) and title.strip() and len(title.strip()) <= 200,
+             "Reference title is invalid")
+        need(self.studio, isinstance(notes, str) and len(notes) <= 4000, "Reference notes are invalid")
+        original_name = payload["originalName"]
+        need(self.studio, isinstance(original_name, str) and original_name == original_name.strip()
+             and REFERENCE_NAME.fullmatch(original_name), "Reference original name is invalid")
+        extension = Path(original_name).suffix.lower()
+        need(self.studio, extension in REFERENCE_TYPES, "Reference file type is not supported")
+        if "extension" in payload:
+            need(self.studio, payload["extension"] == extension, "Reference extension does not match file name")
+        mime_type = payload["mimeType"]
+        need(self.studio, isinstance(mime_type, str) and mime_type.lower() in REFERENCE_MIME_ALIASES[extension],
+             "Reference MIME type does not match file type")
+        encoded = payload["data"]
+        need(self.studio, isinstance(encoded, str) and encoded, "Reference data is required")
+        try:
+            content = base64.b64decode(encoded, validate=True)
+        except (ValueError, base64.binascii.Error) as exc:
+            raise self.studio.StudioError("Reference data must be valid base64") from exc
+        need(self.studio, 1 <= len(content) <= MAX_REFERENCE_BYTES, "Reference size exceeds supported limit")
+        observed_digest = digest(content)
+        if "bytes" in payload:
+            need(self.studio, isinstance(payload["bytes"], int) and not isinstance(payload["bytes"], bool)
+                 and payload["bytes"] == len(content), "Reference byte count does not match data")
+        if "sha256" in payload:
+            need(self.studio, isinstance(payload["sha256"], str) and HASH.fullmatch(payload["sha256"])
+                 and payload["sha256"] == observed_digest, "Reference digest does not match data")
+        record = {"schemaVersion": "1.0", "id": reference_id, "category": category,
+                  "title": title.strip(), "notes": notes, "originalName": original_name,
+                  "extension": extension, "mimeType": REFERENCE_TYPES[extension][0], "bytes": len(content),
+                  "sha256": observed_digest, "createdAt": timestamp(),
+                  "path": f"references/{reference_id}/source"}
+        target = self._target(reference_id, must_exist=False)
+        if target.exists():
+            try:
+                existing = self.record(reference_id)
+            except (self.studio.StudioError, OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
+                raise ReferenceConflict("Reference ID already exists with an invalid record") from exc
+            immutable = {key: existing[key] for key in self.RECORD_KEYS if key != "createdAt"}
+            expected = {key: record[key] for key in self.RECORD_KEYS if key != "createdAt"}
+            if immutable != expected:
+                raise ReferenceConflict("Reference ID already exists with different content")
+            return existing, True
+        self.directory.mkdir(parents=True, exist_ok=True)
+        temporary = Path(tempfile.mkdtemp(prefix=".reference-", dir=self.directory))
+        try:
+            source = temporary / "source"
+            self.studio.atomic_bytes(source, content, 0o600)
+            self.studio.atomic_json(temporary / "record.json", record)
+            os.chmod(temporary / "record.json", 0o600)
+            os.replace(temporary, target)
+        except BaseException:
+            if temporary.exists():
+                shutil.rmtree(temporary)
+            raise
+        return record, False
+
 
 
 def private_json(studio, path, value):
@@ -1043,6 +1254,7 @@ class DesignState:
         self.preview_capability = preview_capability
         self.started_at = timestamp()
         self.library = ArtworkLibrary(studio, self.root, repo)
+        self.references = ReferenceLibrary(studio, self.root)
         self.omp_usage = _usage_backend().OMPUsageProbe(self.root)
         self.lock = threading.RLock()
         self.history = []
@@ -1075,8 +1287,8 @@ class DesignState:
                                   for stage in ("assessment", "plan", "design", "produce", "finalize")],
                         "coverage": {"required": 0, "mockups": 0, "verified": 0, "inventoryComplete": False},
                         "nextAction": "Repair the run records before continuing.", "blockers": [message], "warnings": [message],
-                        "workers": [], "tasks": [], "statistics": {"artworks": 0, "workers": 0, "tasks": 0, "evidence": 0, "passedEvidence": 0, "elapsedSeconds": 0},
-                        "history": list(self.history), "artworks": [], "evidence": [], "approvals": [], "decisions": []}
+                        "workers": [], "tasks": [], "statistics": {"artworks": 0, "references": 0, "workers": 0, "tasks": 0, "evidence": 0, "passedEvidence": 0, "elapsedSeconds": 0},
+                        "history": list(self.history), "artworks": [], "references": [], "evidence": [], "approvals": [], "decisions": []}
 
     def _snapshot(self):
         studio, root = self.studio, self.root
@@ -1104,6 +1316,12 @@ class DesignState:
             item = {key: art[key] for key in ("id", "path", "title", "context", "kind", "createdAt", "version")}
             item["url"] = f"preview/{self.preview_capability}/{art['version']}/" + quote(art["path"], safe="/") if self.preview_capability else ""
             published_art.append(item)
+        published_references = []
+        for reference in self.references.records():
+            item = dict(reference)
+            item["url"] = f"reference/{self.preview_capability}/{quote(reference['id'], safe='')}" if self.preview_capability else ""
+            item["downloadUrl"] = item["url"]
+            published_references.append(item)
         published_evidence = []
         for entry in evidence:
             if isinstance(entry, dict):
@@ -1239,8 +1457,8 @@ class DesignState:
                     "id", "themeId", "mode", "phase", "status", "scope", "scopeSchemaVersion", "scopeRationale")},
                 "server": self.server_details(), "gates": gates, "coverage": counts,
                 "nextAction": next_action, "blockers": blockers, "warnings": warnings, "workers": workers, "tasks": tasks,
-                "statistics": {"artworks": len(published_art), "workers": len(workers), "tasks": len(tasks), "evidence": len(evidence), "passedEvidence": len(fresh), "elapsedSeconds": elapsed},
-                "artworks": published_art, "evidence": published_evidence, "approvals": approvals,
+                "statistics": {"artworks": len(published_art), "references": len(published_references), "workers": len(workers), "tasks": len(tasks), "evidence": len(evidence), "passedEvidence": len(fresh), "elapsedSeconds": elapsed},
+                "artworks": published_art, "references": published_references, "evidence": published_evidence, "approvals": approvals,
                 "decisions": [{key: decision[key] for key in ("stage", "actor", "outcome", "rationale", "recordedAt", "optionId", "inputsDigest", "attachments", "annotations") if key in decision}
                               for decision in decisions["decisions"]]}
         snap["usage"] = usage
@@ -1541,6 +1759,15 @@ class Handler(BaseHTTPRequestHandler):
             if self.server.shutdown_only:
                 self.respond(404, {"error": "Not found"})
                 return
+            if path.startswith("/api/reference/") or path.startswith("/api/references/"):
+                if not self.authorized(owner.token):
+                    self.respond(401, {"error": "Bearer authentication required"})
+                    return
+                self.reference(path, authenticated=True)
+                return
+            if path.startswith("/reference/"):
+                self.reference(path, authenticated=False)
+                return
             if path == "/api/snapshot":
                 if not self.authorized(owner.token):
                     self.respond(401, {"error": "Bearer authentication required"})
@@ -1614,6 +1841,58 @@ class Handler(BaseHTTPRequestHandler):
         csp = f"sandbox; default-src 'none'; script-src 'none'; style-src 'unsafe-inline' {source}; img-src {source} data:; font-src {source} data:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
         self.respond(200, content, content_type, csp, {"Access-Control-Allow-Origin": "*", "Cross-Origin-Resource-Policy": "cross-origin"})
 
+    def reference(self, path, *, authenticated):
+        owner = self.owner
+        parts = path.split("/", 3)
+        if authenticated:
+            if len(parts) != 4 or parts[1] != "api" or parts[2] not in ("reference", "references"):
+                self.respond(404, {"error": "Not found"})
+                return
+            reference_id = parts[3]
+            route = f"api/reference/{quote(reference_id, safe='')}"
+        else:
+            if len(parts) != 4 or parts[1] != "reference" or not secrets.compare_digest(parts[2], owner.preview_capability):
+                self.respond(404, {"error": "Not found"})
+                return
+            reference_id = parts[3]
+            route = f"reference/{owner.preview_capability}/{quote(reference_id, safe='')}"
+        if not REFERENCE_ID.fullmatch(reference_id):
+            self.respond(404, {"error": "Not found"})
+            return
+        record, content = owner.state.references.file(reference_id)
+        extension = record["extension"]
+        kind = REFERENCE_TYPES[extension][1]
+        directory = owner.state.references._target(reference_id, must_exist=True)
+        prefix = urlsplit(self.request_base).path + route + "/"
+        if kind == "html":
+            parser = SafeHTML(owner.studio, directory, "source", {"source": record["sha256"]}, prefix)
+            parser.feed(content.decode("utf-8"))
+            parser.close()
+            content = "".join(parser.output).encode("utf-8")
+            content_type = "text/html; charset=utf-8"
+            parsed = urlsplit(self.request_base)
+            source = f"{parsed.scheme}://{parsed.netloc}{prefix}"
+            csp = f"sandbox; default-src 'none'; script-src 'none'; style-src 'unsafe-inline' {source}; img-src {source} data:; font-src {source} data:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
+        elif kind == "svg":
+            content = safe_svg(owner.studio, directory, "source", content, {"source": record["sha256"]}, prefix)
+            content_type = f"{SVG_CONTENT_TYPE}; charset=utf-8"
+            csp = "sandbox; default-src 'none'; script-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'"
+        elif kind == "text":
+            content_type = "text/plain; charset=utf-8"
+            csp = "default-src 'none'; frame-ancestors 'self'; base-uri 'none'"
+        elif kind == "download":
+            content_type = "application/octet-stream"
+            csp = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+        else:
+            content_type = REFERENCE_TYPES[extension][0]
+            csp = "default-src 'none'; frame-ancestors 'self'; base-uri 'none'"
+        ascii_name = "".join(character if 32 <= ord(character) < 127 and character not in {'"', "\\"} else "_"
+                             for character in record["originalName"]) or f"reference{extension}"
+        disposition_kind = "inline" if kind in {"html", "svg", "pdf", "image", "text"} else "attachment"
+        disposition = f"{disposition_kind}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(record['originalName'], safe='')}"
+        self.respond(200, content, content_type, csp, {"Content-Disposition": disposition,
+                                                        "Cross-Origin-Resource-Policy": "same-origin"})
+
     def do_POST(self):
         owner = self.owner
         try:
@@ -1622,7 +1901,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             path = self.request_path()
             shutdown = self.server.shutdown_only
-            if (shutdown and path != "/api/shutdown") or (not shutdown and path not in ("/api/approval", "/api/command", "/api/cancel", "/api/reconcile", "/api/usage")):
+            if (shutdown and path != "/api/shutdown") or (not shutdown and path not in ("/api/approval", "/api/command", "/api/cancel", "/api/reconcile", "/api/usage", "/api/reference", "/api/references")):
                 self.respond(404, {"error": "Not found"})
                 return
             if not self.authorized(owner.shutdown_token if shutdown else owner.token):
@@ -1653,8 +1932,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(200, reconcile_run(owner.studio, owner.root, payload))
             elif path == "/api/usage":
                 self.respond(200, record_usage(owner.studio, owner.root, payload))
+            elif path in ("/api/reference", "/api/references"):
+                with records_lock(owner.studio, owner.root):
+                    record, idempotent = owner.state.references.store(payload)
+                self.respond(200, {"status": "PASS", "reference": record, "idempotent": idempotent})
             else:
                 self.respond(200, approve(owner.studio, owner.root, payload, owner.repo))
+        except ReferenceConflict as exc:
+            self.respond(409, {"error": str(exc)})
         except ApprovalConflict as exc:
             self.respond(409, {"error": str(exc)})
         except (owner.studio.StudioError, OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
