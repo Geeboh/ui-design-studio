@@ -686,6 +686,23 @@ class StudioTests(unittest.TestCase):
         with self.assertRaises(studio.StudioError):
             studio.register_theme(self.repo, "fixture", root)
         self.assertEqual(path.read_text(), "{malformed")
+    def test_stale_active_theme_is_rejected_before_registration(self):
+        path = self.repo / "themes/registry.json"
+        write_json(path, {
+            "schemaVersion": "1.0",
+            "defaultTheme": "fixture",
+            "themes": [{"id": "fixture", "version": "1.0.0"}],
+            "activeTheme": {
+                "id": "missing",
+                "version": "1.0.0",
+                "themeDigest": "0" * 64,
+                "activatedAt": studio.now(),
+                "activationReceipt": "receipt",
+            },
+        })
+        with self.assertRaisesRegex(studio.StudioError, "active theme is not registered"):
+            studio.registry_read(path.parent)
+
 
     def test_registration_respects_project_budget_and_concurrent_lock(self):
         root = fixture_run(self.repo, self.theme)

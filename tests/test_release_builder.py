@@ -8,12 +8,17 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest import mock
+import subprocess
+import sys
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("ui_design_release_builder_test", ROOT / "scripts/package_release.py")
 builder = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(builder)
+M8_SPEC = importlib.util.spec_from_file_location("ui_design_m8_checks_test", ROOT / "tools/run_prism_m8_checks.py")
+m8_checks = importlib.util.module_from_spec(M8_SPEC)
+M8_SPEC.loader.exec_module(m8_checks)
 
 
 class ReleaseBuilderTests(unittest.TestCase):
@@ -41,7 +46,26 @@ class ReleaseBuilderTests(unittest.TestCase):
         patch = mock.patch.object(builder, "ROOT", self.root)
         patch.start()
         self.addCleanup(patch.stop)
+    def clean_manifest(self):
+        self.manifest.write_text(builder.manifest(builder.sources()), encoding="utf-8")
 
+    def test_build_requires_clean_manifest_before_mutation(self):
+        with self.assertRaisesRegex(ValueError, "missing or stale"):
+            builder.build(self.output)
+        self.assertEqual(self.manifest.read_bytes(), self.original_manifest)
+        self.assertFalse(self.output.exists())
+        self.clean_manifest()
+        self.assertEqual(builder.build(self.output, check=True)["status"], "PASS")
+    def test_m8_artifact_names_follow_release_version(self):
+        with mock.patch.object(m8_checks, "ROOT", self.root):
+            self.assertEqual(
+                [path.relative_to(self.root).as_posix() for path in m8_checks.artifacts()],
+                [
+                    "dist/prism-v2/UI-Design-Studio-PRISM-v1.4.1.zip",
+                    "dist/prism-v2/ui_design_studio_mcp-1.4.1.tar.gz",
+                    "dist/prism-v2/ui_design_studio_mcp-1.4.1-py3-none-any.whl",
+                ],
+            )
     def test_private_environment_files_are_excluded_and_example_is_retained(self):
         for directory in (self.skill, self.root / "docs/nested", self.root / "src/example"):
             directory.mkdir(parents=True, exist_ok=True)
@@ -52,6 +76,7 @@ class ReleaseBuilderTests(unittest.TestCase):
             (private / "settings.txt").write_text("Private directory contents\n", encoding="utf-8")
             (directory / ".env.example").write_text("PUBLIC_ENV=example\n", encoding="utf-8")
 
+        self.clean_manifest()
         result = builder.build(self.output)
         self.assertEqual(result["status"], "PASS")
         with zipfile.ZipFile(self.output) as archive:
@@ -71,6 +96,7 @@ class ReleaseBuilderTests(unittest.TestCase):
         directory.mkdir()
         (directory / "private-config").write_text("PRIVATE_SECRET=not-for-distribution\n", encoding="utf-8")
         (directory / ".env.example").write_text("PRIVATE_NESTED_TEMPLATE=not-for-distribution\n", encoding="utf-8")
+        self.clean_manifest()
         builder.build(self.output)
         with zipfile.ZipFile(self.output) as archive:
             self.assertFalse(any("/.env.example/" in name for name in archive.namelist()))
@@ -83,6 +109,7 @@ class ReleaseBuilderTests(unittest.TestCase):
         (runtime / ".design-server.json").write_text('{"token":"private"}\n', encoding="utf-8")
         (runtime / "draft.html").write_text("<h1>private</h1>\n", encoding="utf-8")
         (self.root / "docs/.design-owner.json").write_text('{"owner":"private"}\n', encoding="utf-8")
+        self.clean_manifest()
         builder.build(self.output)
         with zipfile.ZipFile(self.output) as archive:
             payload = b"".join(archive.read(name) for name in archive.namelist())
@@ -96,17 +123,41 @@ class ReleaseBuilderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "non-regular manifest"):
             builder.build(self.output, check=True)
 
-    def test_env_and_credentials_remain_rejected(self):
+    def test_env_and_credentials_are_excluded(self):
         for name in (".env", "credentials/token"):
             with self.subTest(name=name):
                 path = self.skill / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("Private state\n", encoding="utf-8")
-                with self.assertRaises(ValueError):
-                    builder.build(self.output)
-                self.assertEqual(self.manifest.read_bytes(), self.original_manifest)
-                self.assertFalse(self.output.exists())
+                self.clean_manifest()
+                builder.build(self.output)
+                with zipfile.ZipFile(self.output) as archive:
+                    names = archive.namelist()
+                self.assertFalse(any(name in archive_name for archive_name in names))
+                self.assertNotIn(name, self.manifest.read_text(encoding="utf-8"))
                 path.unlink()
+    def test_nested_private_trees_are_not_packaged(self):
+        files = {
+            "docs/nested/.git/config": "git remote private\n",
+            "src/vendor/node_modules/private.js": "module private\n",
+            "tools/cache/__pycache__/private.pyc": "bytecode\n",
+            "examples/.DS_Store": "finder metadata\n",
+            "docs/design/runs/current/draft.html": "runtime private\n",
+            "src/.ui-design-studio/state.json": "project state\n",
+        }
+        for relative, contents in files.items():
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(contents, encoding="utf-8")
+        self.clean_manifest()
+        builder.build(self.output)
+        with zipfile.ZipFile(self.output) as archive:
+            names = archive.namelist()
+        for relative in files:
+            self.assertFalse(any(relative in name for name in names), relative)
+        manifest = self.manifest.read_text(encoding="utf-8")
+        for relative in files:
+            self.assertNotIn(relative, manifest)
 
     def test_symlinked_environment_example_is_rejected(self):
         target = self.base / "private.txt"
@@ -211,6 +262,7 @@ class ReleaseBuilderTests(unittest.TestCase):
 
         with mock.patch.object(Path, "write_text", deny_checksum_write):
             try:
+                self.clean_manifest()
                 builder.build(self.output)
             except PermissionError:
                 self.assertEqual(self.output.read_bytes(), b"Existing archive")
@@ -232,12 +284,14 @@ class ReleaseBuilderTests(unittest.TestCase):
             return replace(source, destination)
 
         with mock.patch.object(builder.os, "replace", side_effect=fail_checksum):
+            self.clean_manifest()
             with self.assertRaisesRegex(OSError, "Synthetic checksum commit failure"):
                 builder.build(self.output)
         self.assertEqual(self.output.read_bytes(), b"Existing archive")
         self.assertEqual(sidecar.read_bytes(), b"Existing checksum")
 
     def test_external_and_dist_outputs_remain_deterministic(self):
+        self.clean_manifest()
         outputs = (self.output, self.root / "dist/release.zip")
         archives = []
         for output in outputs:
@@ -254,6 +308,35 @@ class ReleaseBuilderTests(unittest.TestCase):
         with zipfile.ZipFile(outputs[0]) as archive:
             self.assertEqual(archive.read("ui-design-studio-v1.4.1/MANIFEST.sha256"), self.manifest.read_bytes())
             self.assertTrue(all(info.date_time == (2026, 11, 14, 0, 0, 0) for info in archive.infolist()))
+
+
+class MilestoneRunnerTests(unittest.TestCase):
+    def test_rejects_external_absolute_and_traversal_test_paths(self):
+        runner = ROOT / "tools/run_prism_milestone_tests.py"
+        receipt = ROOT / ".prism-state/m3-workflow-tests.txt"
+        previous = receipt.read_bytes() if receipt.exists() else None
+        arguments = (
+            str(ROOT / "tests/test_prism_m3.py"),
+            str(ROOT.parent / "test_prism_m3.py"),
+            "../tests/test_prism_m3.py",
+            "tests/../tests/test_prism_m3.py",
+        )
+        try:
+            for argument in arguments:
+                with self.subTest(argument=argument):
+                    result = subprocess.run(
+                        [sys.executable, str(runner), argument],
+                        cwd=ROOT,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("unsupported milestone test path", result.stderr)
+        finally:
+            if previous is None:
+                self.assertFalse(receipt.exists())
+            else:
+                self.assertEqual(receipt.read_bytes(), previous)
 
 
 if __name__ == "__main__":

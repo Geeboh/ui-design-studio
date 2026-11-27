@@ -6,11 +6,13 @@ import asyncio
 import base64
 from contextlib import asynccontextmanager
 from datetime import timedelta
+import hashlib
 import http.client
 import json
 import os
 from pathlib import Path
 import shlex
+import sqlite3
 import signal
 import socket
 import subprocess
@@ -216,6 +218,21 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(McpError):
                 await client.read_resource("ui-design://guide/skills/ui-design-studio/scripts/studio.py")
 
+    async def test_command_project_roots_are_bound_to_the_mcp_repository(self):
+        bound_project = "repo-" + hashlib.sha256(str(self.repo.resolve()).encode()).hexdigest()[:32]
+        envelope = {
+            "command": "project.initialize",
+            "operationId": "foreign-root",
+            "idempotencyKey": "foreign-root",
+            "actor": {"principal": "mcp-" + bound_project, "kind": "agent", "mode": "guided"},
+            "scope": {"projectId": bound_project},
+            "expectedVersions": [],
+            "payload": {"projectId": bound_project, "sourceRoot": "/tmp/foreign-source", "stateRoot": "/tmp/foreign-state"},
+        }
+        async with self.connect() as (client, unused):
+            result = await self.call_failure(client, "ui_design_command", envelope=envelope)
+            self.assertIn("sourceRoot", json.dumps(result.structuredContent))
+
     async def test_start_resume_progress_artwork_and_review_preserve_pending_gates(self):
         async with self.connect() as (client, unused):
             started = await self.start(client)
@@ -224,6 +241,15 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(Path(relative).is_absolute())
             document = json.loads((root / "run.json").read_text(encoding="utf-8"))
             self.assertEqual(document["status"], "pending")
+            with sqlite3.connect(self.repo / ".ui-design-studio/prism/state.sqlite3") as connection:
+                row = connection.execute("SELECT project_id, status, stage FROM runs WHERE run_id = ?", (document["id"],)).fetchone()
+            self.assertEqual(row, ("repo-" + hashlib.sha256(str(self.repo.resolve()).encode()).hexdigest()[:32], "pending", "assessment"))
+            with sqlite3.connect(self.repo / ".ui-design-studio/prism/state.sqlite3") as connection:
+                commands = [item[0] for item in connection.execute(
+                    "SELECT command FROM operations WHERE actor = ? ORDER BY created_at",
+                    ("mcp-" + row[0],),
+                )]
+            self.assertIn("run.create", commands)
             self.assertEqual(document["phase"], "assessment")
             self.assertIsNone(document["projectContext"]["sha256"])
             self.assertEqual(document["evidence"], [])
@@ -236,6 +262,11 @@ class MCPProtocolTests(unittest.IsolatedAsyncioTestCase):
                                        next_action="Review the first concept", blocker=["Synthetic pending assessment"])
             self.assertEqual(progress["dashboard"]["instanceId"], started["dashboard"]["instanceId"])
             self.assertEqual(progress["landing"]["instanceId"], started["landing"]["instanceId"])
+            with sqlite3.connect(self.repo / ".ui-design-studio/prism/state.sqlite3") as connection:
+                self.assertTrue(connection.execute(
+                    "SELECT 1 FROM operations WHERE command = 'run.progress' AND actor = ?",
+                    ("mcp-" + row[0],),
+                ).fetchone())
             worker = await self.call(client, "ui_design_worker", run=relative, id="concept",
                                      task="Render a synthetic concept", status="active", message="Fixture pass", model="fixture/model")
             self.assertEqual(worker["worker"]["model"], "fixture/model")

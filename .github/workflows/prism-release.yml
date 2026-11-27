@@ -5,6 +5,10 @@ on:
     branches: [main, overhaul/prism-v2]
   pull_request:
 
+concurrency:
+  group: prism-release-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   core-and-package:
     runs-on: ubuntu-latest
@@ -19,10 +23,80 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m venv .ci-venv
-      - run: .ci-venv/bin/python -m pip install --upgrade pip build pytest hatchling
-      - run: .ci-venv/bin/python -m pip install 'mcp==1.30.0' 'segno>=1.6,<2' 'psutil>=7,<8'
-      - run: .ci-venv/bin/python -m pytest tests/test_prism_core.py tests/test_prism_migration.py tests/test_prism_m3.py tests/test_prism_m4.py -q
-      - run: .ci-venv/bin/python -m pytest tests/test_mcp.py tests/test_mcp_package.py tests/test_release_builder.py tests/test_install.py -q
-      - run: .ci-venv/bin/python -m build --wheel --sdist --no-isolation --outdir dist/ci
-      - run: .ci-venv/bin/python scripts/package_release.py --output dist/ci/PRISM-Studio-2.0.0.zip
-      - run: .ci-venv/bin/python scripts/package_release.py --check
+      - run: |
+          .ci-venv/bin/python -m pip install --upgrade pip build pytest hatchling
+          .ci-venv/bin/python -m pip install 'mcp==1.30.0' 'segno>=1.6,<2' 'psutil>=7,<8' 'zxing-cpp>=2,<3'
+      - name: Verify committed source manifest
+        run: .ci-venv/bin/python scripts/package_release.py --check
+      - name: Run shipped non-browser suites
+        run: .ci-venv/bin/python -m pytest -q tests --ignore=tests/test_dashboard_browser.py
+      - name: Build versioned source ZIP and sdist
+        run: |
+          version="$(
+            .ci-venv/bin/python -c 'import json; print(json.load(open("release.json", encoding="utf-8"))["version"])'
+          )"
+          mkdir -p dist/prism-v2
+          .ci-venv/bin/python scripts/package_release.py \
+            --output "dist/prism-v2/UI-Design-Studio-PRISM-v${version}.zip"
+          .ci-venv/bin/python -m build --sdist --no-isolation --outdir dist/prism-v2
+      - name: Build and test wheel from extracted sdist
+        run: |
+          sdist="$(find dist/prism-v2 -maxdepth 1 -name '*.tar.gz' -print -quit)"
+          rm -rf dist/ci-sdist
+          mkdir -p dist/ci-sdist
+          tar -xzf "$sdist" -C dist/ci-sdist --strip-components=1
+          mkdir -p dist/prism-v2/from-sdist
+          .ci-venv/bin/python -m build --wheel --no-isolation \
+            --outdir dist/prism-v2/from-sdist dist/ci-sdist
+          wheel="$(find dist/prism-v2/from-sdist -maxdepth 1 -name '*.whl' -print -quit)"
+          UI_DESIGN_TEST_WHEEL="$wheel" \
+            .ci-venv/bin/python -m pytest -q tests/test_mcp_package.py
+          cp "$wheel" dist/prism-v2/
+      - name: Test real source ZIP installer payload
+        run: |
+          source_zip="$(find dist/prism-v2 -maxdepth 1 -name 'UI-Design-Studio-PRISM-v*.zip' -print -quit)"
+          rm -rf dist/ci-source
+          mkdir -p dist/ci-source
+          unzip -q "$source_zip" -d dist/ci-source
+          source_root="$(find dist/ci-source -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          .ci-venv/bin/python -m pytest -q "$source_root/tests/test_install.py"
+      - name: Check release gate and clean source
+        run: |
+          .ci-venv/bin/python tools/run_prism_m8_checks.py
+          .ci-venv/bin/python scripts/package_release.py --check
+          git diff --check
+          git diff --quiet -- . ':!dist'
+
+  browser:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: src:tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: |
+          python -m pip install --upgrade pip pytest playwright
+          python -m pip install 'mcp==1.30.0' 'segno>=1.6,<2' 'psutil>=7,<8'
+          python -m playwright install --with-deps chromium firefox webkit
+      - run: python tools/run_prism_browser_tests.py
+
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/test_progress_extension.mjs
+
+  rebuild-pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade pip pytest
+      - run: python -m pytest -q .prism-rebuild/tools/test_tools.py

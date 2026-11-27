@@ -179,6 +179,8 @@ class DashboardBrowserTests(unittest.TestCase):
         card.locator('input[name="reviewed"]').check()
         card.locator('button[type="submit"]').click()
         expect(card.locator(".approval-readonly")).to_contain_text("Recorded decision: approved.")
+        draft_keys = page.evaluate("Object.keys(localStorage).filter(key => key.startsWith('prism-studio:draft:'))")
+        self.assertEqual(draft_keys, [])
         decisions = self.engine.read_json(root / "decisions.json")["decisions"]
         self.assertEqual(len(decisions), 1)
         self.assertEqual(
@@ -210,6 +212,12 @@ class DashboardBrowserTests(unittest.TestCase):
         card.locator('input[name="optionId"][value="approve"]').check()
         card.locator('input[name="outcome"][value="approved"]').check()
         card.locator('textarea[name="rationale"]').fill("Keep the approved spacing and continue the review.")
+        stored_draft = page.evaluate("""() => {
+            const key = Object.keys(localStorage).find(item => item.startsWith("prism-studio:draft:"));
+            return key ? JSON.parse(localStorage.getItem(key)) : null;
+        }""")
+        self.assertEqual(stored_draft["version"], 1)
+        self.assertTrue(all("previewUrl" not in item for item in stored_draft["attachments"]))
         page.reload()
         expect(page.locator("#connection-status")).to_have_text("Connected")
         page.locator("#nav-approvals").click()

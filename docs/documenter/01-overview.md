@@ -4,7 +4,7 @@
 
 UI Design Studio is an OMP workflow package for UI assessment, planning, design, production, review, finalization, and theme work. It includes OMP skills, specialist agent contracts, commands, a progress extension, a Python runtime, dashboard assets, documentation, and release tooling.
 
-The package metadata names distribution ui-design-studio-mcp, version 1.4.3, Python >=3.10, and MIT licensing. Runtime dependencies are declared in pyproject.toml: mcp==1.30.0, segno>=1.6,<2, and psutil>=7,<8.
+The package metadata names distribution ui-design-studio-mcp, version 2.0.10, Python >=3.10, and MIT licensing. Runtime dependencies are declared in pyproject.toml: mcp==1.30.0, segno>=1.6,<2, and psutil>=7,<8.
 
 ## Package surfaces
 

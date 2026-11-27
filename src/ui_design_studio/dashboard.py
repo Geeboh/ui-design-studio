@@ -35,6 +35,7 @@ PROBE_TIMEOUT = 2.0
 CONTENTION_TIMEOUT = 3.0
 MAX_IDENTITY = 16 * 1024
 MAX_RECORD = 1024 * 1024
+MAX_SESSION_RECORDS = 128
 INSTANCE = re.compile(r"[0-9a-f]{48}\Z")
 TOKEN = re.compile(r"token=([A-Za-z0-9_-]{16,256})\Z")
 CONTROLS = re.compile(r"[\x00-\x20\x7f-\x9f]")
@@ -748,6 +749,12 @@ class DashboardSession:
                 except (OSError, ValueError, TypeError, studio().StudioError):
                     continue
                 candidates.append((root, relative, record))
+        truncated = len(candidates) > MAX_SESSION_RECORDS
+        if truncated:
+            selected = [item for item in candidates if item[1] == selected_run]
+            remaining = [item for item in candidates if item[1] != selected_run]
+            remaining.sort(key=lambda item: (str(item[2].get("createdAt", "")), item[1]), reverse=True)
+            candidates = selected[:1] + remaining[:MAX_SESSION_RECORDS - len(selected[:1])]
         deadline = time.monotonic() + PROBE_TIMEOUT
 
         def inspect(root):
@@ -777,7 +784,7 @@ class DashboardSession:
                     details = observed[root] = None
                 runs.append({"run": relative, "id": record["id"], "phase": record["phase"], "status": record["status"],
                              "selected": relative == self.selected_run, "live": details is not None, "dashboard": details})
-            return {**self._landing_details(), "selectedRun": self._selected_details(observed), "runs": runs}
+            return {**self._landing_details(), "selectedRun": self._selected_details(observed), "runs": runs, "runsTruncated": truncated}
 
     def close(self) -> None:
         self._closing.set()

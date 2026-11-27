@@ -91,7 +91,7 @@ The server supplies deterministic operations and instructions, not an autonomous
 
 Open the authenticated dashboard's **Usage** section to inspect local run telemetry and optional native OMP statistics. PRISM reads `omp stats --json` directly when the user requests OMP data. Tersio is not required.
 
-Local usage records live in the selected run's private `usage.json`. Record one provider observation through the authenticated `POST /api/usage` route with a stable `usageId` and `idempotencyKey`. Use `GET /api/usage/24h`, `GET /api/usage/7d`, or `GET /api/usage/all` for bounded projections. Export with `GET /api/usage/export.json` or `GET /api/usage/export.csv`.
+Local usage records live in the selected run's private `usage.sqlite3`; older `usage.json` records are read once and migrated. Record one provider observation through the authenticated `POST /api/usage` route with a stable `usageId` and `idempotencyKey`. Use `GET /api/usage/24h`, `GET /api/usage/7d`, or `GET /api/usage/all` for bounded projections. Export with `GET /api/usage/export.json` or `GET /api/usage/export.csv`.
 
 Observed, estimated, not-billable, and unknown costs remain separate. Missing token counts remain `Unknown`; cache reads are not compression savings. Usage telemetry never changes hard budget enforcement.
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from functools import partial, wraps
+import hashlib
+import secrets
 import json
 from pathlib import Path
 import posixpath
@@ -21,7 +23,7 @@ from . import __version__
 from .dashboard import DashboardSession, DashboardUnavailable
 from .runtime import PACKAGE, PAYLOAD, backend, studio
 from .application import dispatch
-from .storage import StateStore
+from .storage import EventDraft, OperationRejected, OperationResult, StateStore
 
 
 Mode = Literal["guided", "yolo"]
@@ -108,9 +110,124 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
     engine = studio()
     design = backend()
     guides = _Guides(engine)
-    session = DashboardSession(root, host=dashboard_host, port=dashboard_port, lan_address=lan_address)
-    command_store = StateStore(root / ".ui-design-studio" / "prism" / "state.sqlite3")
+    state_directory = root / ".ui-design-studio" / "prism"
+    cursor = root
+    for part in state_directory.relative_to(root).parts:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise ValueError("Project state directory cannot contain symlinked ancestors")
+    command_store = StateStore(state_directory / "state.sqlite3")
+    bound_project = "repo-" + hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:32]
+    bound_actor = {"principal": "mcp-" + bound_project, "kind": "agent", "mode": "guided"}
+    def sync_command_projection(run_root: Path) -> None:
+        document = engine.read_json(engine.safe_path(run_root, "run.json"))
+        run_id = document.get("id")
+        if not isinstance(run_id, str) or not run_id:
+            raise ValueError("Run identity is missing")
 
+        projection_payload = json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        projection_status = document.get("status", "pending")
+        projection_stage = document.get("phase", "assessment")
+        prior = command_store.get_run(run_id)
+        prior_revision = prior["revision"] if prior is not None else 0
+        projection_key = hashlib.sha256(projection_payload.encode("utf-8")).hexdigest()
+
+        def apply(connection):
+            project = connection.execute(
+                "SELECT project_id, source_root, state_root FROM projects WHERE project_id = ?",
+                (bound_project,),
+            ).fetchone()
+            if project is None:
+                command_store.create_project_in_transaction(connection, bound_project, str(root), str(state_directory))
+            elif (project["source_root"], project["state_root"]) != (str(root), str(state_directory)):
+                raise ValueError("Command project projection belongs to a different repository")
+            existing = connection.execute(
+                "SELECT project_id, status, stage, payload_json FROM runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+            changed_projection = False
+            if existing is None:
+                command_store.create_run_in_transaction(
+                    connection, run_id, bound_project, document,
+                    stage=projection_stage,
+                    status=projection_status,
+                )
+                changed_projection = True
+            elif existing["project_id"] != bound_project:
+                raise ValueError("Run command projection belongs to a different repository")
+            elif (existing["status"], existing["stage"], existing["payload_json"]) != (
+                projection_status, projection_stage, projection_payload
+            ):
+                changed = connection.execute(
+                    "UPDATE runs SET status = ?, stage = ?, revision = revision + 1, payload_json = ? "
+                    "WHERE run_id = ? AND project_id = ?",
+                    (projection_status, projection_stage, projection_payload, run_id, bound_project),
+                ).rowcount
+                if changed != 1:
+                    raise ValueError("Run command projection could not be refreshed")
+                changed_projection = True
+            return OperationResult(
+                {"runId": run_id, "projectId": bound_project},
+                (EventDraft(run_id, "RunProjectionSynchronized", {"runId": run_id, "projectId": bound_project}),)
+                if changed_projection else (),
+            )
+
+        command_store.run_operation(
+            realm=bound_project,
+            actor=bound_actor["principal"],
+            command="run.create",
+            idempotency_key=f"run-sync-{projection_key}-{prior_revision}",
+            request={"runId": run_id, "projectionSha256": projection_key, "priorRevision": prior_revision},
+            callback=apply,
+        )
+    def public_mutation(command: str, run_root: Path | None, payload: dict[str, Any],
+                        callback: Callable[[], dict[str, Any]], *, idempotent: bool = True) -> dict[str, Any]:
+        if run_root is not None:
+            document = engine.read_json(engine.safe_path(run_root, "run.json"))
+            run_id = document.get("id")
+            if not isinstance(run_id, str) or not run_id:
+                raise ValueError("Run identity is missing")
+            sync_command_projection(run_root)
+        else:
+            run_id = "project"
+        request = {"runId": run_id, **payload}
+        if idempotent:
+            idempotency_key = payload.get("idempotencyKey")
+            if not isinstance(idempotency_key, str) or not idempotency_key.strip():
+                idempotency_key = "compat-" + hashlib.sha256(
+                    json.dumps(request, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+                ).hexdigest()
+        else:
+            idempotency_key = "call-" + secrets.token_hex(16)
+
+        def apply(connection):
+            result = callback()
+            if not isinstance(result, dict):
+                raise OperationRejected("INVALID_RESULT", "Public mutation returned an invalid result")
+            if run_root is not None:
+                updated = engine.read_json(engine.safe_path(run_root, "run.json"))
+                encoded = json.dumps(updated, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+                changed = connection.execute(
+                    "UPDATE runs SET status = ?, stage = ?, revision = revision + 1, payload_json = ? "
+                    "WHERE run_id = ? AND project_id = ?",
+                    (updated.get("status", "pending"), updated.get("phase", "assessment"), encoded, run_id, bound_project),
+                ).rowcount
+                if changed != 1:
+                    raise OperationRejected("STATE_CONFLICT", "Run projection was not updated")
+            return OperationResult(result, (
+                EventDraft(run_id, command, {"runId": run_id, "command": command}),
+            ))
+
+        receipt = command_store.run_operation(
+            realm=bound_project,
+            actor=bound_actor["principal"],
+            command=command,
+            idempotency_key=idempotency_key,
+            request=request,
+            callback=apply,
+        )
+        return {**receipt.result, "receipt": receipt.as_dict()}
+
+    session = DashboardSession(root, host=dashboard_host, port=dashboard_port, lan_address=lan_address)
     @asynccontextmanager
     async def lifespan(_: FastMCP) -> AsyncIterator[DashboardSession]:
         try:
@@ -202,13 +319,38 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
     @tool(destructive=True, idempotent=True)
     def ui_design_command(envelope: dict[str, Any]) -> dict[str, Any]:
         """Dispatch one canonical PRISM command envelope through the shared engine."""
-        return dispatch(command_store, envelope)
+        if not isinstance(envelope, dict):
+            raise ValueError("Command envelope must be an object")
+        if envelope.get("actor") != bound_actor:
+            raise ValueError("Command actor is bound to this MCP adapter")
+        scope = envelope.get("scope")
+        if not isinstance(scope, dict):
+            raise ValueError("Command scope must be an object")
+        if scope.get("projectId") not in (None, bound_project):
+            raise ValueError("Command project scope is bound to this MCP adapter")
+        payload = envelope.get("payload")
+        if not isinstance(payload, dict):
+            raise ValueError("Command payload must be an object")
+        payload = dict(payload)
+        if payload.get("projectId") not in (None, bound_project):
+            raise ValueError("Command payload project scope is bound to this MCP adapter")
+        command = envelope.get("command")
+        if command in {"project.initialize", "run.create"}:
+            payload["projectId"] = bound_project
+        if command == "project.initialize":
+            for field, expected in (("sourceRoot", str(root)), ("stateRoot", str(state_directory))):
+                if payload.get(field) not in (None, expected):
+                    raise ValueError(f"Command {field} is bound to this MCP adapter")
+                payload[field] = expected
+        bound = {**envelope, "actor": bound_actor, "scope": {**scope, "projectId": bound_project}, "payload": payload}
+        return dispatch(command_store, bound)
 
     @tool()
     def ui_design_start_run(theme_id: str, mode: Mode = "guided", theme_action: ThemeAction = "auto",
                             models: ModelPolicy | None = None, scope: Scope | None = None) -> dict[str, Any] | CallToolResult:
         """Create a pending run and select its dashboard. Resume the returned run after an opening failure."""
         result = engine.init_run(root, mode=mode, action=theme_action, theme_id=theme_id, model_policy=models, scope=scope)
+        sync_command_projection(Path(result["run"]))
         relative = Path(result["run"]).relative_to(root).as_posix()
         result["run"] = relative
         try:
@@ -224,6 +366,7 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
     def ui_design_resume_run(run: str) -> dict[str, Any]:
         """Open an existing repository-relative run without creating a dossier or granting approval."""
         run_root = path_in(run, "run")
+        sync_command_projection(run_root)
         relative = run_root.relative_to(root).as_posix()
         return {"status": "PASS", "run": relative, "dashboard": session.open_run(relative),
                 "landing": session.info()}
@@ -233,18 +376,28 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
         """Inspect local capabilities for the configured repository without running application gates."""
         return engine.doctor(root)
 
-    @tool()
+    @tool(destructive=True, idempotent=True)
     def ui_design_theme_new(id: str, name: str) -> dict[str, Any]:
         """Scaffold an unregistered theme under the configured themes directory."""
         engine.validate_slug(id)
         _, themes, _ = engine.config_paths(root)
         engine.safe_path(root, (themes / id).relative_to(root).as_posix(), must_exist=False, allow_dir=True)
-        return engine.theme_new(root, id, name)
+        return public_mutation("theme.new", None, {"id": id, "name": name},
+                               lambda: engine.theme_new(root, id, name))
 
     @tool(destructive=True, idempotent=True)
     def ui_design_build_theme(path: str) -> dict[str, Any]:
         """Compile a repository-relative theme under the configured themes directory."""
-        return engine.build_theme(path_in(path, "theme"))
+        theme = path_in(path, "theme")
+        _, manifest, _ = engine.load_theme(theme)
+        _, source_files, _ = engine.theme_files(manifest)
+        source_digest = engine.file_digest(theme, [item for item in source_files if item != "tokens.css"])
+        generated = engine.safe_path(theme, "tokens.css", must_exist=False)
+        generated_digest = hashlib.sha256(generated.read_bytes()).hexdigest() if generated.exists() else "none"
+        return public_mutation(
+            "theme.build", None, {"path": path, "sourceDigest": source_digest, "generatedDigest": generated_digest},
+            lambda: engine.build_theme(theme),
+        )
 
     @tool(read_only=True)
     def ui_design_check_theme(path: str) -> dict[str, Any]:
@@ -266,7 +419,13 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
     def ui_design_scope_complete(path: str, target: str, artifacts: FileList,
                                  blocker: list[str] | None = None, next: str | None = None) -> dict[str, Any]:
         """Record bounded scope closure without granting full-theme release."""
-        return engine.complete_scope(path_in(path, "run"), target, run_files(path_in(path, "run"), artifacts), blocker, next)
+        run_root = path_in(path, "run")
+        selected = run_files(run_root, artifacts)
+        return public_mutation(
+            "run.scope_complete", run_root,
+            {"target": target, "artifacts": artifacts, "blocker": blocker, "next": next},
+            lambda: engine.complete_scope(run_root, target, selected, blocker, next),
+        )
     @tool(read_only=True)
     def ui_design_resume_check(path: str) -> dict[str, Any]:
         """Check changed run dependencies and transitive stale nodes without rerunning unchanged work."""
@@ -301,12 +460,13 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
         inputs = run_files(run_root, files)
         return {"status": "PASS", "inputs": files, "inputsDigest": engine.file_digest(run_root, inputs)}
 
-    @tool()
+    @tool(destructive=True, idempotent=True)
     def ui_design_package(path: str, output: str) -> dict[str, Any]:
         """Package a configured theme into a new repository-relative ZIP destination."""
         theme = path_in(path, "theme")
         destination = engine.safe_path(root, output, must_exist=False)
-        return engine.package_theme(theme, destination)
+        return public_mutation("theme.package", None, {"path": path, "output": output},
+                               lambda: engine.package_theme(theme, destination), idempotent=False)
 
     @tool(destructive=True, idempotent=True)
     def ui_design_register(theme: str, run: str, make_default: bool = False) -> dict[str, Any]:
@@ -314,11 +474,16 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
         engine.validate_slug(theme)
         _, themes, _ = engine.config_paths(root)
         path_in((themes / theme).relative_to(root).as_posix(), "theme")
-        return engine.register_theme(root, theme, path_in(run, "run"), make_default)
+        run_root = path_in(run, "run")
+        return public_mutation(
+            "theme.register", run_root, {"theme": theme, "run": run, "makeDefault": make_default},
+            lambda: engine.register_theme(root, theme, run_root, make_default),
+        )
     @tool(destructive=True, idempotent=True)
     def ui_design_restore_theme(backup: str) -> dict[str, Any]:
         """Restore a prior theme registry backup and its active-theme selection."""
-        return engine.restore_theme(root, backup)
+        return public_mutation("theme.restore", None, {"backup": backup},
+                               lambda: engine.restore_theme(root, backup))
 
     @tool()
     def ui_design_status(run: str, interval: float = 1.0) -> dict[str, Any]:
@@ -342,7 +507,10 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
         """Publish the director's actual next action or blocker list and return connection details."""
         run_root = path_in(run, "run")
         engine.require(next_action is not None or blocker is not None, "Publish --next or --blocker")
-        result = design.publish_progress(design.studio, run_root, next_action, blocker)
+        result = public_mutation(
+            "run.progress", run_root, {"nextAction": next_action, "blocker": blocker},
+            lambda: design.publish_progress(design.studio, run_root, next_action, blocker),
+        )
         result.update(connection_details(run_root.relative_to(root).as_posix()))
         return result
 
@@ -350,22 +518,37 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
     def ui_design_worker(run: str, id: str, task: str, status: WorkerStatus,
                          message: str, model: str | None = None) -> dict[str, Any]:
         """Publish a worker's reported state. A record does not prove process liveness."""
-        return design.publish_worker(design.studio, path_in(run, "run"), id, task, status, message, model)
+        run_root = path_in(run, "run")
+        return public_mutation(
+            "run.worker", run_root,
+            {"id": id, "task": task, "status": status, "message": message, "model": model},
+            lambda: design.publish_worker(design.studio, run_root, id, task, status, message, model),
+        )
 
-    @tool()
+    @tool(destructive=True, idempotent=True)
     def ui_design_artwork(run: str, file: str, context: str, title: str | None = None) -> dict[str, Any]:
         """Retain artwork. file is repository-relative, inside the selected run or its active configured theme."""
         run_root = path_in(run, "run")
-        return design.publish_artwork(design.studio, run_root, file, context, title, repo=root)
+        content_digest = engine.sha_file(engine.safe_path(root, file))
+        return public_mutation(
+            "run.artwork",
+            run_root,
+            {"file": file, "contentSha256": content_digest, "context": context, "title": title},
+            lambda: design.publish_artwork(design.studio, run_root, file, context, title, repo=root),
+        )
 
-    @tool()
+    @tool(destructive=True, idempotent=True)
     def ui_design_approval_request(run: str, id: str, stage: ReviewStage, title: str, context: str,
                                    files: FileList, choices: str | None = None) -> dict[str, Any]:
         """Publish a guided review, never an approval. files and choices are repository-relative selected-run files."""
         run_root = path_in(run, "run")
         inputs = run_files(run_root, files)
         options = engine.read_json(engine.safe_path(run_root, run_file(run_root, choices))) if choices is not None else None
-        return design.publish_request(design.studio, run_root, id, stage, title, context, inputs, options, repo=root)
+        return public_mutation(
+            "run.approval_request", run_root,
+            {"id": id, "stage": stage, "title": title, "context": context, "files": files, "choices": choices},
+            lambda: design.publish_request(design.studio, run_root, id, stage, title, context, inputs, options, repo=root),
+        )
 
     @tool(destructive=True, idempotent=True)
     def ui_design_design_cleanup(run: str | None = None, all: bool = False) -> dict[str, Any]:
@@ -374,8 +557,11 @@ def create_server(repo: Path | str, dashboard_host: str = "127.0.0.1", dashboard
                        "Use design-cleanup RUN or design-cleanup --all --repo PATH")
         if all:
             engine.config_paths(root)
-            return design.cleanup_all(design.studio, root)
-        return design.cleanup(design.studio, path_in(run, "run"))
+            return public_mutation("project.cleanup", None, {"all": True},
+                                   lambda: design.cleanup_all(design.studio, root))
+        run_root = path_in(run, "run")
+        return public_mutation("run.cleanup", run_root, {"all": False, "run": run},
+                               lambda: design.cleanup(design.studio, run_root))
 
     @tool(read_only=True)
     def ui_design_dashboard_info(run: str | None = None) -> dict[str, Any]:

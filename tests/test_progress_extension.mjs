@@ -540,6 +540,25 @@ test("automatic observers cannot replace a director and explicit handoff keeps b
 	assert.equal(readFileSync(exportPath(run), "utf8"), retained);
 });
 
+test("expires malformed and stale observer records before projecting them", t => {
+	const f = fixture(t);
+	const run = addRun(f);
+	const sessionId = "stale-observer";
+	const directory = join(run.root, "progress-pi-tasks-observer");
+	mkdirSync(directory, { recursive: true, mode: 0o700 });
+	const key = createHash("sha256").update(sessionId).digest("hex");
+	writeJson(join(directory, `${key}.json`), {
+		...taskEvent(), sessionId, runId: run.snapshot.run.id,
+		updatedAt: new Date(Date.now() - 60_000).toISOString(),
+	});
+	const malformed = join(directory, `${"f".repeat(64)}.json`);
+	writeFileSync(malformed, "{not-json");
+	const runtime = host(t, f.project);
+	runtime.emit("session_start");
+	assert.equal(existsSync(malformed), false);
+	assert.equal(existsSync(join(directory, `${key}.json`)), false);
+});
+
 function addConnection(f, overrides = {}) {
 	const instanceId = overrides.instanceId ?? "a".repeat(48);
 	const localUrl = overrides.localUrl ?? `http://127.0.0.1:54322/#token=${"fixture-token-".repeat(4)}`;

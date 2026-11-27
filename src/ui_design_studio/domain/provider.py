@@ -55,21 +55,31 @@ class ProviderReconciler:
 
     def mark_unknown(self, attempt_id: str) -> ProviderAttempt:
         attempt = self._get(attempt_id)
+        if attempt.billing_state == "settled" or attempt.execution_state in {"succeeded", "failed", "cancelled"}:
+            raise ProviderError("provider attempt is terminal")
+        if attempt.execution_state == "outcome_unknown":
+            return attempt
         attempt.execution_state = "outcome_unknown"
         attempt.billing_state = "unknown"
         return attempt
 
     def reconcile(self, attempt_id: str, provider_receipt: str, charge: Money, *, reserved_minor: int) -> ProviderAttempt:
-        if provider_receipt in self.receipts:
-            if self.receipts[provider_receipt] != attempt_id:
-                raise ProviderError("provider receipt belongs to a different attempt")
-            return self._get(attempt_id)
+        if not isinstance(provider_receipt, str) or not provider_receipt.strip():
+            raise ProviderError("provider receipt is required")
         attempt = self._get(attempt_id)
-        if attempt.charge is not None and attempt.charge != charge:
-            raise ProviderError("attempt was reconciled with a different charge")
+        bound_attempt = self.receipts.get(provider_receipt)
+        if bound_attempt is not None:
+            if bound_attempt != attempt_id:
+                raise ProviderError("provider receipt belongs to a different attempt")
+            if attempt.charge != charge:
+                raise ProviderError("attempt was reconciled with a different charge")
+            return attempt
+        if attempt.charge is not None or attempt.billing_state == "settled":
+            raise ProviderError("provider attempt is already reconciled")
         attempt.charge = charge
         attempt.billing_state = "settled"
-        attempt.execution_state = "succeeded" if attempt.execution_state == "outcome_unknown" else attempt.execution_state
+        if attempt.execution_state in {"prepared", "outcome_unknown"}:
+            attempt.execution_state = "succeeded"
         attempt.discrepancy_minor = charge.amount_minor - reserved_minor
         self.receipts[provider_receipt] = attempt_id
         return attempt

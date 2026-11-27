@@ -74,10 +74,19 @@ MAX_BODY = 12 * 1024 * 1024
 MAX_ATTACHMENTS = 4
 MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024
 MAX_ANNOTATIONS = 256
+MAX_REFERENCES = 128
+MAX_REFERENCE_TOTAL_BYTES = 64 * 1024 * 1024
+MAX_BUNDLE_FILES = 64
+MAX_BUNDLE_BYTES = 32 * 1024 * 1024
+MAX_HISTORY = 128
+MAX_SNAPSHOT_ITEMS = 256
+MAX_TASKS = 256
+OBSERVER_MAX_AGE_SECONDS = 90
 ATTACHMENT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._ -]{0,159}\Z")
 ATTACHMENT_MIME = {"image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "image/webp": ".webp"}
 ANNOTATION_TOOLS = {"arrow", "line", "curve", "rectangle", "ellipse", "text"}
 REFERENCE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
+OPTIMIZATION_ID = re.compile(r"opt-[0-9a-f]{32}\Z")
 REFERENCE_CATEGORIES = frozenset({"reference", "design", "concept", "inspiration"})
 REFERENCE_NAME = re.compile(r"[^\x00-\x1f\x7f-\x9f/\\]{1,255}\Z")
 MAX_REFERENCE_BYTES = 8 * 1024 * 1024
@@ -258,6 +267,126 @@ def approval_feedback(studio, root, request_id, payload):
     return attachments, annotations, pending
 
 
+def _plain_directory(studio, value):
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    need(studio, not any(part in (".", "..") for part in path.parts), "State roots must use canonical paths")
+    cursor = Path(path.anchor)
+    for part in path.parts[1:]:
+        cursor /= part
+        need(studio, not cursor.is_symlink(), f"State root cannot contain symlinked ancestors: {cursor}")
+    need(studio, path.is_dir() and not path.is_symlink(), "State root must be a regular directory")
+    return path.resolve()
+
+
+def _confined_state_path(studio, root, repo=None):
+    root = _plain_directory(studio, root)
+    project = _plain_directory(studio, repo or root)
+    if repo is not None and root != project:
+        unused, unused_themes, runs = studio.config_paths(project)
+        need(studio, root.is_relative_to(runs), "Run is outside the selected project's configured runs directory")
+    state = project / ".ui-design-studio" / "prism"
+    cursor = project
+    for name in (".ui-design-studio", "prism"):
+        cursor = cursor / name
+        if cursor.exists() or cursor.is_symlink():
+            need(studio, not cursor.is_symlink() and cursor.is_dir(), "Project state directory cannot contain symlinked ancestors")
+        else:
+            cursor.mkdir(mode=0o700)
+            os.chmod(cursor, 0o700)
+    database = state / "state.sqlite3"
+    need(studio, not database.is_symlink(), "Project state database cannot be a symlink")
+    if database.exists():
+        need(studio, database.is_file(), "Project state database must be a regular file")
+    return database
+
+
+def _record_timestamp(record, fallback):
+    value = record.get("updatedAt") if isinstance(record, dict) else None
+    return value if isinstance(value, str) and value.strip() else fallback
+
+
+def _observer_is_current(record, path, run_id):
+    if not isinstance(record, dict) or record.get("version") != 1 or record.get("runId") != run_id:
+        return False
+    session_id = record.get("sessionId")
+    if not isinstance(session_id, str) or not session_id.strip() or digest(session_id.encode("utf-8")) != path.stem:
+        return False
+    observed_at = record.get("observedAt") or record.get("updatedAt")
+    if not isinstance(observed_at, str):
+        return False
+    try:
+        observed = dt.datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if observed.tzinfo is None:
+        return False
+    age = (dt.datetime.now(dt.timezone.utc) - observed).total_seconds()
+    if age < -5:
+        return False
+    return age <= OBSERVER_MAX_AGE_SECONDS
+
+
+
+
+def _state_project_id(studio, store, project, run):
+    value = run.get("projectId") if isinstance(run, dict) else None
+    if isinstance(value, str) and REFERENCE_ID.fullmatch(value):
+        return value
+    try:
+        connection = store._connect()
+        try:
+            row = connection.execute(
+                "SELECT project_id FROM projects WHERE source_root = ? ORDER BY created_at LIMIT 1",
+                (str(project),),
+            ).fetchone()
+        finally:
+            connection.close()
+    except (AttributeError, OSError, TypeError, ValueError):
+        row = None
+    if row is not None and isinstance(row[0], str) and row[0].strip():
+        return row[0]
+    return project.name
+
+
+def _bound_command(studio, store, project, run, payload, instance_id):
+    need(studio, isinstance(payload, dict), "Command body must be an object")
+    envelope = dict(payload)
+    actor = {"principal": "design-dashboard-" + instance_id, "kind": "human", "mode": "guided"}
+    scope = envelope.get("scope")
+    need(studio, isinstance(scope, dict), "Command scope must be an object")
+    scope = dict(scope)
+    project_id = _state_project_id(studio, store, project, run)
+    requested_project = scope.get("projectId")
+    need(studio, requested_project is None or requested_project == project_id,
+         "Command project scope does not match the authenticated project")
+    run_id = run.get("id") if isinstance(run, dict) else None
+    need(studio, isinstance(run_id, str) and REFERENCE_ID.fullmatch(run_id),
+         "Selected run has an invalid command identity")
+    requested_run = scope.get("runId")
+    need(studio, requested_run is None or requested_run == run_id,
+         "Command run scope does not match the authenticated run")
+    scope["projectId"] = project_id
+    scope["runId"] = run_id
+    envelope["actor"] = actor
+    envelope["scope"] = scope
+    expected = envelope.get("expectedVersions")
+    if isinstance(expected, list):
+        for version in expected:
+            if isinstance(version, dict) and version.get("entity") == "run":
+                need(studio, version.get("identity") == run_id,
+                     "Command expected version does not match the authenticated run")
+    command_payload = envelope.get("payload")
+    if isinstance(command_payload, dict):
+        nested_run = command_payload.get("runId")
+        need(studio, nested_run is None or nested_run == run_id,
+             "Command payload run does not match the authenticated run")
+        nested_project = command_payload.get("projectId")
+        need(studio, nested_project is None or nested_project == project_id,
+             "Command payload project does not match the authenticated project")
+    return envelope
+
 def read_record(studio, root, relative, default=None):
     path = studio.safe_path(root, relative, must_exist=False)
     try:
@@ -326,6 +455,23 @@ class ReferenceLibrary:
     def __init__(self, studio, root):
         self.studio, self.root = studio, Path(root)
         self.directory = studio.safe_path(root, "references", must_exist=False, allow_dir=True)
+    def _usage(self):
+        count = 0
+        total = 0
+        if not self.directory.exists():
+            return count, total
+        for target in self.directory.iterdir():
+            if target.is_symlink() or not target.is_dir() or not REFERENCE_ID.fullmatch(target.name):
+                continue
+            count += 1
+            source = target / "source"
+            if source.is_file() and not source.is_symlink():
+                try:
+                    total += source.stat().st_size
+                except OSError:
+                    continue
+        return count, total
+
 
     def _target(self, reference_id, *, must_exist=False):
         need(self.studio, isinstance(reference_id, str) and REFERENCE_ID.fullmatch(reference_id),
@@ -383,7 +529,7 @@ class ReferenceLibrary:
         if not self.directory.exists() or not self.directory.is_dir():
             return []
         records = []
-        for target in sorted(self.directory.iterdir(), key=lambda path: path.name):
+        for target in sorted(self.directory.iterdir(), key=lambda path: path.name)[:MAX_REFERENCES]:
             if target.is_symlink() or not target.is_dir() or not REFERENCE_ID.fullmatch(target.name):
                 continue
             try:
@@ -419,6 +565,14 @@ class ReferenceLibrary:
         mime_type = payload["mimeType"]
         need(self.studio, isinstance(mime_type, str) and mime_type.lower() in REFERENCE_MIME_ALIASES[extension],
              "Reference MIME type does not match file type")
+        target = self._target(reference_id, must_exist=False)
+        target_exists = target.exists()
+        if not target_exists:
+            count, total = self._usage()
+            need(self.studio, count < MAX_REFERENCES, "Reference count quota exceeded")
+        else:
+            total = 0
+
         encoded = payload["data"]
         need(self.studio, isinstance(encoded, str) and encoded, "Reference data is required")
         try:
@@ -426,6 +580,9 @@ class ReferenceLibrary:
         except (ValueError, base64.binascii.Error) as exc:
             raise self.studio.StudioError("Reference data must be valid base64") from exc
         need(self.studio, 1 <= len(content) <= MAX_REFERENCE_BYTES, "Reference size exceeds supported limit")
+        if not target_exists:
+            need(self.studio, total + len(content) <= MAX_REFERENCE_TOTAL_BYTES,
+                 "Reference byte quota exceeded")
         observed_digest = digest(content)
         if "bytes" in payload:
             need(self.studio, isinstance(payload["bytes"], int) and not isinstance(payload["bytes"], bool)
@@ -525,16 +682,25 @@ class References(HTMLParser):
 
 def dependency_bundle(studio, root, inputs, warnings=None):
     """Return original bytes keyed by every explicit input and local dependency."""
-    need(studio, isinstance(inputs, list) and inputs and all(isinstance(p, str) for p in inputs), "Inputs must be a nonempty path list")
-    pending, files = list(inputs), {}
+    need(studio, isinstance(inputs, (list, tuple)), "Bundle inputs must be a sequence")
+    pending = list(inputs)
+    need(studio, len(pending) <= MAX_BUNDLE_FILES, "Bundle contains too many files")
+    files = {}
+    total_bytes = 0
     while pending:
         relative = pending.pop()
         path = studio.safe_path(root, relative)
         relative = path.relative_to(root).as_posix()
         if relative in files:
             continue
+        observed_size = path.stat().st_size
+        need(studio, len(files) < MAX_BUNDLE_FILES, "Bundle contains too many files")
+        need(studio, total_bytes + observed_size <= MAX_BUNDLE_BYTES, "Bundle exceeds byte quota")
         content = path.read_bytes()
+        need(studio, len(content) == observed_size and total_bytes + len(content) <= MAX_BUNDLE_BYTES,
+             "Bundle changed while it was being read")
         files[relative] = content
+        total_bytes += len(content)
         suffix = path.suffix.lower()
         references = []
         styles = []
@@ -557,6 +723,7 @@ def dependency_bundle(studio, root, inputs, warnings=None):
                 warnings.append(f"Preview dependency {relative}: {exc}")
                 continue
             if target and target not in files:
+                need(studio, len(files) + len(pending) < MAX_BUNDLE_FILES, "Bundle contains too many files")
                 pending.append(target)
     return files
 
@@ -680,7 +847,7 @@ def publish_artwork(studio, root, relative, context, title=None, repo=None):
 
 
 def checked_root(studio, root):
-    root = Path(root).resolve()
+    root = _plain_directory(studio, root)
     run = studio.read_json(studio.safe_path(root, "run.json"))
     need(studio, isinstance(run, dict), "run.json must be an object")
     return root
@@ -1232,7 +1399,7 @@ def task_records(record):
     if not isinstance(tasks, list):
         return []
     result = []
-    for item in tasks:
+    for item in tasks[:MAX_TASKS]:
         if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not isinstance(item.get("title"), str) or not isinstance(item.get("status"), str):
             continue
         task = {key: item[key] for key in ("id", "title", "status")}
@@ -1286,7 +1453,7 @@ class DesignState:
                 message = "Cannot validate current run records: " + str(exc)
                 revision = digest(message.encode())
                 if revision != self.last_revision:
-                    self.history.append({"at": observed, "verified": 0, "required": 0, "passedGates": 0})
+                    self.history = (self.history + [{"at": observed, "verified": 0, "required": 0, "passedGates": 0}])[-MAX_HISTORY:]
                     self.last_revision = revision
                 return {"schemaVersion": "1.0", "revision": revision, "observedAt": observed,
                         "run": {"id": self.root.name, "themeId": "", "mode": "", "phase": "", "status": "unverified"},
@@ -1300,6 +1467,7 @@ class DesignState:
 
     def _snapshot(self):
         studio, root = self.studio, self.root
+        validation_cache = {}
         warnings = ["Worker statuses are reported records, not proof of process liveness."]
         run = studio.read_json(studio.safe_path(root, "run.json"))
         usage = usage_projection(studio, root, omp_probe=self.omp_usage)
@@ -1310,7 +1478,9 @@ class DesignState:
         if not isinstance(evidence, list):
             evidence = []
             warnings.append("run.evidence is not a list")
-        validation_cache = {}
+        elif len(evidence) > MAX_SNAPSHOT_ITEMS:
+            warnings.append(f"Evidence projection truncated at {MAX_SNAPSHOT_ITEMS} records.")
+            evidence = evidence[:MAX_SNAPSHOT_ITEMS]
         try:
             offline_required, unused = studio.check_project_context(root, run, [])
         except (studio.StudioError, OSError, ValueError, TypeError, KeyError):
@@ -1318,6 +1488,7 @@ class DesignState:
         counts, inventory_valid = coverage_counts(
             studio, root, coverage, evidence, validation_cache, offline_required)
         artworks, art_warnings = self.library.discover()
+        artworks = artworks[:MAX_SNAPSHOT_ITEMS]
         warnings.extend(art_warnings)
         published_art = []
         for art in artworks:
@@ -1325,24 +1496,24 @@ class DesignState:
             item["url"] = f"preview/{self.preview_capability}/{art['version']}/" + quote(art["path"], safe="/") if self.preview_capability else ""
             published_art.append(item)
         published_references = []
-        for reference in self.references.records():
+        for reference in self.references.records()[:MAX_SNAPSHOT_ITEMS]:
             item = dict(reference)
             item["url"] = f"reference/{self.preview_capability}/{quote(reference['id'], safe='')}" if self.preview_capability else ""
             item["downloadUrl"] = item["url"]
             published_references.append(item)
         published_evidence = []
-        for entry in evidence:
+        for entry in evidence[:MAX_SNAPSHOT_ITEMS]:
             if isinstance(entry, dict):
                 item = {key: entry[key] for key in ("id", "kind", "status", "path", "sha256", "reviewer", "recordedAt", "inputs", "inputsDigest", "reason") if key in entry}
                 if isinstance(item.get("inputs"), list):
-                    item["inputs"] = list(item["inputs"])
+                    item["inputs"] = list(item["inputs"][:MAX_BUNDLE_FILES])
                 published_evidence.append(item)
         progress = read_record(studio, root, "progress.json", {})
         need(studio, isinstance(progress, dict), "progress.json must be an object")
         workers = []
         directory = studio.safe_path(root, "workers", must_exist=False, allow_dir=True)
         if directory.exists():
-            for path in sorted(directory.glob("*.json")):
+            for path in sorted(directory.glob("*.json"))[:MAX_SNAPSHOT_ITEMS]:
                 try:
                     record = studio.read_json(studio.safe_path(directory, path.name))
                     if isinstance(record, dict) and record.get("id") == path.stem and record.get("status") in STATUSES and all(isinstance(record.get(key), str) for key in ("task", "message", "updatedAt")):
@@ -1350,49 +1521,57 @@ class DesignState:
                 except (studio.StudioError, OSError, ValueError, TypeError) as exc:
                     warnings.append(f"Worker {path.stem}: {exc}")
         tasks = task_records(progress)
+        task_timestamp = _record_timestamp(progress, run.get("createdAt", self.started_at))
         director = read_record(studio, root, "progress-pi-tasks-director.json", {})
         known = {item["id"] for item in tasks}
         if director:
             session_id = director.get("sessionId") if isinstance(director, dict) else None
-            if not isinstance(session_id, str) or not session_id.strip() or director.get("schemaVersion") != "1.0" or director.get("runId") != run.get("id"):
+            if (not isinstance(session_id, str) or not session_id.strip()
+                    or director.get("schemaVersion") != "1.0" or director.get("runId") != run.get("id")):
                 warnings.append("Native task director pointer does not match this run.")
             else:
                 pi_tasks = read_record(studio, root, f"progress-pi-tasks/{digest(session_id.encode('utf-8'))}.json", {})
-                if not isinstance(pi_tasks, dict) or pi_tasks.get("version") != 1 or pi_tasks.get("runId") != run.get("id") or pi_tasks.get("sessionId") != session_id:
+                if (not isinstance(pi_tasks, dict) or pi_tasks.get("version") != 1
+                        or pi_tasks.get("runId") != run.get("id") or pi_tasks.get("sessionId") != session_id):
                     warnings.append("Native task snapshot does not match the selected director session.")
                 else:
+                    task_timestamp = _record_timestamp(pi_tasks, task_timestamp)
                     native = pi_tasks.get("state", {})
                     native_tasks = native.get("tasks", {}) if isinstance(native, dict) else {}
                     if isinstance(native_tasks, dict):
-                        native_tasks = [dict(item, id=key) for key, item in native_tasks.items() if isinstance(key, str) and isinstance(item, dict)]
+                        native_tasks = [dict(item, id=key) for key, item in native_tasks.items()
+                                        if isinstance(key, str) and isinstance(item, dict)]
                     tasks.extend(item for item in task_records({"tasks": native_tasks}) if item["id"] not in known)
         if not director:
+            observer_dir = studio.safe_path(root, "progress-pi-tasks-observer", must_exist=False, allow_dir=True)
             candidates = []
-            for native_name in ("progress-pi-tasks", "progress-pi-tasks-observer"):
-                native_dir = studio.safe_path(root, native_name, must_exist=False, allow_dir=True)
-                if not native_dir.exists():
-                    continue
-                for path in native_dir.glob("*.json"):
+            if observer_dir.exists():
+                for path in sorted(observer_dir.glob("*.json")):
                     try:
-                        candidate = studio.read_json(studio.safe_path(native_dir, path.name))
-                        if isinstance(candidate, dict) and candidate.get("version") == 1 and candidate.get("runId") == run.get("id"):
+                        candidate = studio.read_json(studio.safe_path(observer_dir, path.name))
+                        if _observer_is_current(candidate, path, run.get("id")):
                             candidates.append(candidate)
+                        elif isinstance(candidate, dict) and candidate.get("runId") == run.get("id"):
+                            warnings.append(f"Observer task record expired: {path.stem}")
                     except (studio.StudioError, OSError, ValueError, TypeError):
                         continue
             if candidates:
-                latest_native = max(candidates, key=lambda item: item.get("updatedAt", ""))
+                latest_native = max(candidates, key=lambda item: item.get("observedAt") or item.get("updatedAt", ""))
+                task_timestamp = _record_timestamp(latest_native, task_timestamp)
                 native = latest_native.get("state", {})
                 native_tasks = native.get("tasks", {}) if isinstance(native, dict) else {}
                 if isinstance(native_tasks, dict):
-                    native_tasks = [dict(item, id=key) for key, item in native_tasks.items() if isinstance(key, str) and isinstance(item, dict)]
+                    native_tasks = [dict(item, id=key) for key, item in native_tasks.items()
+                                    if isinstance(key, str) and isinstance(item, dict)]
                 tasks.extend(item for item in task_records({"tasks": native_tasks}) if item["id"] not in known)
+        tasks = tasks[:MAX_TASKS]
         if not workers and tasks:
             workers = [{
                 "id": f"task-{item['id']}",
                 "task": item["title"],
                 "status": "done" if item["status"] == "done" else "active" if item["status"] in ("active", "in_progress") else "pending",
                 "message": f"Observed OMP task status: {item['nextAction']}" if item.get("nextAction") else f"Observed OMP task status: {item['status']}.",
-                "updatedAt": timestamp(),
+                "updatedAt": task_timestamp,
             } for item in tasks]
         gates = []
         def gate(key, label, condition, detail, failed=False):
@@ -1451,7 +1630,7 @@ class DesignState:
         approvals = []
         requests = studio.safe_path(root, "approval-requests", must_exist=False, allow_dir=True)
         if requests.exists():
-            for path in sorted(requests.glob("*.json")):
+            for path in sorted(requests.glob("*.json"))[:MAX_SNAPSHOT_ITEMS]:
                 try:
                     request = studio.read_json(studio.safe_path(requests, path.name))
                     status = "pending"
@@ -1476,7 +1655,8 @@ class DesignState:
                 except (studio.StudioError, OSError, ValueError, TypeError, KeyError) as exc:
                     warnings.append(f"Approval {path.stem}: {exc}")
             approvals.sort(key=lambda item: (item.get("createdAt", ""), item["id"]), reverse=True)
-        blockers = [text for text in progress.get("blockers", []) if isinstance(text, str) and text.strip()] if isinstance(progress.get("blockers", []), list) else []
+            approvals = approvals[:MAX_SNAPSHOT_ITEMS]
+        blockers = [text for text in progress.get("blockers", [])[:MAX_SNAPSHOT_ITEMS] if isinstance(text, str) and text.strip()] if isinstance(progress.get("blockers", []), list) else []
         blockers += [gate["label"] + ": " + gate["detail"] for gate in gates if gate["status"] == "failed"]
         next_action = progress.get("nextAction", "")
         if not isinstance(next_action, str) or not next_action.strip():
@@ -1496,10 +1676,16 @@ class DesignState:
                 "statistics": {"artworks": len(published_art), "references": len(published_references), "workers": len(workers), "tasks": len(tasks), "evidence": len(evidence), "passedEvidence": len(fresh), "elapsedSeconds": elapsed},
                 "artworks": published_art, "references": published_references, "evidence": published_evidence, "approvals": approvals,
                 "decisions": [{key: decision[key] for key in ("stage", "actor", "outcome", "rationale", "recordedAt", "optionId", "inputsDigest", "attachments", "annotations") if key in decision}
-                              for decision in decisions["decisions"]]}
+                              for decision in decisions["decisions"][-MAX_SNAPSHOT_ITEMS:]]}
         snap["usage"] = usage
         try:
-            snap["optimization"] = optimization.projection(studio, root)
+            projected = optimization.projection(studio, root)
+            if isinstance(projected, dict):
+                if isinstance(projected.get("results"), list):
+                    projected["results"] = projected["results"][-MAX_SNAPSHOT_ITEMS:]
+                if isinstance(projected.get("examples"), list):
+                    projected["examples"] = projected["examples"][-MAX_SNAPSHOT_ITEMS:]
+            snap["optimization"] = projected
         except (OSError, UnicodeError, ValueError, TypeError, KeyError):
             snap["optimization"] = {"schemaVersion": optimization.SCHEMA_VERSION, "settings": optimization.DEFAULT_SETTINGS(),
                                     "capabilities": optimization.tool_availability(), "recommendations": [],
@@ -1516,7 +1702,7 @@ class DesignState:
                 stable["usage"]["omp"]["observedAt"] = None
         revision = digest(canonical(stable))
         if revision != self.last_revision:
-            self.history.append({"at": timestamp(), "verified": counts["verified"], "required": counts["required"], "passedGates": sum(g["status"] == "passed" for g in gates)})
+            self.history = (self.history + [{"at": timestamp(), "verified": counts["verified"], "required": counts["required"], "passedGates": sum(g["status"] == "passed" for g in gates)}])[-MAX_HISTORY:]
             self.last_revision = revision
         snap.update(revision=revision, observedAt=timestamp(), history=list(self.history))
         return snap
@@ -1861,6 +2047,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(403, {"error": "Unadvertised request Host"})
                 return
             path = self.request_path()
+            if self.server.shutdown_only and path != "/api/identity":
+                self.respond(404, {"error": "Not found"})
+                return
             if path == "/api/events":
                 if not self.authorized(owner.token):
                     self.respond(401, {"error": "Bearer authentication required"})
@@ -1891,27 +2080,36 @@ class Handler(BaseHTTPRequestHandler):
                 if not self.authorized(owner.token):
                     self.respond(401, {"error": "Bearer authentication required"})
                     return
-                projection = optimization.ensure_examples(owner.studio, owner.root)
+                with records_lock(owner.studio, owner.root):
+                    projection = optimization.ensure_examples(owner.studio, owner.root)
                 projection["contentBase"] = f"/optimization/{owner.optimization_capability}"
                 self.respond(200, projection)
                 return
             if path.startswith("/optimization/"):
                 parts = path.split("/")
-                if (len(parts) not in (4, 5) or not secrets.compare_digest(parts[2], owner.optimization_capability)):
+                if (len(parts) not in (4, 5) or not secrets.compare_digest(parts[2], owner.optimization_capability)
+                        or not OPTIMIZATION_ID.fullmatch(parts[3])):
                     self.respond(404, {"error": "Not found"})
                     return
                 variant = parts[4] if len(parts) == 5 else "after"
-                result, content, content_type = optimization.read_content(owner.studio, owner.root, parts[3], variant)
-                content_type = mimetypes.guess_type(result["sourceName"])[0] or content_type
-                if variant == "gzip":
-                    content_type = "application/gzip"
-                elif variant == "brotli":
-                    content_type = "application/octet-stream"
+                if variant not in {"before", "after", "gzip", "brotli"}:
+                    self.respond(404, {"error": "Not found"})
+                    return
+                result, content, returned_content_type = optimization.read_content(owner.studio, owner.root, parts[3], variant)
+                metadata = result.get("variants", {}).get(variant, {}) if isinstance(result, dict) else {}
+                content_type = metadata.get("contentType") if isinstance(metadata, dict) else None
+                content_type = content_type or mimetypes.guess_type(result["sourceName"])[0] or returned_content_type or "application/octet-stream"
                 safe_name = "".join(character if 32 <= ord(character) < 127 and character not in {'"', "\\"}
-                                     else "_" for character in Path(result["sourceName"]).name) or "optimized.bin"
+                                    else "_" for character in Path(result["sourceName"]).name) or "optimized.bin"
+                extra = dict(metadata.get("headers", {})) if isinstance(metadata, dict) and isinstance(metadata.get("headers"), dict) else {}
+                extra.pop("Content-Type", None)
+                if variant == "gzip":
+                    extra["Content-Encoding"] = "gzip"
+                elif variant == "brotli":
+                    extra["Content-Encoding"] = "br"
+                extra["Content-Disposition"] = f'inline; filename="{safe_name}"'
                 self.respond(200, content, content_type,
-                             "default-src 'none'; frame-ancestors 'self'; base-uri 'none'",
-                             {"Content-Disposition": f'inline; filename="{safe_name}"'})
+                             "default-src 'none'; frame-ancestors 'self'; base-uri 'none'", extra)
                 return
             if path.startswith("/api/reference/") or path.startswith("/api/references/"):
                 if not self.authorized(owner.token):
@@ -2081,32 +2279,38 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self.respond(200, {"status": "PASS", "instanceId": owner.instance_id})
                 owner.stop.set()
-            elif path == "/api/command":
-                self.respond(200, owner.dispatch_command(payload))
-            elif path == "/api/cancel":
-                self.respond(200, cancel_run(owner.studio, owner.root))
-            elif path == "/api/reconcile":
-                self.respond(200, reconcile_run(owner.studio, owner.root, payload))
-            elif path == "/api/usage":
-                self.respond(200, record_usage(owner.studio, owner.root, payload))
-            elif path == "/api/optimization/settings":
-                settings = payload.get("settings", payload) if isinstance(payload, dict) else payload
-                self.respond(200, {"status": "PASS", "settings": optimization.save_settings(owner.studio, owner.root, settings)})
-            elif path == "/api/optimization/run":
-                result = optimization.run_optimization(
-                    owner.studio, owner.root, payload, reference_loader=owner.state.references)
-                result["contentBase"] = f"/optimization/{owner.optimization_capability}"
-                self.respond(200, result)
-            elif path == "/api/optimization/example":
-                result = optimization.ensure_examples(owner.studio, owner.root)
-                result["contentBase"] = f"/optimization/{owner.optimization_capability}"
-                self.respond(200, result)
-            elif path in ("/api/reference", "/api/references"):
-                with records_lock(owner.studio, owner.root):
-                    record, idempotent = owner.state.references.store(payload)
-                self.respond(200, {"status": "PASS", "reference": record, "idempotent": idempotent})
             else:
-                self.respond(200, approve(owner.studio, owner.root, payload, owner.repo))
+                with owner.admit_mutation():
+                    if path == "/api/command":
+                        self.respond(200, owner.dispatch_command(payload))
+                    elif path == "/api/cancel":
+                        self.respond(200, cancel_run(owner.studio, owner.root))
+                    elif path == "/api/reconcile":
+                        self.respond(200, reconcile_run(owner.studio, owner.root, payload))
+                    elif path == "/api/usage":
+                        self.respond(200, record_usage(owner.studio, owner.root, payload))
+                    elif path == "/api/optimization/settings":
+                        settings = payload.get("settings", payload) if isinstance(payload, dict) else payload
+                        with records_lock(owner.studio, owner.root):
+                            saved = optimization.save_settings(owner.studio, owner.root, settings)
+                        self.respond(200, {"status": "PASS", "settings": saved})
+                    elif path == "/api/optimization/run":
+                        with records_lock(owner.studio, owner.root):
+                            result = optimization.run_optimization(
+                                owner.studio, owner.root, payload, reference_loader=owner.state.references)
+                        result["contentBase"] = f"/optimization/{owner.optimization_capability}"
+                        self.respond(200, result)
+                    elif path == "/api/optimization/example":
+                        with records_lock(owner.studio, owner.root):
+                            result = optimization.ensure_examples(owner.studio, owner.root)
+                        result["contentBase"] = f"/optimization/{owner.optimization_capability}"
+                        self.respond(200, result)
+                    elif path in ("/api/reference", "/api/references"):
+                        with records_lock(owner.studio, owner.root):
+                            record, idempotent = owner.state.references.store(payload)
+                        self.respond(200, {"status": "PASS", "reference": record, "idempotent": idempotent})
+                    else:
+                        self.respond(200, owner.approve_command(payload))
         except ReferenceConflict as exc:
             self.respond(409, {"error": str(exc)})
         except ApprovalConflict as exc:
@@ -2123,7 +2327,11 @@ class DesignServer:
         self.studio, self.root = studio, checked_root(studio, root)
         need(studio, isinstance(port, int) and 0 <= port <= 65535 and interval > 0, "Port/refresh interval is invalid")
         self.host, self.port, self.public_url, self.interval = host, port, public_url, interval
-        self.repo = repo
+        self.repo = _plain_directory(studio, repo) if repo is not None else None
+        if self.repo is not None and self.root != self.repo:
+            unused, unused_themes, runs = studio.config_paths(self.repo)
+            need(studio, self.root.is_relative_to(runs),
+                 "Run is outside the selected project's configured runs directory")
         self._lan_addresses = validated_lan_addresses(studio, lan_addresses)
         self.lock_contended = False
         self.token, self.preview_capability, self.optimization_capability, self.shutdown_token = (
@@ -2137,6 +2345,21 @@ class DesignServer:
         self._event_clients = set()
         self._events_lock = threading.Lock()
         self._event_revision = None
+        self._mutation_condition = threading.Condition()
+        self._active_mutations = 0
+
+    @contextmanager
+    def admit_mutation(self):
+        with self._mutation_condition:
+            if self.stop.is_set() or self.closed.is_set():
+                raise self.studio.StudioError("Design server is closing")
+            self._active_mutations += 1
+        try:
+            yield
+        finally:
+            with self._mutation_condition:
+                self._active_mutations -= 1
+                self._mutation_condition.notify_all()
 
     def subscribe_events(self):
         client = SnapshotEventClient()
@@ -2174,12 +2397,74 @@ class DesignServer:
         for client in clients:
             client.close()
 
+    def approve_command(self, payload):
+        from ui_design_studio.storage import EventDraft, OperationRejected, OperationResult, StateStore
+
+        project = _plain_directory(self.studio, self.repo or self.root)
+        run = self.studio.read_json(self.studio.safe_path(self.root, "run.json"))
+        run_id = run.get("id")
+        need(self.studio, isinstance(run_id, str) and run_id, "Run identity is missing")
+        state_root = _confined_state_path(self.studio, self.root, self.repo)
+        store = StateStore(state_root)
+        project_id = _state_project_id(self.studio, store, project, run)
+        with store.transaction() as connection:
+            project_row = connection.execute(
+                "SELECT source_root, state_root FROM projects WHERE project_id = ?", (project_id,)
+            ).fetchone()
+            if project_row is None:
+                store.create_project_in_transaction(connection, project_id, str(project), str(state_root.parent))
+            elif (project_row["source_root"], project_row["state_root"]) != (str(project), str(state_root.parent)):
+                raise self.studio.StudioError("Command project projection belongs to a different repository")
+            if connection.execute("SELECT 1 FROM runs WHERE run_id = ?", (run_id,)).fetchone() is None:
+                store.create_run_in_transaction(
+                    connection, run_id, project_id, run,
+                    stage=run.get("phase", "assessment"), status=run.get("status", "pending"),
+                )
+        request = {"runId": run_id, "approval": payload}
+        current = store.get_run(run_id)
+        revision = current["revision"] if current is not None else 0
+        decisions_path = self.studio.safe_path(self.root, "decisions.json", must_exist=False)
+        decisions_digest = hashlib.sha256(decisions_path.read_bytes()).hexdigest() if decisions_path.exists() else "none"
+        key = "approval-" + hashlib.sha256(
+            canonical(request) + decisions_digest.encode("ascii") + str(revision).encode("ascii")
+        ).hexdigest()
+        actor = "design-dashboard-" + self.instance_id
+
+        def apply(connection):
+            result = approve(self.studio, self.root, payload, self.repo)
+            updated = self.studio.read_json(self.studio.safe_path(self.root, "run.json"))
+            encoded = json.dumps(updated, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+            existing = connection.execute(
+                "SELECT status, stage, payload_json FROM runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+            if existing is None:
+                raise OperationRejected("STATE_CONFLICT", "Run projection is missing")
+            if (existing["status"], existing["stage"], existing["payload_json"]) != (
+                updated.get("status", "pending"), updated.get("phase", "assessment"), encoded
+            ):
+                changed = connection.execute(
+                    "UPDATE runs SET status = ?, stage = ?, revision = revision + 1, payload_json = ? WHERE run_id = ?",
+                    (updated.get("status", "pending"), updated.get("phase", "assessment"), encoded, run_id),
+                ).rowcount
+                if changed != 1:
+                    raise OperationRejected("STATE_CONFLICT", "Run projection was not updated")
+            return OperationResult(result, (EventDraft(run_id, "ApprovalRecorded", {"runId": run_id}),))
+
+        receipt = store.run_operation(
+            realm=project_id, actor=actor, command="approval.decide",
+            idempotency_key=key, request=request, callback=apply,
+        )
+        return {**receipt.result, "receipt": receipt.as_dict()}
+
     def dispatch_command(self, payload):
         from ui_design_studio.application import dispatch
         from ui_design_studio.storage import StateStore
 
-        state_root = Path(self.repo or self.root) / ".ui-design-studio" / "prism" / "state.sqlite3"
-        return dispatch(StateStore(state_root), payload)
+        project = _plain_directory(self.studio, self.repo or self.root)
+        run = self.studio.read_json(self.studio.safe_path(self.root, "run.json"))
+        state_root = _confined_state_path(self.studio, self.root, self.repo)
+        store = StateStore(state_root)
+        return dispatch(store, _bound_command(self.studio, store, project, run, payload, self.instance_id))
 
     @property
     def addresses(self):
@@ -2347,6 +2632,10 @@ class DesignServer:
                 return
             self.stop.set()
             self.close_event_clients()
+            with self._mutation_condition:
+                deadline = time.monotonic() + 6
+                while self._active_mutations and time.monotonic() < deadline:
+                    self._mutation_condition.wait(max(0.0, deadline - time.monotonic()))
             try:
                 for index, server in enumerate((self.http, self.local)):
                     if server:
