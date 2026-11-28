@@ -1,9 +1,9 @@
 # Release validation
 
-## Version 2.0.10 candidate · 27 November 2026 UTC
+## Version 2.0.11 candidate · 27 November 2026 UTC
 
-This release record covers the PRISM Studio rebuild, the standalone MCP adapter, the project-local installer, the authenticated dashboard, and release packaging. Human participant research remains deferred by project policy.
-The M8 gate receipt records the exact source commit and manifest digest used for artifact verification. Historical validation sections below are retained as historical records.
+This release record covers the PRISM Studio remediation release, the standalone MCP adapter, the project-local installer, the authenticated dashboard, and release packaging. Human participant research remains deferred by project policy.
+The M8 gate receipt binds artifact verification to the source commit and manifest digest. Historical validation sections below are retained as historical records.
 
 | Check | Observed result | Scope |
 | --- | --- | --- |
@@ -11,11 +11,17 @@ The M8 gate receipt records the exact source commit and manifest digest used for
 | Full Python suite | PASS; 387 tests and 230 subtests | `tests`, excluding the browser matrix |
 | Dashboard browser matrix | PASS; 15 tests each | Chromium, Firefox, and WebKit |
 | Standalone OMP host regression | PASS; 53 tests | Live no-tools RPC readiness and UI Design Studio discovery |
+| Rebuild-pack tests | PASS; 19 tests and 40 subtests | `.prism-rebuild/tools/test_tools.py` |
 | Python distributions | PASS | Wheel, sdist, and source ZIP built from the current source |
 | Manifest and archive verification | PASS; 201 source hashes | `scripts/package_release.py --check`, ZIP CRC, sidecar, and private-path exclusion |
 | Installer regression | PASS; 32 tests | Project-local install, update, restore, conflict, and portability behavior |
+| Node extension suite | PASS; 53 tests | `tests/test_progress_extension.mjs` |
+| M8 reproducibility | PASS | Source ZIP, sdist, and wheel rebuilt and byte-compared with reviewed artifacts |
+| GitHub CI | PASS; 10 of 10 checks | Required release workflow lanes |
+| Trivy filesystem scan | PASS | No medium, high, or critical findings |
 
-The release review records `PASS_WITH_DECLARED_REVIEW_FALLBACK`. This is not human participant research or recipient-application acceptance evidence. Native Windows/macOS, physical devices, and target-application usability remain outside this package validation.
+The release review records `PASS_WITH_DECLARED_REVIEW_FALLBACK`. One requested independent shipping verifier crashed before producing a verdict, so direct checks and the completed GitHub CI matrix provide the release evidence. This is not human participant research or recipient-application acceptance evidence. Native Windows/macOS, physical devices, and target-application usability remain outside this package validation.
+
 
 ## Version 1.4.3 candidate · 16 November 2026 UTC
 
